@@ -76,6 +76,9 @@ app.use((req, res, next) => {
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve public files (Google verification, robots.txt, etc.)
+app.use(express.static(path.join(__dirname, '../public')));
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
