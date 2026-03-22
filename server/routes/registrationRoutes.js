@@ -9,6 +9,7 @@ import {
 } from "../config/database.js";
 import { generateQRCodeData, generateQRCodeImage } from "../utils/qrCodeUtils.js";
 import { resolveGatedEvent, createGatedVisitor, getGatedVerifyUrl, isGatedEnabled, pushEventToGated } from "../utils/gatedSync.js";
+import { sendRegistrationEmail } from "../utils/emailService.js";
 
 const router = express.Router();
 
@@ -479,6 +480,18 @@ router.post("/register", async (req, res) => {
       { event_id: normalizedEventId }
     );
 
+    // Send confirmation email with QR code (non-blocking)
+    (async () => {
+      try {
+        const emailRecipient = participantEmail;
+        const recipientName = processedData.individual_name || processedData.team_leader_name || 'Participant';
+        const qrImage = await generateQRCodeImage(qrCodeData);
+        await sendRegistrationEmail(emailRecipient, recipientName, event, registration_id, qrImage);
+      } catch (emailErr) {
+        console.error('⚠️  Failed to send registration email:', emailErr.message);
+      }
+    })();
+
     return res.status(201).json({
       message: "Registration successful",
       registration: {
@@ -572,6 +585,37 @@ router.get("/registrations/:registrationId/qr-code", async (req, res) => {
     }
   } catch (error) {
     console.error("Error fetching QR code:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Check if gated visitor pass is ready for an outsider registration
+router.get("/registrations/:registrationId/gated-status", async (req, res) => {
+  try {
+    const { registrationId } = req.params;
+
+    const registration = await queryOne("registrations", {
+      select: "qr_code_data, participant_organization",
+      where: { registration_id: registrationId },
+    });
+
+    if (!registration) {
+      return res.status(404).json({ error: "Registration not found" });
+    }
+
+    const qrData =
+      typeof registration.qr_code_data === "string"
+        ? JSON.parse(registration.qr_code_data)
+        : registration.qr_code_data;
+
+    const gatedReady = !!(qrData?.gated_verify_url);
+
+    return res.status(200).json({
+      gated_ready: gatedReady,
+      is_outsider: registration.participant_organization === "outsider",
+    });
+  } catch (error) {
+    console.error("Error checking gated status:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

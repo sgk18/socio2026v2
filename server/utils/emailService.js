@@ -154,16 +154,53 @@ https://socio.christuniversity.in
  * @param {string} name - User's name
  * @param {object} event - Event details
  * @param {string} registrationId - Registration ID
+ * @param {string|null} qrImageBase64 - Optional base64 data URL of QR code image
  */
-export async function sendRegistrationEmail(email, name, event, registrationId) {
+export async function sendRegistrationEmail(email, name, event, registrationId, qrImageBase64 = null) {
   if (!resend) { console.warn('⚠️ Resend not configured — skipping registration email'); return { success: true }; }
   try {
     const firstName = name ? name.split(' ')[0] : 'there';
-    
-    const { data, error } = await resend.emails.send({
+    const ticketUrl = `https://socio.christuniversity.in/profile`;
+
+    // Build inline QR attachment if image provided
+    let qrAttachments = [];
+    let qrHtmlBlock = `
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${ticketUrl}" style="display: inline-block; background: #154CB3; color: white; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+          View My Ticket &amp; QR Code
+        </a>
+      </div>
+    `;
+
+    if (qrImageBase64) {
+      // Strip the data URL prefix to get raw base64
+      const base64Data = qrImageBase64.replace(/^data:image\/png;base64,/, '');
+      qrAttachments = [{
+        filename: 'entry-qr.png',
+        content: Buffer.from(base64Data, 'base64'),
+        content_id: 'entryqr',
+        content_disposition: 'inline',
+      }];
+      qrHtmlBlock = `
+        <div style="text-align: center; margin: 28px 0;">
+          <p style="color: #475569; font-size: 14px; margin: 0 0 16px 0; font-weight: 600;">Your Entry QR Code</p>
+          <div style="display: inline-block; background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px;">
+            <img src="cid:entryqr" width="180" height="180" alt="Entry QR Code" style="display: block;" />
+          </div>
+          <p style="color: #94a3b8; font-size: 12px; margin: 12px 0 0 0;">Show this QR code at the event entrance</p>
+          <div style="margin-top: 16px;">
+            <a href="${ticketUrl}" style="color: #154CB3; font-size: 13px; text-decoration: none; font-weight: 500;">
+              View full ticket on SOCIO →
+            </a>
+          </div>
+        </div>
+      `;
+    }
+
+    const emailPayload = {
       from: 'SOCIO <hello@withsocio.com>',
       to: [email],
-      subject: `Registration Confirmed - ${event.title}`,
+      subject: `Your Ticket - ${event.title}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -178,27 +215,25 @@ export async function sendRegistrationEmail(email, name, event, registrationId) 
             </div>
             <div style="background: white; padding: 40px 36px; border-radius: 0 0 16px 16px;">
               <h2 style="color: #1e293b; font-size: 22px; margin: 0 0 8px 0;">Registration Confirmed</h2>
-              <p style="color: #64748b; font-size: 15px; margin: 0 0 24px 0;">Hi ${firstName}, you're all set.</p>
-              
-              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 24px 0;">
+              <p style="color: #64748b; font-size: 15px; margin: 0 0 24px 0;">Hi ${firstName}, you're registered!</p>
+
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 0 0 24px 0;">
                 <p style="margin: 0 0 12px 0;"><strong style="color: #475569;">Event:</strong> <span style="color: #1e293b;">${event.title}</span></p>
                 <p style="margin: 0 0 12px 0;"><strong style="color: #475569;">Date:</strong> <span style="color: #1e293b;">${event.event_date || 'To be announced'}</span></p>
                 <p style="margin: 0 0 12px 0;"><strong style="color: #475569;">Venue:</strong> <span style="color: #1e293b;">${event.venue || 'To be announced'}</span></p>
-                <p style="margin: 0;"><strong style="color: #475569;">Registration ID:</strong> <span style="color: #063168; font-family: monospace; font-weight: 600;">${registrationId}</span></p>
+                <p style="margin: 0;"><strong style="color: #475569;">Registration ID:</strong> <span style="color: #063168; font-family: monospace; font-weight: 600; font-size: 13px;">${registrationId}</span></p>
               </div>
-              
-              <p style="color: #64748b; font-size: 14px; margin: 24px 0 0 0; text-align: center;">
-                See you there! 🎉
-              </p>
-              
+
+              ${qrHtmlBlock}
+
               <!-- Beta Notice -->
-              <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 10px; padding: 20px; margin: 28px 0 0 0;">
+              <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 10px; padding: 20px; margin: 24px 0 0 0;">
                 <p style="color: #92400e; font-size: 13px; margin: 0; line-height: 1.6; text-align: center;">
-                  <strong style="display: block; margin-bottom: 8px;">🚧 Beta Preview</strong>
+                  <strong style="display: block; margin-bottom: 8px;">Beta Preview</strong>
                   This is a preview version of SOCIO. We sincerely apologize for any inconvenience caused due to technical glitches. We're working hard to improve your experience every day.
                 </p>
                 <p style="color: #b45309; font-size: 12px; margin: 12px 0 0 0; text-align: center; font-style: italic;">
-                  Thank you for your patience and support! ❤️<br>
+                  Thank you for your patience and support!<br>
                   — With love, Team SOCIO
                 </p>
               </div>
@@ -210,8 +245,14 @@ export async function sendRegistrationEmail(email, name, event, registrationId) 
         </body>
         </html>
       `,
-      text: `Registration Confirmed\n\nHi ${firstName}, you're all set for ${event.title}.\n\nEvent: ${event.title}\nDate: ${event.event_date || 'To be announced'}\nVenue: ${event.venue || 'To be announced'}\nRegistration ID: ${registrationId}\n\nSee you there! 🎉\n\n---\n🚧 BETA PREVIEW\nThis is a preview version of SOCIO. We sincerely apologize for any inconvenience caused due to technical glitches. We're working hard to improve your experience every day.\n\nThank you for your patience and support! ❤️\n— With love, Team SOCIO\n---\n\nSOCIO Team\nhttps://socio.christuniversity.in`,
-    });
+      text: `Registration Confirmed\n\nHi ${firstName}, you're registered for ${event.title}.\n\nEvent: ${event.title}\nDate: ${event.event_date || 'To be announced'}\nVenue: ${event.venue || 'To be announced'}\nRegistration ID: ${registrationId}\n\nView your ticket: ${ticketUrl}\n\nSOCIO Team\nhttps://socio.christuniversity.in`,
+    };
+
+    if (qrAttachments.length > 0) {
+      emailPayload.attachments = qrAttachments;
+    }
+
+    const { data, error } = await resend.emails.send(emailPayload);
 
     if (error) {
       console.error('Error sending registration email:', error);

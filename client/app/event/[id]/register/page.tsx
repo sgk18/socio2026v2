@@ -389,8 +389,13 @@ const Page = () => {
 
         if (response.ok) {
           const responseData = await response.json();
-          setRegistrationId(responseData.registration?.registration_id || null);
-          setShowSuccessMessage(true);
+          const regId = responseData.registration?.registration_id;
+          if (regId && eventId) {
+            router.push(`/event/${eventId}/ticket/${regId}`);
+          } else {
+            setRegistrationId(regId || null);
+            setShowSuccessMessage(true);
+          }
         } else {
           const errorData = await response.json();
           setRegistrationError(
