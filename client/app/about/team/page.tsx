@@ -29,17 +29,6 @@ export default function TeamPage() {
       quote: "Great products solve real problems. We just happened to find ours on campus.",
       image: "/founder-surya-vamshi.jpg",
     },
-    {
-      name: "Meeth Shah",
-      role: "Co-Founder & Design Lead",
-      bio: "The visionary behind SOCIO's original concept. Pitched the idea during a college incubation program, brought Sachin and Surya onboard, and together they turned a classroom conversation into a working product through Christ Incubation Foundation. Now leads brand identity, UI/UX design, and the creative direction of the platform.",
-      skills: ["UI/UX Design", "Brand Identity", "Innovation", "Strategic Planning"],
-      email: "thesocio.blr@gmail.com",
-      linkedin: "https://www.linkedin.com/in/meeth-shah-75b182214/",
-      dribbble: "https://dribbble.com/meethshah",
-      quote: "The right idea, at the right time, with the right people -- that changes everything.",
-      image: "/founder-meeth-shah.jpg",
-    },
   ];
 
   const advisors = [
