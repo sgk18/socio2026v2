@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEvents } from "../../context/EventContext";
@@ -30,7 +30,7 @@ interface FilterOption {
   active: boolean;
 }
 
-const EventsPage = () => {
+const EventsPageContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const categoryParam = searchParams.get("category");
@@ -313,5 +313,20 @@ const EventsPage = () => {
     </div>
   );
 };
-  
-export default EventsPage;
+
+function EventsPageLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-white flex justify-center items-center">
+      <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#154CB3]"></div>
+      <p className="ml-4 text-xl text-[#154CB3]">Loading events...</p>
+    </div>
+  );
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense fallback={<EventsPageLoadingFallback />}>
+      <EventsPageContent />
+    </Suspense>
+  );
+}
