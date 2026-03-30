@@ -10,6 +10,11 @@ type OrganiserEvent = {
   event_id: string;
   title: string;
   event_date: string;
+  event_time?: string | null;
+  venue?: string | null;
+  category?: string | null;
+  registration_fee?: number | string | null;
+  registration_deadline?: string | null;
   fest?: string | null;
   organizing_dept?: string | null;
   created_by: string;
@@ -48,6 +53,32 @@ const formatDate = (value: string) => {
     month: "short",
     year: "numeric",
   });
+};
+
+const formatTime = (value?: string | null) => {
+  if (!value) return "TBA";
+
+  const safeValue = value.length === 5 ? `${value}:00` : value;
+  const parsed = new Date(`1970-01-01T${safeValue}`);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return parsed.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const formatFee = (value?: number | string | null) => {
+  if (value === null || value === undefined || value === "") {
+    return "Free";
+  }
+
+  const parsed = typeof value === "string" ? Number.parseFloat(value) : value;
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return "Free";
+  }
+
+  return `Rs ${parsed.toLocaleString("en-IN")}`;
 };
 
 const getEventStatus = (eventDate: string) => {
@@ -165,7 +196,7 @@ export default function OrganiserHistoryModal({
       const { data, error: fetchError } = await supabase
         .from("events")
         .select(
-          "event_id, title, event_date, fest, organizing_dept, created_by, created_at"
+          "event_id, title, event_date, event_time, venue, category, registration_fee, registration_deadline, fest, organizing_dept, created_by, created_at"
         )
         .eq("created_by", identifier)
         .order("created_at", { ascending: false });
@@ -510,6 +541,12 @@ export default function OrganiserHistoryModal({
                         {formatDate(event.event_date)}
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+                        {formatTime(event.event_time)}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+                        {event.venue || "Venue TBA"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
                         <FolderKanban className="h-3 w-3" />
                         {event.fest || "No Fest"}
                       </span>
@@ -517,6 +554,17 @@ export default function OrganiserHistoryModal({
                         <Building2 className="h-3 w-3" />
                         {event.organizing_dept || "No Department"}
                       </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+                        {event.category || "General"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+                        {formatFee(event.registration_fee)}
+                      </span>
+                      {event.registration_deadline && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+                          Reg closes {formatDate(event.registration_deadline)}
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
                         <ClipboardList className="h-3 w-3" />
                         {eventRegistrationCount} registrations
