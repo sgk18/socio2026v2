@@ -215,7 +215,7 @@ const EventsPageContent = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <main className="container mx-auto px-4 pt-3 pb-8 sm:pt-4 sm:pb-10 max-w-7xl">
+      <main className="container mx-auto px-4 pt-8 pb-8 sm:pt-10 sm:pb-10 max-w-7xl">
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-row items-start justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
             <div className="min-w-0">
@@ -248,7 +248,7 @@ const EventsPageContent = () => {
             </Link>
           </div>
 
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
             <div className="order-2 lg:order-1 flex flex-wrap gap-2">
               {filterOptions.map((filter, index) => (
                 <button
