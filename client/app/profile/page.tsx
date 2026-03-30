@@ -301,15 +301,15 @@ const StudentProfile = () => {
             <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
               <div className="bg-[#063168] p-6 sm:p-8 flex flex-col items-center relative">
                 <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-white mb-4 border-2 border-gray-200">
-                  <div
-                    className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center overflow-hidden"
-                    style={{
-                      backgroundImage: `url(${student.profilePicture})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  >
-                    {!student.profilePicture && (
+                  <div className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                    {student.profilePicture ? (
+                      <img
+                        src={student.profilePicture}
+                        alt={`${student.name || "Student"} profile`}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
                       <span className="text-3xl text-gray-500">?</span>
                     )}
                   </div>
