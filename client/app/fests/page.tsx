@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { formatDateRange } from "@/lib/dateUtils";
 
 import { FestCard } from "../_components/Discover/FestCard";
@@ -25,8 +26,29 @@ interface FilterOption {
   active: boolean;
 }
 
+const buildFestsUrl = (category: string | null, searchValue: string) => {
+  const params = new URLSearchParams();
+  if (category && category.toLowerCase() !== "all") {
+    params.set("category", category);
+  }
+
+  const normalizedSearch = searchValue.trim();
+  if (normalizedSearch) {
+    params.set("search", normalizedSearch);
+  }
+
+  const queryString = params.toString();
+  return queryString ? `/fests?${queryString}` : "/fests";
+};
+
 const FestsPage = () => {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const categoryParam = searchParams.get("category");
+  const searchParam = searchParams.get("search") || "";
+
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState(searchParam);
   const [filterOptions, setFilterOptions] = useState<FilterOption[]>([
     { name: "All", active: true },
     { name: "Technology", active: false },
@@ -62,25 +84,94 @@ const FestsPage = () => {
       });
   }, []);
 
+  useEffect(() => {
+    const activeFilter = filterOptions
+      .find((f) => f.active)
+      ?.name.toLowerCase();
+    const paramToMatch = categoryParam?.toLowerCase();
+
+    if (categoryParam && activeFilter !== paramToMatch) {
+      const normalizedCategoryParam = categoryParam.toLowerCase();
+      const newActiveExists = filterOptions.some(
+        (filter) => filter.name.toLowerCase() === normalizedCategoryParam
+      );
+
+      setFilterOptions((prevFilters) =>
+        prevFilters.map((filter) => ({
+          ...filter,
+          active: newActiveExists
+            ? filter.name.toLowerCase() === normalizedCategoryParam
+            : filter.name === "All",
+        }))
+      );
+    } else if (!categoryParam && activeFilter !== "all") {
+      setFilterOptions((prevFilters) =>
+        prevFilters.map((filter) => ({
+          ...filter,
+          active: filter.name === "All",
+        }))
+      );
+    }
+  }, [categoryParam]);
+
   const activeFilter =
     filterOptions.find((filter) => filter.active)?.name || "All";
 
-  const filteredFests: Fest[] =
-    activeFilter === "All"
-      ? allFests
-      : allFests.filter(
-          (fest: Fest) => fest.category === activeFilter.toLowerCase()
-        );
+  useEffect(() => {
+    setSearchQuery(searchParam);
+  }, [searchParam]);
+
+  // Keep URL in sync with the page-level fests search input.
+  useEffect(() => {
+    const normalizedSearch = searchQuery.trim();
+    const normalizedParamSearch = searchParam.trim();
+
+    if (normalizedSearch === normalizedParamSearch) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      router.replace(buildFestsUrl(categoryParam, normalizedSearch), {
+        scroll: false,
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [categoryParam, router, searchParam, searchQuery]);
+
+  const festsToFilter = Array.isArray(allFests) ? allFests : [];
+  const filteredFests: Fest[] = festsToFilter.filter((fest: Fest) => {
+    if (
+      activeFilter !== "All" &&
+      fest.category?.toLowerCase() !== activeFilter.toLowerCase()
+    ) {
+      return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const titleMatch = fest.fest_title?.toLowerCase().includes(q);
+      const deptMatch = fest.organizing_dept?.toLowerCase().includes(q);
+      const descriptionMatch = fest.description?.toLowerCase().includes(q);
+      const categoryMatch = fest.category?.toLowerCase().includes(q);
+
+      if (!titleMatch && !deptMatch && !descriptionMatch && !categoryMatch) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   // Pagination
   const totalPages = Math.ceil(filteredFests.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedFests = filteredFests.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-  // Reset to page 1 when filter changes
+  // Reset to page 1 when category/search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter]);
+  }, [activeFilter, searchQuery]);
 
   const handleFilterClick = (clickedFilter: string) => {
     setFilterOptions(
@@ -89,6 +180,14 @@ const FestsPage = () => {
         active: filter.name === clickedFilter,
       }))
     );
+
+    const nextCategory = clickedFilter === "All" ? null : clickedFilter;
+    router.push(buildFestsUrl(nextCategory, searchQuery));
+  };
+
+  const handlePageSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    router.push(buildFestsUrl(categoryParam, searchQuery), { scroll: false });
   };
 
   return (
@@ -123,6 +222,57 @@ const FestsPage = () => {
           <p className="text-gray-500 mb-6 text-sm sm:text-base">
             Browse through all upcoming fests and festivals happening on campus.
           </p>
+
+          <form onSubmit={handlePageSearchSubmit} className="mb-6 sm:mb-8 max-w-3xl">
+            <label htmlFor="fests-page-search" className="sr-only">
+              Search fests
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <input
+                  id="fests-page-search"
+                  type="text"
+                  placeholder="Search by fest title, department, category, or description"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-full border border-gray-300 px-4 py-2.5 pr-20 text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-[#154CB3] focus:border-[#154CB3]"
+                />
+                {searchQuery.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-xs font-semibold text-[#154CB3] hover:bg-[#154CB3]/10 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                ) : (
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      className="h-4 w-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m21 21-4.35-4.35m1.6-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                      />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="shrink-0 rounded-full bg-[#154CB3] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0f3f95] transition-colors cursor-pointer"
+              >
+                Search
+              </button>
+            </div>
+          </form>
+
           <div className="flex flex-wrap gap-2 mb-6 sm:mb-8">
             {filterOptions.map((filter, index) => (
               <button
