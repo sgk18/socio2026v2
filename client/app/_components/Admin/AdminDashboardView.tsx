@@ -44,6 +44,12 @@ import {
   History,
 } from "lucide-react";
 import OrganiserHistoryModal from "./OrganiserHistoryModal";
+import {
+  addStructuredSummarySheet,
+  addStructuredTableSheet,
+  createThemedWorkbook,
+  downloadWorkbook,
+} from "@/lib/xlsxTheme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface User {
@@ -409,6 +415,113 @@ export default function AdminDashboardView({
     setShowExport(false);
   };
 
+  const exportEventsXlsx = useCallback(async () => {
+    type DashboardEventExportRow = {
+      event_id: string;
+      title: string;
+      department: string;
+      event_date: string;
+      created_by: string;
+      created_at: string;
+      registration_fee: number;
+      registrations: number;
+      status: string;
+    };
+
+    const now = new Date();
+    const workbook = createThemedWorkbook("SOCIO - Main Dashboard");
+
+    addStructuredSummarySheet(workbook, {
+      title: "Main Dashboard Events Export",
+      subtitle: "Unified XLSX structure, spacing, and theme colors.",
+      sections: [
+        {
+          title: "Report Metadata",
+          rows: [
+            { label: "Generated On", value: now.toLocaleString("en-GB") },
+            { label: "Module", value: "Master Admin Dashboard" },
+            { label: "Rows Exported", value: filteredEvents.length },
+          ],
+        },
+        {
+          title: "Active Filters",
+          rows: [
+            {
+              label: "Date Window",
+              value:
+                startDate || endDate
+                  ? `${startDate || "Any start"} to ${endDate || "Any end"}`
+                  : dateRange,
+            },
+            { label: "Campus Filter", value: campusFilter === "all" ? "All Campuses" : campusFilter },
+            { label: "Department Filter", value: deptFilter === "all" ? "All Departments" : deptFilter },
+          ],
+        },
+        {
+          title: "KPI Snapshot",
+          rows: [
+            { label: "Total Users", value: users.length },
+            { label: "Total Events", value: events.length },
+            { label: "Registrations (period)", value: filteredRegs.length },
+            { label: "Estimated Revenue", value: `INR ${totalRevenue.toLocaleString("en-IN")}` },
+          ],
+        },
+      ],
+    });
+
+    const eventRows: DashboardEventExportRow[] = filteredEvents.map((event) => {
+      const eventDate = event.event_date ? new Date(event.event_date) : null;
+      const status =
+        !eventDate || Number.isNaN(eventDate.getTime())
+          ? "unmarked"
+          : eventDate < now
+            ? "absent"
+            : "pending";
+
+      return {
+        event_id: event.event_id,
+        title: event.title,
+        department: event.organizing_dept || "N/A",
+        event_date: eventDate ? eventDate.toLocaleDateString("en-GB") : "N/A",
+        created_by: event.created_by || "N/A",
+        created_at: event.created_at ? new Date(event.created_at).toLocaleString("en-GB") : "N/A",
+        registration_fee: Number(event.registration_fee || 0),
+        registrations: Number(event.registration_count || 0),
+        status,
+      };
+    });
+
+    addStructuredTableSheet(workbook, {
+      sheetName: "Events",
+      columns: [
+        { header: "Event ID", key: "event_id", width: 22 },
+        { header: "Title", key: "title", width: 32 },
+        { header: "Department", key: "department", width: 24 },
+        { header: "Event Date", key: "event_date", width: 16, horizontal: "center" },
+        { header: "Created By", key: "created_by", width: 28 },
+        { header: "Created At", key: "created_at", width: 22 },
+        { header: "Registration Fee", key: "registration_fee", width: 16, kind: "currency" },
+        { header: "Registrations", key: "registrations", width: 14, kind: "number" },
+        { header: "Status", key: "status", width: 12, kind: "status" },
+      ],
+      rows: eventRows,
+    });
+
+    await downloadWorkbook(workbook, `dashboard_events_${now.toISOString().slice(0, 10)}.xlsx`);
+    setShowExport(false);
+  }, [
+    campusFilter,
+    dateRange,
+    deptFilter,
+    endDate,
+    events.length,
+    filteredEvents,
+    filteredRegs.length,
+    startDate,
+    totalRevenue,
+    users.length,
+  ]);
+
   const dateRangeLabel = () => {
     const n = new Date();
     const days: Record<DateRange, number> = { "7d": 7, "30d": 30, "90d": 90, "1y": 365, "all": 3650 };
@@ -574,12 +687,12 @@ export default function AdminDashboardView({
             onClick={() => setShowExport((v) => !v)}
             className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
           >
-            <Download className="w-3.5 h-3.5" /> Export CSV
+            <Download className="w-3.5 h-3.5" /> Export
           </button>
           {showExport && (
             <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 min-w-[180px] py-1.5 overflow-hidden">
               <button onClick={handleExportCSV} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Export Dashboard Summary</button>
-              <button onClick={() => { downloadCSV("events", ["Title", "Dept", "Date", "Registrations"], events.map((e) => [e.title, e.organizing_dept, e.event_date, String(e.registration_count || 0)])); setShowExport(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Export Events ({events.length})</button>
+              <button onClick={() => { void exportEventsXlsx(); }} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Export Events XLSX ({filteredEvents.length})</button>
               <button onClick={() => { downloadCSV("users", ["Name", "Email", "Role"], users.map((u) => [u.name, u.email, u.is_masteradmin ? "Admin" : u.is_organiser ? "Organiser" : u.is_support ? "Support" : "Regular"])); setShowExport(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">Export Users ({users.length})</button>
             </div>
           )}
