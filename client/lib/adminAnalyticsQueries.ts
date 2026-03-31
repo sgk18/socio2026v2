@@ -90,6 +90,7 @@ type TableName = keyof typeof TABLE_MAX_ROWS;
 
 type FetchInBatchesOptions = {
   table: TableName;
+  tableOverride?: string;
   select: string;
   batchSize?: number;
   maxRows?: number;
@@ -99,6 +100,11 @@ type FetchInBatchesOptions = {
 function isMissingColumnError(errorMessage: string): boolean {
   const normalized = errorMessage.toLowerCase();
   return normalized.includes("column") && normalized.includes("does not exist");
+}
+
+function isMissingRelationError(errorMessage: string): boolean {
+  const normalized = errorMessage.toLowerCase();
+  return normalized.includes("relation") && normalized.includes("does not exist");
 }
 
 function toNumber(value: unknown): number {
@@ -269,8 +275,9 @@ async function fetchInBatches<T extends Record<string, unknown>>(
   let from = 0;
 
   for (;;) {
+    const fromTable = options.tableOverride ?? options.table;
     let query = client
-      .from(options.table)
+      .from(fromTable)
       .select(options.select)
       .order("id", { ascending: true })
       .range(from, from + batchSize - 1);
@@ -282,7 +289,8 @@ async function fetchInBatches<T extends Record<string, unknown>>(
     const { data, error } = await query;
 
     if (error) {
-      throw new Error(`[${options.table}] ${error.message}`);
+      const errorCode = typeof error.code === "string" ? `${error.code} ` : "";
+      throw new Error(`[${fromTable}] ${errorCode}${error.message}`);
     }
 
     const chunk = ((data ?? []) as unknown) as T[];
@@ -316,22 +324,39 @@ async function fetchWithSelectFallback<T extends Record<string, unknown>>(
   signal?: AbortSignal
 ): Promise<T[]> {
   let lastError: Error | null = null;
+  const tableCandidates = table === "fests" ? ["fests", "fest"] : [table];
 
-  for (const select of selectCandidates) {
-    try {
-      const rows = await fetchInBatches<T>(client, {
-        table,
-        select,
-        signal,
-      });
-      return rows;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const shouldFallback = isMissingColumnError(message);
-      lastError = error instanceof Error ? error : new Error(message);
-      if (!shouldFallback) {
+  for (const tableCandidate of tableCandidates) {
+    let shouldTryNextTable = false;
+
+    for (const select of selectCandidates) {
+      try {
+        const rows = await fetchInBatches<T>(client, {
+          table,
+          tableOverride: tableCandidate,
+          select,
+          signal,
+        });
+        return rows;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        lastError = error instanceof Error ? error : new Error(message);
+
+        if (isMissingColumnError(message)) {
+          continue;
+        }
+
+        if (isMissingRelationError(message)) {
+          shouldTryNextTable = true;
+          break;
+        }
+
         throw lastError;
       }
+    }
+
+    if (!shouldTryNextTable) {
+      break;
     }
   }
 
