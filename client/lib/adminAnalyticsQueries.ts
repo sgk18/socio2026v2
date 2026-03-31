@@ -97,6 +97,8 @@ type FetchInBatchesOptions = {
   signal?: AbortSignal;
 };
 
+type QueryOrderColumn = string | "__none__";
+
 function isMissingColumnError(errorMessage: string): boolean {
   const normalized = errorMessage.toLowerCase();
   return normalized.includes("column") && normalized.includes("does not exist");
@@ -105,6 +107,24 @@ function isMissingColumnError(errorMessage: string): boolean {
 function isMissingRelationError(errorMessage: string): boolean {
   const normalized = errorMessage.toLowerCase();
   return normalized.includes("relation") && normalized.includes("does not exist");
+}
+
+function getOrderCandidates(tableName: string): QueryOrderColumn[] {
+  switch (tableName) {
+    case "users":
+      return ["id", "created_at", "email", "__none__"];
+    case "events":
+      return ["id", "event_id", "created_at", "__none__"];
+    case "fests":
+    case "fest":
+      return ["id", "fest_id", "created_at", "__none__"];
+    case "registrations":
+      return ["id", "registration_id", "created_at", "__none__"];
+    case "attendance_status":
+      return ["id", "registration_id", "marked_at", "__none__"];
+    default:
+      return ["id", "created_at", "__none__"];
+  }
 }
 
 function toNumber(value: unknown): number {
@@ -273,24 +293,58 @@ async function fetchInBatches<T extends Record<string, unknown>>(
   const maxRows = options.maxRows ?? TABLE_MAX_ROWS[options.table];
   const rows: T[] = [];
   let from = 0;
+  const fromTable = options.tableOverride ?? options.table;
+  const orderCandidates = getOrderCandidates(fromTable);
+  let currentOrderIndex = 0;
 
   for (;;) {
-    const fromTable = options.tableOverride ?? options.table;
-    let query = client
-      .from(fromTable)
-      .select(options.select)
-      .order("id", { ascending: true })
-      .range(from, from + batchSize - 1);
+    let data: unknown[] | null = null;
+    let lastError: { code?: string; message: string } | null = null;
+    let resolved = false;
 
-    if (options.signal) {
-      query = query.abortSignal(options.signal);
+    for (let index = currentOrderIndex; index < orderCandidates.length; index += 1) {
+      const orderBy = orderCandidates[index];
+
+      let query = client
+        .from(fromTable)
+        .select(options.select)
+        .range(from, from + batchSize - 1);
+
+      if (orderBy !== "__none__") {
+        query = query.order(orderBy, { ascending: true });
+      }
+
+      if (options.signal) {
+        query = query.abortSignal(options.signal);
+      }
+
+      const result = await query;
+
+      if (!result.error) {
+        data = (result.data ?? []) as unknown[];
+        currentOrderIndex = index;
+        resolved = true;
+        break;
+      }
+
+      lastError = {
+        code: typeof result.error.code === "string" ? result.error.code : undefined,
+        message: result.error.message,
+      };
+
+      const composedError = `${lastError.code ? `${lastError.code} ` : ""}${lastError.message}`;
+
+      if (isMissingColumnError(composedError) && index < orderCandidates.length - 1) {
+        continue;
+      }
+
+      break;
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      const errorCode = typeof error.code === "string" ? `${error.code} ` : "";
-      throw new Error(`[${fromTable}] ${errorCode}${error.message}`);
+    if (!resolved) {
+      const errorCode = lastError?.code ? `${lastError.code} ` : "";
+      const errorMessage = lastError?.message ?? "Unknown query error";
+      throw new Error(`[${fromTable}] ${errorCode}${errorMessage}`);
     }
 
     const chunk = ((data ?? []) as unknown) as T[];
