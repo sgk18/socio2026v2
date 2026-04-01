@@ -728,7 +728,7 @@ export default function MasterAdminPage() {
   ];
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-16 flex overflow-hidden bg-slate-50">
+    <div className="fixed inset-x-0 bottom-0 top-24 md:top-20 flex overflow-hidden bg-slate-50">
 
       {/* ── Sidebar ───────────────────────────────────────────────────────── */}
       <aside className="w-56 h-full flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
