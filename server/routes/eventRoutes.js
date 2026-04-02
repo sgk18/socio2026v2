@@ -47,8 +47,7 @@ router.get("/", async (req, res) => {
         : parseJsonField(event.custom_fields, []),
     }));
 
-    // OPTIMIZATION: Cache for 5 minutes, allow stale content for 1 hour
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(200).json({ events: processedEvents });
   } catch (error) {
     console.error("Server error GET /api/events:", error);
@@ -93,8 +92,7 @@ router.get("/:eventId", async (req, res) => {
         : parseJsonField(event.custom_fields, []),
     };
 
-    // OPTIMIZATION: Cache individual events for 5 minutes
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(200).json({ event: processedEvent });
   } catch (error) {
     console.error(`Server error GET /api/events/${req.params.eventId}:`, error);

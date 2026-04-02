@@ -30,6 +30,15 @@ initializeDatabase().catch(err => {
 const app = express();
 app.use(express.json());
 
+// Prevent stale API payloads from being cached by browsers or intermediary caches.
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  next();
+});
+
 // CORS - restrict to allowed origins in production
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://socio.christuniversity.in,http://localhost:3000,http://127.0.0.1:3000')
   .split(',')

@@ -2,7 +2,6 @@ import express from "express";
 import { getPathFromStorageUrl, deleteFileFromLocal } from "../utils/fileUtils.js";
 import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, insert, update, remove } from "../config/database.js";
-import { parseJsonField } from "../utils/parsers.js";
 import {
   authenticateUser,
   getUserInfo,
@@ -33,6 +32,29 @@ const normalizeJsonField = (value) => {
   }
   return [];
 };
+
+const pickDefined = (...values) => values.find((value) => value !== undefined);
+
+const parseJsonLikeField = (value, fallbackValue) => {
+  if (value === undefined) return undefined;
+  if (value === null) return fallbackValue;
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return fallbackValue;
+
+    try {
+      return JSON.parse(trimmedValue);
+    } catch (error) {
+      console.warn("Failed to parse JSON update field:", error.message);
+      return fallbackValue;
+    }
+  }
+
+  return value;
+};
+
+const isMissingColumnError = (error) => String(error?.code || "") === "42703";
 
 const mapFestResponse = (fest) => {
   if (!fest) return fest;
@@ -128,8 +150,7 @@ router.get("/", async (req, res) => {
 
     const shouldPaginate = page !== undefined || pageSize !== undefined;
     if (!shouldPaginate) {
-      // OPTIMIZATION: Cache for 5 minutes, allow stale content for 1 hour
-      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       return res.status(200).json({ fests: processedFests });
     }
 
@@ -141,8 +162,7 @@ router.get("/", async (req, res) => {
     const start = (safePage - 1) * parsedPageSize;
     const pagedFests = processedFests.slice(start, start + parsedPageSize);
 
-    // OPTIMIZATION: Cache for 5 minutes, allow stale content for 1 hour
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(200).json({
       fests: pagedFests,
       pagination: {
@@ -194,10 +214,7 @@ router.get("/:festId", async (req, res) => {
       return res.status(404).json({ error: `Fest with ID (slug) '${festSlug}' not found.` });
     }
 
-    console.log(`[Fest GET] ✅ Found fest: ${fest.fest_title}`);
-    
-    // OPTIMIZATION: Cache individual fests for 5 minutes
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(200).json({ fest: mapFestResponse(fest) });
   } catch (error) {
     console.error("❌ Error fetching fest:", error);
@@ -368,6 +385,12 @@ router.put(
       const newTitle = updateData.fest_title ?? updateData.festTitle ?? updateData.title;
       const titleChanged = newTitle && newTitle.trim() !== existingFest.fest_title;
 
+      const departmentAccessInput = pickDefined(updateData.department_access, updateData.departmentAccess);
+      const eventHeadsInput = pickDefined(updateData.event_heads, updateData.eventHeads);
+      const campusHostedAtInput = pickDefined(updateData.campus_hosted_at, updateData.campusHostedAt);
+      const allowedCampusesInput = pickDefined(updateData.allowed_campuses, updateData.allowedCampuses);
+      const allowOutsidersInput = pickDefined(updateData.allow_outsiders, updateData.allowOutsiders);
+
       const updatePayload = {};
 
       const mapFields = [
@@ -380,24 +403,24 @@ router.put(
         ["category", updateData.category],
         ["contact_email", updateData.contact_email ?? updateData.contactEmail],
         ["contact_phone", updateData.contact_phone ?? updateData.contactPhone],
-        ["department_access", parseJsonField(updateData.department_access ?? updateData.departmentAccess, [])],
-        ["event_heads", parseJsonField(updateData.event_heads ?? updateData.eventHeads, [])],
+        ["department_access", parseJsonLikeField(departmentAccessInput, [])],
+        ["event_heads", parseJsonLikeField(eventHeadsInput, [])],
         // New enhanced fest fields - parse JSON safely
         ["venue", updateData.venue],
         ["status", updateData.status],
         ["registration_deadline", updateData.registration_deadline],
-        ["timeline", parseJsonField(updateData.timeline, [])],
-        ["sponsors", parseJsonField(updateData.sponsors, [])],
-        ["social_links", parseJsonField(updateData.social_links, {})],
-        ["faqs", parseJsonField(updateData.faqs, [])],
-        ["campus_hosted_at", updateData.campus_hosted_at ?? updateData.campusHostedAt],
-        ["allowed_campuses", parseJsonField(updateData.allowed_campuses ?? updateData.allowedCampuses, [])],
-        ["allow_outsiders", updateData.allow_outsiders !== undefined ? (updateData.allow_outsiders === true || updateData.allow_outsiders === 'true') : (updateData.allowOutsiders !== undefined ? (updateData.allowOutsiders === true || updateData.allowOutsiders === 'true') : undefined)],
+        ["timeline", parseJsonLikeField(updateData.timeline, [])],
+        ["sponsors", parseJsonLikeField(updateData.sponsors, [])],
+        ["social_links", parseJsonLikeField(updateData.social_links, [])],
+        ["faqs", parseJsonLikeField(updateData.faqs, [])],
+        ["campus_hosted_at", campusHostedAtInput],
+        ["allowed_campuses", parseJsonLikeField(allowedCampusesInput, [])],
+        ["allow_outsiders", allowOutsidersInput !== undefined ? (allowOutsidersInput === true || allowOutsidersInput === 'true') : undefined],
       ];
 
       for (const [key, value] of mapFields) {
         if (value !== undefined) {
-          updatePayload[key] = key === "department_access" || key === "event_heads" ? value || [] : value;
+          updatePayload[key] = value;
         }
       }
 
@@ -531,8 +554,22 @@ router.delete(
       const { festId } = req.params;
       const existingFest = req.resource; // From ownership middleware
 
-      // Delete associated events first
-      await remove("events", { fest: festId });
+      // Delete associated events first (support both legacy and newer schemas)
+      try {
+        await remove("events", { fest_id: festId });
+      } catch (eventDeleteError) {
+        if (!isMissingColumnError(eventDeleteError)) {
+          throw eventDeleteError;
+        }
+      }
+
+      try {
+        await remove("events", { fest: existingFest?.fest_title || festId });
+      } catch (eventDeleteError) {
+        if (!isMissingColumnError(eventDeleteError)) {
+          throw eventDeleteError;
+        }
+      }
 
       // Delete fest image if exists
       if (existingFest.fest_image_url) {
