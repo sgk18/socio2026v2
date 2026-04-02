@@ -728,10 +728,10 @@ export default function MasterAdminPage() {
   ];
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-16 flex overflow-hidden bg-slate-50">
+    <div className="flex h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-8.5rem)] lg:h-[calc(100dvh-7.75rem)] bg-slate-50 overflow-hidden">
 
       {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-      <aside className="w-56 h-full flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+      <aside className="sticky top-0 h-full w-56 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
         <nav className="px-3 pt-4 pb-2 space-y-0.5">
           {sidebarNav.map((item) => {
             const isActive = activeTab === item.id;
@@ -785,7 +785,7 @@ export default function MasterAdminPage() {
       </aside>
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
-      <main className="h-full flex-1 overflow-y-auto bg-slate-50">
+      <main className="min-w-0 flex-1 bg-slate-50 overflow-y-auto">
 
         {/* Dashboard Tab */}
         {activeTab === "dashboard" && (
