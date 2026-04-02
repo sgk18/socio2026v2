@@ -449,14 +449,24 @@ router.put(
       }
 
       const updated = await update(festTable, updatePayload, { fest_id: festId });
-      const updatedFest = updated?.[0];
+      let updatedFest = updated?.[0];
       
+      // If update didn't return data, try fetching the updated fest
       if (!updatedFest) {
-        console.error("❌ Update query returned no data. Updated:", updated);
-        throw new Error("Fest update failed - no data returned from database");
+        console.warn("⚠️ Update query returned no data, fetching fest from database...");
+        try {
+          updatedFest = await queryOne(festTable, { where: { fest_id: festId } });
+          if (!updatedFest) {
+            throw new Error("Could not fetch updated fest after update");
+          }
+          console.log(`✅ Fest updated and refetched successfully: ${festId}`);
+        } catch (refetchError) {
+          console.error("❌ Failed to refetch fest after update:", refetchError.message);
+          throw new Error("Fest update failed - could not verify update");
+        }
+      } else {
+        console.log(`✅ Fest updated successfully: ${festId}`);
       }
-      
-      console.log(`✅ Fest updated successfully: ${festId}`);
 
       // Push to UniversityGated if outsiders are now enabled (non-blocking)
       if (isGatedEnabled() && updatedFest) {
