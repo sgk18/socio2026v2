@@ -9,12 +9,24 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").rep
 // Store read notifications locally so they persist across refreshes
 
 const STORAGE_KEY = "socio_read_notifications";
+const DISMISSED_KEY = "socio_dismissed_notifications"; // Track dismissed/cleared notifications
 
 // Get all read notification IDs from localStorage
 const getReadNotificationsFromStorage = (): Set<string> => {
   if (typeof window === "undefined") return new Set();
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+// Get all dismissed notification IDs from localStorage
+const getDismissedNotificationsFromStorage = (): Set<string> => {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const stored = localStorage.getItem(DISMISSED_KEY);
     return new Set(stored ? JSON.parse(stored) : []);
   } catch {
     return new Set();
@@ -34,6 +46,18 @@ const addReadNotification = (notificationId: string, email?: string): void => {
     document.cookie = `notif_${notificationId}=read; max-age=2592000; path=/`;
   } catch (error) {
     console.error("Error saving to localStorage:", error);
+  }
+};
+
+// Add notification ID to dismissed list (for clear all)
+const addDismissedNotification = (notificationId: string): void => {
+  if (typeof window === "undefined") return;
+  try {
+    const dismissedIds = getDismissedNotificationsFromStorage();
+    dismissedIds.add(notificationId);
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(dismissedIds)));
+  } catch (error) {
+    console.error("Error saving dismissed notification:", error);
   }
 };
 
@@ -97,12 +121,16 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
         const newNotifications = data.notifications || [];
         
         // ─── APPLY LOCALSTORAGE FILTERING ───
-        // If notification ID is in localStorage, mark it as read locally
+        // Filter out dismissed notifications and mark read ones
         const readIds = getReadNotificationsFromStorage();
-        const filteredNotifications = newNotifications.map((n: Notification) => ({
-          ...n,
-          read: n.read || readIds.has(n.id) // Mark as read if in localStorage
-        }));
+        const dismissedIds = getDismissedNotificationsFromStorage();
+        
+        const filteredNotifications = newNotifications
+          .filter((n: Notification) => !dismissedIds.has(n.id)) // Remove dismissed
+          .map((n: Notification) => ({
+            ...n,
+            read: n.read || readIds.has(n.id) // Mark as read if in localStorage
+          }));
         
         if (append) {
           setNotifications(prev => [...prev, ...filteredNotifications]);
@@ -201,17 +229,12 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
   }, [notifications, session?.access_token, userData?.email]);
 
   const clearAllNotifications = useCallback(() => {
-    // ─── CLEAR LOCAL STORAGE AND MARK ALL AS DISMISSED ───
+    // ─── MARK ALL AS DISMISSED IN LOCAL STORAGE ───
+    // This ensures they won't show on refresh even if backend deletion is delayed
     if (typeof window !== "undefined") {
-      // Save all notification IDs as "read/dismissed" in localStorage
-      // This ensures even if backend deletion is delayed, they won't show on refresh
       const allIds = notifications.map(n => n.id);
       if (allIds.length > 0) {
-        const readIds = getReadNotificationsFromStorage();
-        allIds.forEach(id => readIds.add(id));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(readIds)));
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
+        allIds.forEach(id => addDismissedNotification(id));
       }
     }
 
