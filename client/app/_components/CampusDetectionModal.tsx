@@ -212,21 +212,21 @@ export default function CampusDetectionModal({
           {state === "finalConfirm" && detectedCampus && (
             <>
               <div className="text-center mb-4">
-                <p className="text-base font-bold text-[#063168] mb-1">Your campus will be set to</p>
-                <p className="text-xl font-extrabold text-[#154CB3] mb-2">{detectedCampus.toUpperCase()}</p>
-                <p className="text-sm font-semibold text-red-600">This is permanent. Are you sure?</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Final confirmation</p>
+                <p className="text-sm font-medium text-gray-600">Campus will be permanently set to</p>
+                <p className="text-lg font-bold text-[#063168] mt-0.5">{detectedCampus.toUpperCase()}</p>
               </div>
 
-              <div className="mb-3 rounded-xl border border-[#154CB3]/15 bg-[#f4f8ff] p-3">
-                <p className="text-xs font-semibold text-[#063168] mb-2">Step 1: Use this required word</p>
+              <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="border border-[#154CB3]/25 bg-white rounded-lg px-3 py-2 text-center text-base font-extrabold tracking-[0.18em] text-[#154CB3] font-mono select-all">
-                    {CONFIRM_WORD}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Required word</p>
+                    <p className="text-sm font-mono font-bold tracking-[0.2em] text-[#154CB3]">{CONFIRM_WORD}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={copyYes}
-                      className="px-3 py-2 border border-[#154CB3]/30 bg-white rounded-lg hover:bg-[#eaf1ff] transition-colors text-xs font-semibold text-[#154CB3] flex items-center gap-1 shrink-0"
+                      className="px-2.5 py-1.5 border border-gray-300 bg-white rounded-md hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600 flex items-center gap-1 shrink-0"
                       title="Copy confirmation word"
                     >
                       {copied ? (
@@ -248,7 +248,7 @@ export default function CampusDetectionModal({
 
                     <button
                       onClick={pasteConfirmWord}
-                      className="px-3 py-2 border border-[#154CB3]/30 bg-white rounded-lg hover:bg-[#eaf1ff] transition-colors text-xs font-semibold text-[#154CB3] flex items-center gap-1 shrink-0"
+                      className="px-2.5 py-1.5 border border-[#154CB3]/30 bg-white rounded-md hover:bg-[#eaf1ff] transition-colors text-xs font-semibold text-[#154CB3] flex items-center gap-1 shrink-0"
                       title="Auto-fill YES in confirmation input"
                     >
                       {pasted ? (
@@ -263,7 +263,7 @@ export default function CampusDetectionModal({
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
                           </svg>
-                          Paste YES
+                          Use YES
                         </>
                       )}
                     </button>
@@ -273,7 +273,7 @@ export default function CampusDetectionModal({
 
               <div className="mb-3">
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Step 2: Confirm by typing <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-[#154CB3]">{CONFIRM_WORD}</span> below
+                  Type <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-[#154CB3]">{CONFIRM_WORD}</span> below to continue
                 </label>
                 <input
                   type="text"
@@ -285,7 +285,7 @@ export default function CampusDetectionModal({
                 />
 
                 <p className={`mt-1.5 text-xs font-medium ${isConfirmationValid ? "text-green-600" : "text-gray-500"}`}>
-                  {isConfirmationValid ? "Ready. You can now confirm and save." : `Enter ${CONFIRM_WORD} exactly to continue.`}
+                  {isConfirmationValid ? "Ready to confirm." : `Confirm is enabled when input matches ${CONFIRM_WORD}.`}
                 </p>
 
                 {pasted && (
