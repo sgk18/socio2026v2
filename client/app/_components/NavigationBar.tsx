@@ -88,7 +88,8 @@ function NavigationBar() {
   const displayName = userData?.name || sessionDisplayName;
   const displayAvatar = userData?.avatar_url || session?.user?.user_metadata?.avatar_url || null;
   const avatarInitial = (displayName || "U").charAt(0).toUpperCase();
-  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const isMasterAdmin = Boolean((userData as any)?.is_masteradmin);
+  const isOrganiser = Boolean(userData?.is_organiser);
 
   useEffect(() => {
     setAvatarLoadError(false);
@@ -237,7 +238,7 @@ function NavigationBar() {
   return (
     <>
  {/* CHANGED FOR EACH DEVICE */}
-      <nav ref={navContainerRef} className="relative z-50 w-full flex flex-wrap md:flex-nowrap items-center pt-6 pb-4 md:pt-8 md:pb-7 px-4 md:px-8 lg:px-12 text-[#154CB3] select-none gap-3 md:gap-4">
+      <nav ref={navContainerRef} className="w-full flex flex-wrap md:flex-nowrap items-center pt-6 pb-4 md:pt-8 md:pb-7 px-4 md:px-8 lg:px-12 text-[#154CB3] select-none relative gap-3 md:gap-4">
         <div ref={desktopNavMeasureRef} className="hidden md:flex absolute invisible pointer-events-none -z-10">
           <div className="flex space-x-8">
             {navigationLinks.map((link) => (
@@ -344,20 +345,20 @@ function NavigationBar() {
                 <div className="h-9 w-24 rounded-full bg-gray-200 animate-pulse" />
               </div>
             ) : session ? (
-              userData && (userData.is_organiser || (userData as any).is_masteradmin) ? (
+              userData && (isOrganiser || isMasterAdmin) ? (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   <NotificationSystem />
-                  {!isDesktopCompact && (userData as any).is_masteradmin && (
+                  {!isDesktopCompact && isMasterAdmin && (
                     <Link href="/masteradmin">
                       <button className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm hover:bg-red-50 border-red-600 text-red-600 transition-all duration-200 ease-in-out">
-                        {(userData as any).is_masteradmin ? 'Admin Panel' : 'Admin (Dev)'}
+                        Admin
                       </button>
                     </Link>
                   )}
-                  {!isDesktopCompact && userData.is_organiser && (
+                  {!isDesktopCompact && isOrganiser && (
                     <Link href="/manage">
                       <button className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm hover:bg-[#f3f3f3] transition-all duration-200 ease-in-out">
-                        {userData.is_organiser ? 'Manage events' : 'Manage (Dev)'}
+                        Organiser
                       </button>
                     </Link>
                   )}
@@ -489,7 +490,7 @@ function NavigationBar() {
               </button>
             </div>
 
-            <div className="px-4 py-3 overflow-y-auto">
+            <div className="px-4 py-3 overflow-y-auto flex-1">
               {navigationLinks.map((link) => {
                 const isExpanded = expandedDesktopSection === link.name;
 
@@ -591,6 +592,36 @@ function NavigationBar() {
                 );
               })}
             </div>
+
+            {session && userData && (isMasterAdmin || isOrganiser) && (
+              <div className="px-4 pb-4 border-t border-gray-200">
+                <p className="pt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Quick actions
+                </p>
+
+                <div className="mt-2 space-y-2">
+                  {isMasterAdmin && (
+                    <Link
+                      href="/masteradmin"
+                      onClick={closeDesktopMenu}
+                      className="block rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors duration-200"
+                    >
+                      Admin
+                    </Link>
+                  )}
+
+                  {isOrganiser && (
+                    <Link
+                      href="/manage"
+                      onClick={closeDesktopMenu}
+                      className="block rounded-lg border border-[#154CB3]/30 px-3 py-2 text-sm font-semibold text-[#154CB3] hover:bg-[#154CB3]/10 transition-colors duration-200"
+                    >
+                      Organiser
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
           </aside>
         </>
       )}
