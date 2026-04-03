@@ -11,7 +11,8 @@ const remoteImageHosts = (process.env.NEXT_PUBLIC_REMOTE_IMAGE_HOSTS || "")
   .filter(Boolean);
 
 if (remoteImageHosts.length === 0) {
-  throw new Error("Missing NEXT_PUBLIC_REMOTE_IMAGE_HOSTS");
+  console.warn("Missing NEXT_PUBLIC_REMOTE_IMAGE_HOSTS. Falling back to default Supabase host.");
+  remoteImageHosts.push('vkappuaapscvteexogtp.supabase.co');
 }
 
 const remotePatterns = remoteImageHosts.map((hostname) => ({
