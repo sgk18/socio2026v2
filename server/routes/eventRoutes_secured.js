@@ -788,8 +788,8 @@ router.put(
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
 
       // Prepare update payload
+      // Note: Only include event_id if it's NOT changing (to avoid primary key update issues)
       const updateData = {
-        event_id: newEventId, // Include new event_id (will be same as old if title didn't change)
         title: title.trim(),
         description: description || null,
         event_date: event_date || null,
@@ -824,7 +824,6 @@ router.put(
           ? req.body.allowed_campuses
           : parseJsonField(req.body.allowed_campuses, []),
         updated_at: new Date().toISOString()
-        // NOTE: 'updated_by' column does not exist in events table - removed
       };
 
       console.log("🔄 UPDATE DATA - File URLs being saved to database:");
