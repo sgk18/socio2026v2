@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "../../context/AuthContext";
@@ -17,12 +18,14 @@ import DateTimePickerAdmin from "../_components/DateTimePickerAdmin";
 import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
+  Users,
   CalendarDays,
   Trophy,
   Bell,
   BarChart2,
   LineChart,
   Settings,
+  UserCog,
   Eye,
   ChevronRight,
 } from "lucide-react";
@@ -736,6 +739,7 @@ export default function MasterAdminPage() {
   const sidebarNav = [
     { id: "dashboard" as const, label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: "dataExplorer" as const, label: "Data Explorer", icon: <LineChart className="w-4 h-4" /> },
+    { id: "users" as const, label: "Users", icon: <Users className="w-4 h-4" />, count: users.length },
     { id: "events" as const, label: "Events", icon: <CalendarDays className="w-4 h-4" />, count: events.length },
     { id: "fests" as const, label: "Fests", icon: <Trophy className="w-4 h-4" />, count: fests.length },
     { id: "notifications" as const, label: "Notifications", icon: <Bell className="w-4 h-4" /> },
@@ -743,7 +747,8 @@ export default function MasterAdminPage() {
   ];
 
   const managementNav = [
-    { id: undefined, label: "Organiser View", icon: <Eye className="w-4 h-4" />, href: "/manage" },
+    { id: "users" as const, label: "Manage Users", icon: <UserCog className="w-4 h-4" />, href: undefined },
+    { label: "Organiser View", icon: <Eye className="w-4 h-4" />, href: "/manage" },
   ];
 
   return (
