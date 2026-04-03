@@ -226,7 +226,7 @@ export default function MasterAdminPage() {
   }, [authLoading, isMasterAdmin, router]);
 
   // Check if user is on localhost for dev access
-  const [isLocalhostDev, setIsLocalhostDev] = React.useState(false);
+  const [isLocalhostDev, setIsLocalhostDev] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setIsLocalhostDev(window.location.hostname === 'localhost');
