@@ -142,7 +142,9 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
   const isArchived = fest.is_archived ?? false;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-300">
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-all duration-300 ${
+      isArchived ? "opacity-60 grayscale" : ""
+    }`}>
       <div className="h-48 relative bg-slate-100">
         <img
           src={fest.fest_image_url || process.env.NEXT_PUBLIC_EVENT_BANNER_PLACEHOLDER_URL!}
@@ -234,7 +236,9 @@ const MappedEventCard = ({
       : "bg-white text-emerald-600";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-300">
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-all duration-300 ${
+      isArchived ? "opacity-60 grayscale" : ""
+    }`}>
       <div className="h-48 relative bg-slate-100">
         <img
           src={event.event_image_url || process.env.NEXT_PUBLIC_EVENT_BANNER_PLACEHOLDER_URL!}
