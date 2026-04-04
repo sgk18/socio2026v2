@@ -66,8 +66,6 @@ const EVENT_STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }>
   { value: "archived", label: "Archived" },
 ];
 
-const AUTO_ARCHIVE_DAYS = 15;
-const AUTO_ARCHIVE_MS = AUTO_ARCHIVE_DAYS * 24 * 60 * 60 * 1000;
 const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 
 const CAMPUSES = [
@@ -555,9 +553,20 @@ export default function ManageDashboard() {
   };
 
   const isAutoArchivedEvent = (event: ContextEvent) => {
+    // Match backend auto-archive logic: archive when event_date is in the past
+    // (not after 15 days). If event is manually archived, this won't be called
+    // due to getEffectiveArchiveState logic ordering.
     const eventDate = getValidDate(event.event_date);
     if (!eventDate) return false;
-    return Date.now() - eventDate.getTime() >= AUTO_ARCHIVE_MS;
+    
+    // Set to midnight to match backend comparison
+    const eventDateMidnight = new Date(eventDate);
+    eventDateMidnight.setHours(0, 0, 0, 0);
+    
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    
+    return eventDateMidnight.getTime() < todayMidnight.getTime();
   };
 
   const toBoolean = (value: unknown) =>
@@ -1275,7 +1284,7 @@ export default function ManageDashboard() {
               ) : paginatedEvents.items.length === 0 ? (
                 <div className="text-center text-slate-500 py-10 text-sm font-medium">
                   {statusFilter === "archived"
-                    ? `No archived events found. Events auto-archive after ${AUTO_ARCHIVE_DAYS} days.`
+                    ? `No archived events found. Events auto-archive after their end date.`
                     : "No results found."}
                 </div>
               ) : (

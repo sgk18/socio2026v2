@@ -886,6 +886,19 @@ router.put(
         max_participants
       } = req.body;
 
+      // ─── AUTO-UNARCHIVE LOGIC ───────────────────────────────────────────
+      // If an event was auto-archived (date passed) but then the date is changed
+      // to a future date, automatically unarchive it
+      const newEventDate = getValidDate(event_date || req.body.end_date);
+      const isDateChangedToFuture = newEventDate && newEventDate > getTodayStart();
+      const wasAutoArchivedBySystem = asBoolean(event?.is_archived) && 
+        (event?.archived_by?.includes("system:auto_end_date") || !event?.archived_by);
+      const shouldAutoUnarchive = isDateChangedToFuture && wasAutoArchivedBySystem && asBoolean(event?.is_archived);
+      
+      if (shouldAutoUnarchive) {
+        console.log(`[AutoUnarchive] Event ${eventId} date changed to future (${event_date}). Auto-unarchiving.`);
+      }
+
       if (!title || typeof title !== "string" || title.trim() === "") {
         return res.status(400).json({ error: "Title is required and must be a non-empty string." });
       }
@@ -963,7 +976,9 @@ router.put(
         allowed_campuses: Array.isArray(req.body.allowed_campuses)
           ? req.body.allowed_campuses
           : parseJsonField(req.body.allowed_campuses, []),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        // Auto-unarchive if date changed to future
+        ...(shouldAutoUnarchive ? { is_archived: false, archived_at: null, archived_by: null } : {})
       };
 
       console.log("🔄 UPDATE DATA - File URLs being saved to database:");
