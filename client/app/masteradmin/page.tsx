@@ -193,7 +193,6 @@ export default function MasterAdminPage() {
   const [showDeleteEventConfirm, setShowDeleteEventConfirm] = useState<string | null>(null);
   const [eventPage, setEventPage] = useState(1);
   const [eventStatusFilter, setEventStatusFilter] = useState<"all" | "live" | "upcoming" | "thisweek" | "past">("all");
-  const [eventArchiveFilter, setEventArchiveFilter] = useState<"all" | "active" | "archived">("all");
   const [eventSortKey, setEventSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
   const [eventSortDir, setEventSortDir] = useState<"asc" | "desc">("desc");
   
@@ -207,7 +206,6 @@ export default function MasterAdminPage() {
   const [festSearchQuery, setFestSearchQuery] = useState("");
   const [showDeleteFestConfirm, setShowDeleteFestConfirm] = useState<string | null>(null);
   const [festPage, setFestPage] = useState(1);
-  const [festArchiveFilter, setFestArchiveFilter] = useState<"all" | "active" | "archived">("all");
   const [festSortKey, setFestSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
   const [festSortDir, setFestSortDir] = useState<"asc" | "desc">("desc");
 
@@ -271,61 +269,20 @@ export default function MasterAdminPage() {
   }, [debouncedUserSearch, roleFilter, userSortKey, userSortDir]);
 
   // Event status helper
-  const getEventStatus = (dateStr: string) => {
+  const getEventStatus = (event: Event) => {
+    const isArchived = event.archived_effective === true || event.is_archived === true;
+    if (isArchived) {
+      return { label: "Archived", color: "bg-amber-100 text-amber-700" };
+    }
+
     const now = new Date();
-    const eventDate = new Date(dateStr);
+    const eventDate = new Date(event.event_date);
     const diffMs = eventDate.getTime() - now.getTime();
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
     if (diffDays < -1) return { label: "Past", color: "bg-gray-100 text-gray-600" };
     if (Math.abs(diffDays) <= 1) return { label: "Live", color: "bg-green-100 text-green-700" };
     if (diffDays <= 7) return { label: "This Week", color: "bg-yellow-100 text-yellow-700" };
     return { label: "Upcoming", color: "bg-blue-100 text-blue-700" };
-  };
-
-  const getEventArchiveStatus = (event: Event) => {
-    const isArchived = event.archived_effective === true || event.is_archived === true;
-    if (!isArchived) {
-      return {
-        label: "Active",
-        color: "bg-emerald-100 text-emerald-700",
-        title: "Event is active",
-      };
-    }
-
-    const archivedBy = String(event.archived_by || "").toLowerCase();
-    const isAutoArchived = archivedBy.includes("system:auto_end_date");
-    const archiveAt = event.archived_at
-      ? new Date(event.archived_at).toLocaleString("en-IN")
-      : "unknown time";
-    const archiveByLabel = event.archived_by || (isAutoArchived ? "system:auto_end_date" : "unknown");
-
-    return {
-      label: isAutoArchived ? "Archived (Auto)" : "Archived (Manual)",
-      color: isAutoArchived ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700",
-      title: `Archived at ${archiveAt} by ${archiveByLabel}`,
-    };
-  };
-
-  const getFestArchiveStatus = (fest: Fest) => {
-    const isArchived = fest.is_archived === true;
-    if (!isArchived) {
-      return {
-        label: "Active",
-        color: "bg-emerald-100 text-emerald-700",
-        title: "Fest is active",
-      };
-    }
-
-    const archiveAt = fest.archived_at
-      ? new Date(fest.archived_at).toLocaleString("en-IN")
-      : "unknown time";
-    const archiveByLabel = fest.archived_by || "unknown";
-
-    return {
-      label: "Archived",
-      color: "bg-amber-100 text-amber-700",
-      title: `Archived at ${archiveAt} by ${archiveByLabel}`,
-    };
   };
 
   // Sort toggle helper
@@ -353,11 +310,11 @@ export default function MasterAdminPage() {
 
   useEffect(() => {
     setEventPage(1);
-  }, [debouncedEventSearch, eventStatusFilter, eventArchiveFilter, eventSortKey, eventSortDir]);
+  }, [debouncedEventSearch, eventStatusFilter, eventSortKey, eventSortDir]);
 
   useEffect(() => {
     setFestPage(1);
-  }, [debouncedFestSearch, festArchiveFilter, festSortKey, festSortDir]);
+  }, [debouncedFestSearch, festSortKey, festSortDir]);
 
   useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "users") return;
@@ -367,12 +324,12 @@ export default function MasterAdminPage() {
   useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "events") return;
     fetchEvents();
-  }, [activeTab, isMasterAdmin, authToken, eventPage, debouncedEventSearch, eventStatusFilter, eventArchiveFilter, eventSortKey, eventSortDir]);
+  }, [activeTab, isMasterAdmin, authToken, eventPage, debouncedEventSearch, eventStatusFilter, eventSortKey, eventSortDir]);
 
   useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "fests") return;
     fetchFests();
-  }, [activeTab, isMasterAdmin, authToken, festPage, debouncedFestSearch, festArchiveFilter, festSortKey, festSortDir]);
+  }, [activeTab, isMasterAdmin, authToken, festPage, debouncedFestSearch, festSortKey, festSortDir]);
 
   const fetchRegistrations = async () => {
     try {
@@ -507,7 +464,6 @@ export default function MasterAdminPage() {
         query.set("pageSize", String(ITEMS_PER_PAGE));
         if (debouncedEventSearch.trim()) query.set("search", debouncedEventSearch.trim());
         if (eventStatusFilter !== "all") query.set("status", eventStatusFilter);
-        if (eventArchiveFilter !== "all") query.set("archive", eventArchiveFilter);
         query.set("sortBy", eventSortKey === "date" ? "event_date" : eventSortKey);
         query.set("sortOrder", eventSortDir);
       }
@@ -545,7 +501,6 @@ export default function MasterAdminPage() {
         query.set("page", String(festPage));
         query.set("pageSize", String(ITEMS_PER_PAGE));
         if (debouncedFestSearch.trim()) query.set("search", debouncedFestSearch.trim());
-        if (festArchiveFilter !== "all") query.set("archive", festArchiveFilter);
         query.set("sortBy", festSortKey === "date" ? "opening_date" : festSortKey);
         query.set("sortOrder", festSortDir);
       }
@@ -1218,7 +1173,7 @@ export default function MasterAdminPage() {
 
             {/* Search + Status Filter + Result Count */}
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Search Events</label>
                   <input
@@ -1245,20 +1200,6 @@ export default function MasterAdminPage() {
                     <option value="past">Past</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Archive</label>
-                  <select
-                    value={eventArchiveFilter}
-                    onChange={(e) => setEventArchiveFilter(e.target.value as any)}
-                    aria-label="Filter events by archive status"
-                    title="Filter events by archive status"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
-                  >
-                    <option value="all">All</option>
-                    <option value="active">Active Only</option>
-                    <option value="archived">Archived Only</option>
-                  </select>
-                </div>
               </div>
               {/* Result summary */}
               <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
@@ -1268,11 +1209,6 @@ export default function MasterAdminPage() {
                   {eventStatusFilter !== "all" && (
                     <button onClick={() => setEventStatusFilter("all")} className="ml-2 text-[#154CB3] hover:underline">
                       Clear filter
-                    </button>
-                  )}
-                  {eventArchiveFilter !== "all" && (
-                    <button onClick={() => setEventArchiveFilter("all")} className="ml-2 text-[#154CB3] hover:underline">
-                      Clear archive
                     </button>
                   )}
                 </span>
@@ -1306,7 +1242,6 @@ export default function MasterAdminPage() {
                             Event <SortIcon active={eventSortKey === "title"} dir={eventSortDir} />
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Archive</th>
                           <th
                             onClick={() => toggleSort("dept", eventSortKey, eventSortDir, setEventSortKey, setEventSortDir)}
                             className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
@@ -1331,8 +1266,7 @@ export default function MasterAdminPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {events.map((event) => {
-                          const status = getEventStatus(event.event_date);
-                          const archiveStatus = getEventArchiveStatus(event);
+                          const status = getEventStatus(event);
                           return (
                             <tr key={event.event_id} className="hover:bg-gray-50 transition-all duration-200">
                               <td className="px-6 py-4">
@@ -1342,14 +1276,6 @@ export default function MasterAdminPage() {
                               <td className="px-6 py-3">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${status.color}`}>
                                   {status.label}
-                                </span>
-                              </td>
-                              <td className="px-6 py-3">
-                                <span
-                                  title={archiveStatus.title}
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${archiveStatus.color}`}
-                                >
-                                  {archiveStatus.label}
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-600 font-medium">{event.organizing_dept}</td>
@@ -1415,40 +1341,17 @@ export default function MasterAdminPage() {
           <div className="space-y-6">
 
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Fests</label>
-                  <input
-                    type="text"
-                    placeholder="Search fests by title or department..."
-                    value={festSearchQuery}
-                    onChange={(e) => setFestSearchQuery(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Archive</label>
-                  <select
-                    value={festArchiveFilter}
-                    onChange={(e) => setFestArchiveFilter(e.target.value as any)}
-                    aria-label="Filter fests by archive status"
-                    title="Filter fests by archive status"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
-                  >
-                    <option value="all">All</option>
-                    <option value="active">Active Only</option>
-                    <option value="archived">Archived Only</option>
-                  </select>
-                </div>
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Search Fests</label>
+              <input
+                type="text"
+                placeholder="Search fests by title or department..."
+                value={festSearchQuery}
+                onChange={(e) => setFestSearchQuery(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
+              />
               <div className="mt-3 text-sm text-gray-500">
                 Showing <strong className="text-gray-700">{fests.length}</strong> of{" "}
                 <strong className="text-gray-700">{festPagination.totalItems}</strong> fests
-                {festArchiveFilter !== "all" && (
-                  <button onClick={() => setFestArchiveFilter("all")} className="ml-2 text-[#154CB3] hover:underline">
-                    Clear archive
-                  </button>
-                )}
               </div>
             </div>
 
@@ -1487,7 +1390,6 @@ export default function MasterAdminPage() {
                           >
                             Opening Date <SortIcon active={festSortKey === "date"} dir={festSortDir} />
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Archive</th>
                           <th
                             onClick={() => toggleSort("registrations", festSortKey, festSortDir, setFestSortKey, setFestSortDir)}
                             className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
@@ -1499,62 +1401,51 @@ export default function MasterAdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {fests.map((fest) => {
-                          const archiveStatus = getFestArchiveStatus(fest);
-                          return (
-                            <tr key={fest.fest_id} className="hover:bg-gray-50 transition-all duration-200">
-                              <td className="px-6 py-4">
-                                <div className="font-semibold text-gray-900">{fest.fest_title}</div>
-                                <div className="text-sm text-gray-500">ID: {fest.fest_id}</div>
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-600 font-medium">{fest.organizing_dept}</td>
-                              <td className="px-6 py-4 text-sm text-gray-600">
-                                {new Date(fest.opening_date).toLocaleDateString('en-US', { 
-                                  month: 'short', 
-                                  day: 'numeric', 
-                                  year: 'numeric' 
-                                })}
-                              </td>
-                              <td className="px-6 py-3">
-                                <span
-                                  title={archiveStatus.title}
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${archiveStatus.color}`}
+                        {fests.map((fest) => (
+                          <tr key={fest.fest_id} className="hover:bg-gray-50 transition-all duration-200">
+                            <td className="px-6 py-4">
+                              <div className="font-semibold text-gray-900">{fest.fest_title}</div>
+                              <div className="text-sm text-gray-500">ID: {fest.fest_id}</div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">{fest.organizing_dept}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {new Date(fest.opening_date).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                                {fest.registration_count || 0} Registered
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{fest.created_by}</td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <a
+                                  href={`/edit/fest/${fest.fest_id}`}
+                                  className="px-4 py-2 bg-[#154CB3] text-white text-sm font-medium rounded-lg hover:bg-[#154cb3df] hover:-translate-y-0.5 transition-all"
                                 >
-                                  {archiveStatus.label}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
-                                  {fest.registration_count || 0} Registered
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-600">{fest.created_by}</td>
-                              <td className="px-6 py-4 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <a
-                                    href={`/edit/fest/${fest.fest_id}`}
-                                    className="px-4 py-2 bg-[#154CB3] text-white text-sm font-medium rounded-lg hover:bg-[#154cb3df] hover:-translate-y-0.5 transition-all"
-                                  >
-                                    Edit
-                                  </a>
-                                  <a
-                                    href={`/fest/${fest.fest_id}`}
-                                    className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 hover:-translate-y-0.5 transition-all"
-                                  >
-                                    View
-                                  </a>
-                                  <button
-                                    onClick={() => setShowDeleteFestConfirm(fest.fest_id)}
-                                    className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 hover:-translate-y-0.5 transition-all"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                  Edit
+                                </a>
+                                <a
+                                  href={`/fest/${fest.fest_id}`}
+                                  className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 hover:-translate-y-0.5 transition-all"
+                                >
+                                  View
+                                </a>
+                                <button
+                                  onClick={() => setShowDeleteFestConfirm(fest.fest_id)}
+                                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 hover:-translate-y-0.5 transition-all"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
