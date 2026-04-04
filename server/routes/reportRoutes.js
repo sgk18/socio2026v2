@@ -1,6 +1,7 @@
 import express from "express";
 import { queryAll, queryOne, supabase } from "../config/database.js";
 import { authenticateUser, getUserInfo, checkRoleExpiration } from "../middleware/authMiddleware.js";
+import { getFestTableForSupabase } from "../utils/festTableResolver.js";
 
 const router = express.Router();
 
@@ -9,17 +10,32 @@ const requireOrganiserOrAdmin = (req, res, next) => {
   if (!req.userInfo) {
     return res.status(401).json({ error: "User info not available" });
   }
-  if (!req.userInfo.is_organiser && !req.userInfo.is_masteradmin) {
+
+  if (req.userInfo.is_masteradmin) {
+    return next();
+  }
+
+  if (!req.userInfo.is_organiser) {
     return res.status(403).json({ error: "Access denied: Organiser or Master Admin privileges required" });
   }
+  
   next();
 };
 
 // Get comprehensive report data for selected events
 // Returns event details, registration counts, attendance stats, and participant list
-router.post("/report/data", authenticateUser, getUserInfo(), checkRoleExpiration, requireOrganiserOrAdmin, async (req, res) => {
+// Get comprehensive report data for selected events
+// Returns event details, registration counts, attendance stats, and participant list
+router.post(
+  "/report/data",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  requireOrganiserOrAdmin,
+  async (req, res) => {
   try {
     const { eventIds, festId } = req.body;
+    const festTable = await getFestTableForSupabase(supabase);
     const userEmail = req.userInfo?.email;
     const isMasterAdmin = req.userInfo?.is_masteradmin;
 
@@ -41,7 +57,7 @@ router.post("/report/data", authenticateUser, getUserInfo(), checkRoleExpiration
     let festTitle = null;
     if (festId) {
       const { data: festLookup } = await supabase
-        .from('fests')
+        .from(festTable)
         .select('fest_title, created_by')
         .eq('fest_id', festId)
         .single();
@@ -53,8 +69,8 @@ router.post("/report/data", authenticateUser, getUserInfo(), checkRoleExpiration
       const unauthorizedEvents = events.filter(event => {
         // Check if organiser created this event
         if (event.created_by === userEmail) return false;
-        // Check if event belongs to the selected fest (fest column stores fest_title)
-        if (festId && festTitle && event.fest === festTitle) {
+        // Check if event belongs to the selected fest (fest column now stores fest_id, but legacy data may store fest_title)
+        if (festId && (event.fest === festId || (festTitle && event.fest === festTitle))) {
           // We'll verify fest ownership below
           return false;
         }
@@ -68,7 +84,7 @@ router.post("/report/data", authenticateUser, getUserInfo(), checkRoleExpiration
       // If festId provided, verify organiser owns that fest
       if (festId) {
         const { data: fest } = await supabase
-          .from('fests')
+          .from(festTable)
           .select('created_by')
           .eq('fest_id', festId)
           .single();
@@ -185,7 +201,7 @@ router.post("/report/data", authenticateUser, getUserInfo(), checkRoleExpiration
     let festInfo = null;
     if (festId) {
       const { data: fest } = await supabase
-        .from('fests')
+        .from(festTable)
         .select('*')
         .eq('fest_id', festId)
         .single();

@@ -67,7 +67,7 @@ const generateGoogleCalendarUrl = (eventTitle: string, eventDate: string, eventT
     }
     
     // Build Google Calendar URL
-    const baseUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+    const baseUrl = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_BASE_URL!;
     const params = new URLSearchParams({
       text: eventTitle,
       dates: `${startDateTime}/${endDateTime}`,
@@ -85,7 +85,8 @@ const Page = () => {
   const routeParams = useParams();
   const router = useRouter();
   const { userData, isLoading: authIsLoading } = useAuth();
-  const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+  const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
+  const isAdminOrOrganizer = Boolean(userData?.is_organiser || userData?.is_masteradmin);
 
   const { allEvents, isLoading: contextIsLoading, error: contextError } = useEvents();
   const eventId = routeParams?.id;
@@ -137,6 +138,20 @@ const Page = () => {
     if (allEvents.length > 0) {
       const foundEvent = allEvents.find((e) => e.event_id === eventId);
       if (foundEvent) {
+        const isEventArchived = Boolean(foundEvent.is_archived);
+
+        if (isEventArchived && authIsLoading) {
+          setEventLoading(true);
+          return;
+        }
+
+        if (isEventArchived && !isAdminOrOrganizer) {
+          setSelectedEvent(null);
+          setEventPageError("This event is archived and registration is closed.");
+          setEventLoading(false);
+          return;
+        }
+
         // Parse custom_fields - handle all possible formats
         let parsedCustomFields: any[] = [];
         const rawCustomFields: unknown = foundEvent.custom_fields;
@@ -182,7 +197,7 @@ const Page = () => {
       }
       setEventLoading(false);
     }
-  }, [eventId, allEvents, contextIsLoading, contextError]);
+  }, [eventId, allEvents, contextIsLoading, contextError, authIsLoading, isAdminOrOrganizer]);
 
   useEffect(() => {
     if (selectedEvent && !authIsLoading && userData) {

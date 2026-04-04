@@ -22,6 +22,63 @@ import { sendBroadcastNotification } from "./notificationRoutes.js";
 import { pushEventToGated, shouldPushEventToGated, isGatedEnabled } from "../utils/gatedSync.js";
 
 const router = express.Router();
+const debugRoutesEnabled = process.env.NODE_ENV !== "production";
+
+// HEALTH CHECK - Verify Supabase connection
+router.get("/debug/health", async (req, res) => {
+  try {
+    const result = await queryOne("events", { where: { event_id: "test" } });
+    return res.json({
+      status: "ok",
+      supabase: "connected",
+      message: "✅ Supabase connection is working"
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      supabase: "disconnected",
+      message: "❌ Supabase connection failed",
+      error: error.message
+    });
+  }
+});
+
+// DIAGNOSTIC ENDPOINT - Check authentication and organiser status
+if (debugRoutesEnabled) {
+  router.get("/debug/status", 
+    authenticateUser,
+    getUserInfo(),
+    checkRoleExpiration,
+    async (req, res) => {
+      try {
+        console.log("[DEBUG] User status request from:", req.userInfo.email);
+        
+        return res.json({
+          authenticated: true,
+          userId: req.userInfo.auth_uuid,
+          email: req.userInfo.email,
+          isOrganiser: req.userInfo.is_organiser,
+          organiserExpiresAt: req.userInfo.organiser_expires_at,
+          isMasterAdmin: req.userInfo.is_masteradmin,
+          isSupport: req.userInfo.is_support,
+          message: req.userInfo.is_organiser 
+            ? "✅ You have organiser privileges" 
+            : "❌ You do NOT have organiser privileges. Contact admin to enable.",
+          roles: {
+            organiser: req.userInfo.is_organiser,
+            masteradmin: req.userInfo.is_masteradmin,
+            support: req.userInfo.is_support
+          }
+        });
+      } catch (error) {
+        console.error("[DEBUG] Error checking status:", error);
+        return res.status(500).json({ 
+          error: error.message,
+          message: "Error checking authentication status"
+        });
+      }
+  });
+}
 
 const normalizeJsonField = (value) => {
   if (!value) return [];
@@ -39,23 +96,285 @@ const normalizeJsonField = (value) => {
   return [];
 };
 
+const normalizeFestReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  const lowered = normalized.toLowerCase();
+  if (lowered === "none" || lowered === "null" || lowered === "undefined") {
+    return null;
+  }
+
+  return normalized;
+};
+
+const getValidDate = (value) => {
+  if (!value) return null;
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+const getTodayStart = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+};
+
+const shouldAutoArchiveEvent = (event) => {
+  const parsedEndDate = getValidDate(event?.end_date || event?.event_date);
+  if (!parsedEndDate) return false;
+
+  parsedEndDate.setHours(0, 0, 0, 0);
+  return parsedEndDate.getTime() <= getTodayStart().getTime();
+};
+
+const asBoolean = (value) => {
+  return value === true || value === 1 || value === "1" || value === "true";
+};
+
+const deriveArchiveState = (event) => {
+  const manualArchived = asBoolean(event?.is_archived);
+  const autoArchived = shouldAutoArchiveEvent(event);
+
+  return {
+    is_archived: manualArchived,
+    archived_at: event?.archived_at || null,
+    archived_effective: manualArchived || autoArchived,
+    archive_source: manualArchived ? "manual" : autoArchived ? "auto" : null,
+  };
+};
+
+const isMissingArchiveColumnsError = (error) => {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    code === "42703" ||
+    (message.includes("column") &&
+      (message.includes("is_archived") || message.includes("archived_at") || message.includes("archived_by")))
+  );
+};
+
+const persistAutoArchivedEvents = async (events) => {
+  const eventList = Array.isArray(events) ? events : [];
+  const nowIso = new Date().toISOString();
+
+  const candidates = eventList.filter((event) => {
+    if (asBoolean(event?.is_archived)) return false;
+    return shouldAutoArchiveEvent(event);
+  });
+
+  if (candidates.length === 0) {
+    return eventList;
+  }
+
+  const archivedEventIds = new Set();
+
+  for (const event of candidates) {
+    const eventId = event?.event_id;
+    if (!eventId) continue;
+
+    try {
+      await update(
+        "events",
+        {
+          is_archived: true,
+          archived_at: nowIso,
+          archived_by: event?.archived_by || "system:auto_end_date",
+          updated_at: nowIso,
+        },
+        { event_id: eventId }
+      );
+      archivedEventIds.add(eventId);
+      continue;
+    } catch (error) {
+      const code = String(error?.code || "");
+      const message = String(error?.message || "").toLowerCase();
+      const missingArchivedByColumn = code === "42703" && message.includes("archived_by");
+
+      if (!missingArchivedByColumn) {
+        console.warn(`[AutoArchive] Failed to auto-archive ${eventId}:`, error?.message || error);
+        continue;
+      }
+    }
+
+    try {
+      await update(
+        "events",
+        {
+          is_archived: true,
+          archived_at: nowIso,
+          updated_at: nowIso,
+        },
+        { event_id: eventId }
+      );
+      archivedEventIds.add(eventId);
+    } catch (fallbackError) {
+      console.warn(`[AutoArchive] Fallback auto-archive failed for ${eventId}:`, fallbackError?.message || fallbackError);
+    }
+  }
+
+  if (archivedEventIds.size === 0) {
+    return eventList;
+  }
+
+  return eventList.map((event) => {
+    if (!archivedEventIds.has(event?.event_id)) {
+      return event;
+    }
+
+    return {
+      ...event,
+      is_archived: true,
+      archived_at: event?.archived_at || nowIso,
+      archived_by: event?.archived_by || "system:auto_end_date",
+    };
+  });
+};
+
 
 // GET all events - PUBLIC ACCESS (no auth required)
 router.get("/", async (req, res) => {
   try {
-    const events = await queryAll("events", { order: { column: "created_at", ascending: false } });
+    const { page, pageSize, search, status, sortBy, sortOrder, archive } = req.query;
+    const today = new Date().toISOString().split('T')[0];
+    
+    let queryOptions = { 
+      order: { column: "created_at", ascending: false } 
+    };
+
+    // Push basic status filtering to database
+    if (status === "upcoming" || status === "active") {
+      queryOptions.filters = [{ column: "event_date", operator: "gte", value: today }];
+    } else if (status === "past") {
+      queryOptions.filters = [{ column: "event_date", operator: "lt", value: today }];
+    }
+
+    const events = await queryAll("events", queryOptions);
+    const eventsWithAutoArchive = await persistAutoArchivedEvents(events);
+
+    // Build registration counts once so both sorting and UI display use the same value.
+    const registrations = await queryAll("registrations", { select: "event_id" });
+    const eventRegistrationCounts = {};
+    (registrations || []).forEach((reg) => {
+      if (reg.event_id) {
+        eventRegistrationCounts[reg.event_id] = (eventRegistrationCounts[reg.event_id] || 0) + 1;
+      }
+    });
 
     // Parse JSON fields for each event
-    const processedEvents = events.map(event => ({
-      ...event,
-      department_access: normalizeJsonField(event.department_access),
-      rules: normalizeJsonField(event.rules),
-      schedule: normalizeJsonField(event.schedule),
-      prizes: normalizeJsonField(event.prizes),
-      custom_fields: normalizeJsonField(event.custom_fields)
-    }));
+    let processedEvents = eventsWithAutoArchive.map((event) => {
+      const archiveState = deriveArchiveState(event);
+      return {
+        ...event,
+        fest: event.fest_id || null, // Map fest_id to fest for frontend compatibility
+        department_access: normalizeJsonField(event.department_access),
+        rules: normalizeJsonField(event.rules),
+        schedule: normalizeJsonField(event.schedule),
+        prizes: normalizeJsonField(event.prizes),
+        custom_fields: normalizeJsonField(event.custom_fields),
+        registration_count: eventRegistrationCounts[event.event_id] || 0,
+        ...archiveState,
+      };
+    });
 
-    return res.status(200).json({ events: processedEvents });
+    const normalizedSearch = typeof search === "string" ? search.trim().toLowerCase() : "";
+    if (normalizedSearch) {
+      processedEvents = processedEvents.filter((event) =>
+        event.title?.toLowerCase().includes(normalizedSearch) ||
+        event.organizing_dept?.toLowerCase().includes(normalizedSearch)
+      );
+    }
+
+    const normalizedStatus = typeof status === "string" ? status.toLowerCase() : "all";
+    if (normalizedStatus !== "all" && normalizedStatus !== "active") {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0); // Normalize to start of day
+      
+      processedEvents = processedEvents.filter((event) => {
+        const eventDate = new Date(event.event_date);
+        eventDate.setHours(0, 0, 0, 0); // Normalize to start of day
+        
+        const diffDays = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (normalizedStatus === "past") return diffDays < 0;
+        if (normalizedStatus === "live") return Math.abs(diffDays) < 1;
+        if (normalizedStatus === "thisweek") return diffDays >= 0 && diffDays <= 7;
+        if (normalizedStatus === "upcoming") return diffDays >= 0;
+        return true;
+      });
+    }
+
+    const normalizedArchive = typeof archive === "string" ? archive.toLowerCase() : "all";
+    if (normalizedArchive === "archived") {
+      processedEvents = processedEvents.filter((event) => event.archived_effective);
+    } else if (normalizedArchive === "active") {
+      processedEvents = processedEvents.filter((event) => !event.archived_effective);
+    }
+
+    const normalizedSortBy = typeof sortBy === "string" ? sortBy : "date";
+    const normalizedSortOrder = sortOrder === "asc" ? "asc" : "desc";
+    processedEvents.sort((a, b) => {
+      let result = 0;
+      switch (normalizedSortBy) {
+        case "title":
+          result = (a.title || "").localeCompare(b.title || "");
+          break;
+        case "dept":
+        case "organizing_dept":
+          result = (a.organizing_dept || "").localeCompare(b.organizing_dept || "");
+          break;
+        case "registrations":
+        case "registration_count":
+          result = (a.registration_count || 0) - (b.registration_count || 0);
+          break;
+        case "date":
+        case "event_date":
+          result = new Date(a.event_date || 0).getTime() - new Date(b.event_date || 0).getTime();
+          break;
+        case "created_at":
+          result = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+          break;
+        default:
+          result = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+          break;
+      }
+      return normalizedSortOrder === "asc" ? result : -result;
+    });
+
+    const shouldPaginate = page !== undefined || pageSize !== undefined;
+    if (!shouldPaginate) {
+      return res.status(200).json({ events: processedEvents });
+    }
+
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+    const parsedPageSize = Math.min(Math.max(parseInt(pageSize, 10) || 20, 1), 200);
+    const totalItems = processedEvents.length;
+    const totalPages = Math.max(Math.ceil(totalItems / parsedPageSize), 1);
+    const safePage = Math.min(parsedPage, totalPages);
+    const start = (safePage - 1) * parsedPageSize;
+    const pagedEvents = processedEvents.slice(start, start + parsedPageSize);
+
+    return res.status(200).json({
+      events: pagedEvents,
+      pagination: {
+        page: safePage,
+        pageSize: parsedPageSize,
+        totalItems,
+        totalPages,
+        hasNext: safePage < totalPages,
+        hasPrev: safePage > 1
+      },
+      filters: {
+        search: normalizedSearch,
+        status: normalizedStatus,
+        archive: normalizedArchive,
+      },
+      sort: {
+        by: normalizedSortBy,
+        order: normalizedSortOrder
+      }
+    });
   } catch (error) {
     console.error("Server error GET /api/events:", error);
     return res.status(500).json({ error: "Internal server error while fetching events." });
@@ -80,13 +399,16 @@ router.get("/:eventId", async (req, res) => {
     }
 
     // Parse JSON fields
+    const archiveState = deriveArchiveState(event);
     const processedEvent = {
       ...event,
+      fest: event.fest_id || null, // Map fest_id to fest for frontend compatibility
       department_access: normalizeJsonField(event.department_access),
       rules: normalizeJsonField(event.rules),
       schedule: normalizeJsonField(event.schedule),
       prizes: normalizeJsonField(event.prizes),
-      custom_fields: normalizeJsonField(event.custom_fields)
+      custom_fields: normalizeJsonField(event.custom_fields),
+      ...archiveState,
     };
 
     return res.status(200).json({ event: processedEvent });
@@ -137,6 +459,7 @@ router.post(
         registration_fee,
         organizing_dept,
         fest,
+        fest_id,
         department_access,
         rules,
         schedule,
@@ -148,6 +471,8 @@ router.post(
       if (!title || typeof title !== "string" || title.trim() === "") {
         return res.status(400).json({ error: "Title is required and must be a non-empty string." });
       }
+
+      console.log("✅ Title validation passed:", title);
 
       // Generate slug-based ID from title
       let event_id = title
@@ -168,38 +493,58 @@ router.post(
       const existingEvent = await queryOne("events", { where: { event_id } });
       if (existingEvent) {
         return res.status(400).json({
-          error: `An event with the title "${title}" already exists (ID: '${event_id}'). Please use a different title.`
+          error: `An event with the title "${title}" already exists. Please use a different title.`
         });
       }
+
+      console.log("✅ Event ID uniqueness checked");
 
       // Handle file uploads
       const files = req.files;
       
       // Upload Event Image
       if (files?.eventImage && files.eventImage[0]) {
-        // Removed try/catch to ensure errors bubble up to the user
-        console.log(`Attempting to upload eventImage: ${files.eventImage[0].originalname}`);
-        const result = await uploadFileToSupabase(files.eventImage[0], "event-images", event_id);
-        uploadedFilePaths.image = result?.publicUrl || null;
-        console.log(`Successfully uploaded event image: ${uploadedFilePaths.image}`);
+        try {
+          console.log(`📁 Uploading eventImage: ${files.eventImage[0].originalname}`);
+          const result = await uploadFileToSupabase(files.eventImage[0], "event-images", event_id);
+          uploadedFilePaths.image = result?.publicUrl || null;
+          console.log(`✅ Event image uploaded: ${uploadedFilePaths.image}`);
+        } catch (imgError) {
+          console.error("❌ Event image upload failed:", imgError.message);
+          throw new Error(`Failed to upload event image: ${imgError.message}`);
+        }
       } else {
-        console.warn("WARNING: No eventImage found in request files.");
+        console.log("⚠️  No event image provided (optional)");
       }
 
       // Upload Banner Image
       if (files?.bannerImage && files.bannerImage[0]) {
-          console.log(`Attempting to upload bannerImage: ${files.bannerImage[0].originalname}`);
+        try {
+          console.log(`📁 Uploading bannerImage: ${files.bannerImage[0].originalname}`);
           const result = await uploadFileToSupabase(files.bannerImage[0], "event-banners", event_id);
           uploadedFilePaths.banner = result?.publicUrl || null;
-          console.log(`Successfully uploaded banner image: ${uploadedFilePaths.banner}`);
+          console.log(`✅ Banner image uploaded: ${uploadedFilePaths.banner}`);
+        } catch (bannerError) {
+          console.error("❌ Banner image upload failed:", bannerError.message);
+          // Don't throw - banner is optional
+        }
+      } else {
+        console.log("⚠️  No banner image provided (optional)");
       }
 
       // Upload PDF
       if (files?.pdfFile && files.pdfFile[0]) {
-          console.log(`Attempting to upload pdfFile: ${files.pdfFile[0].originalname}`);
+        try {
+          console.log(`📁 Uploading pdfFile: ${files.pdfFile[0].originalname}`);
           const result = await uploadFileToSupabase(files.pdfFile[0], "event-pdfs", event_id);
           uploadedFilePaths.pdf = result?.publicUrl || null;
-          console.log(`Successfully uploaded PDF for event ${event_id}: ${uploadedFilePaths.pdf}`);
+          console.log(`✅ PDF uploaded: ${uploadedFilePaths.pdf}`);
+        } catch (pdfError) {
+          console.error("❌ PDF upload failed:", pdfError.message);
+          // Don't throw - PDF is optional
+        }
+      } else {
+        console.log("⚠️  No PDF provided (optional)");
       }
 
       // Parse and validate JSON fields
@@ -209,13 +554,13 @@ router.post(
       const parsedPrizes = parseJsonField(prizes, []);
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
 
-      console.log("About to insert into database with params:", {
+      console.log("✅ JSON fields parsed successfully");
+      console.log("About to insert event into database with:", {
         event_id,
         title: title?.trim(),
-        description: description || null,
-        event_date: event_date || null,
-        max_participants_parsed: parseOptionalInt(max_participants, 1),
-        uploadedFiles: uploadedFilePaths
+        organizing_dept,
+        created_by: req.userInfo?.email,
+        fileUrls: uploadedFilePaths
       });
 
       // Insert event with creator's auth_uuid
@@ -243,9 +588,9 @@ router.post(
         organizer_phone: req.body.organizer_phone || null,
         whatsapp_invite_link: req.body.whatsapp_invite_link || null,
         organizing_dept: organizing_dept || null,
-        fest: fest || null,
-        created_by: req.body.created_by || req.userInfo?.email || req.userId, // Prefer email for created_by
-        auth_uuid: req.userId, // Store UUID in auth_uuid
+        fest_id: normalizeFestReference(fest_id ?? fest),
+        created_by: req.userInfo?.email,
+        auth_uuid: req.userId,
         registration_deadline: req.body.registration_deadline || null,
         total_participants: 0,
         // Outsider & campus fields
@@ -259,8 +604,10 @@ router.post(
       }]);
 
       if (!created || created.length === 0) {
-        throw new Error("Event was not created successfully.");
+        throw new Error("Event was not created successfully (no rows returned from insert).");
       }
+
+      console.log("✅ Event inserted successfully:", event_id);
 
       // Send notifications to all users about the new event (non-blocking)
       sendBroadcastNotification({
@@ -304,14 +651,15 @@ router.post(
       });
 
     } catch (error) {
-      console.error("Server error POST /api/events:", error);
-      console.error("Error details:", {
+      console.error("❌ Server error POST /api/events:", error);
+      console.error("🔴 Detailed error info:", {
         message: error.message,
         stack: error.stack,
         code: error.code,
-        requestBody: Object.keys(req.body),
+        requestBodyKeys: Object.keys(req.body || {}),
         userId: req.userId,
-        userInfo: req.userInfo?.email
+        userEmail: req.userInfo?.email,
+        isOrganiser: req.userInfo?.is_organiser
       });
       
       // Clean up uploaded files on error
@@ -325,10 +673,105 @@ router.post(
         console.error("Error cleaning up files:", cleanupError);
       }
 
+      // Return detailed error information
+      let errorDetail = error.message || "Unknown error occurred";
+      
+      // Truncate stack trace for response
+      const stackLines = (error.stack || "").split("\n").slice(0, 3).join(" | ");
+      
       return res.status(500).json({ 
-        error: "Internal server error while creating event.",
-        details: error.message // Include error message for debugging
+        error: "Internal server error while creating event",
+        details: errorDetail,
+        context: {
+          endpoint: "/api/events",
+          method: "POST",
+          userId: req.userId,
+          timestamp: new Date().toISOString()
+        }
       });
+    }
+  }
+);
+
+// PATCH archive/unarchive event - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
+router.patch(
+  "/:eventId/archive",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  (req, res, next) => {
+    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) {
+      return next();
+    }
+    return res.status(403).json({ error: "Access denied: Organiser privileges required" });
+  },
+  requireOwnership("events", "eventId", "auth_uuid"),
+  async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const rawArchiveValue = req.body?.archive;
+      const shouldArchive =
+        rawArchiveValue === true || rawArchiveValue === "true" || rawArchiveValue === 1 || rawArchiveValue === "1";
+      const shouldUnarchive =
+        rawArchiveValue === false || rawArchiveValue === "false" || rawArchiveValue === 0 || rawArchiveValue === "0";
+
+      if (!shouldArchive && !shouldUnarchive) {
+        return res.status(400).json({
+          error: "Invalid payload: 'archive' must be a boolean (true or false).",
+        });
+      }
+
+      const archiveValue = shouldArchive;
+      const nowIso = new Date().toISOString();
+      const buildArchivePayload = (includeArchivedBy = true) => ({
+        is_archived: archiveValue,
+        archived_at: archiveValue ? nowIso : null,
+        ...(includeArchivedBy
+          ? { archived_by: archiveValue ? req.userInfo?.email || req.userId || null : null }
+          : {}),
+        updated_at: nowIso,
+      });
+
+      let updatedRows;
+      try {
+        updatedRows = await update("events", buildArchivePayload(true), { event_id: eventId });
+      } catch (error) {
+        const code = String(error?.code || "");
+        const message = String(error?.message || "").toLowerCase();
+        const missingArchivedByColumn = code === "42703" && message.includes("archived_by");
+
+        if (!missingArchivedByColumn) {
+          throw error;
+        }
+
+        console.warn("[Archive] 'archived_by' column missing; retrying archive update without it.");
+        updatedRows = await update("events", buildArchivePayload(false), { event_id: eventId });
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        return res.status(404).json({ error: "Event not found." });
+      }
+
+      const updatedEvent = updatedRows[0];
+      const archiveState = deriveArchiveState(updatedEvent);
+
+      return res.status(200).json({
+        message: archiveValue ? "Event archived successfully." : "Event moved back to active list.",
+        event: {
+          ...updatedEvent,
+          fest: updatedEvent.fest_id || null, // Map fest_id to fest for frontend compatibility
+          ...archiveState,
+        },
+      });
+    } catch (error) {
+      if (isMissingArchiveColumnsError(error)) {
+        return res.status(500).json({
+          error: "Archive columns are missing. Run latest DB migrations and retry.",
+        });
+      }
+
+      console.error("Server error PATCH /api/events/:eventId/archive:", error);
+      return res.status(500).json({ error: "Internal server error while updating archive state." });
     }
   }
 );
@@ -366,23 +809,63 @@ router.put(
         pdf: event.pdf_url,
       };
 
+      console.log("📁 Initial file paths from existing event:");
+      console.log(`  image: ${uploadedFilePaths.image}`);
+      console.log(`  banner: ${uploadedFilePaths.banner}`);
+      console.log(`  pdf: ${uploadedFilePaths.pdf}`);
+
       // Handle file uploads if new files are provided
-      if (files?.eventImage && files.eventImage[0]) {
-        // Delete old image if exists (optional extended feature: strictly clean up old files)
-        // Here we just overwrite the reference
-        const result = await uploadFileToSupabase(files.eventImage[0], "event-images", eventId);
-        uploadedFilePaths.image = result?.publicUrl || null;
+      try {
+        if (files?.eventImage && files.eventImage[0]) {
+          console.log(`📤 Uploading new event image: ${files.eventImage[0].originalname}`);
+          const result = await uploadFileToSupabase(files.eventImage[0], "event-images", eventId);
+          if (result?.publicUrl) {
+            console.log(`✅ Event image uploaded successfully: ${result.publicUrl}`);
+            uploadedFilePaths.image = result.publicUrl;
+          } else {
+            console.warn(`⚠️ Event image upload returned no URL - keeping existing image`);
+          }
+        } else if (req.body.removeImageFile === "true") {
+          console.log(`🗑️ Event image removal requested.`);
+          uploadedFilePaths.image = null;
+        }
+
+        if (files?.bannerImage && files.bannerImage[0]) {
+          console.log(`📤 Uploading new banner image: ${files.bannerImage[0].originalname}`);
+          const result = await uploadFileToSupabase(files.bannerImage[0], "event-banners", eventId);
+          if (result?.publicUrl) {
+            console.log(`✅ Banner image uploaded successfully: ${result.publicUrl}`);
+            uploadedFilePaths.banner = result.publicUrl;
+          } else {
+            console.warn(`⚠️ Banner image upload returned no URL - keeping existing banner`);
+          }
+        } else if (req.body.removeBannerFile === "true") {
+          console.log(`🗑️ Banner image removal requested.`);
+          uploadedFilePaths.banner = null;
+        }
+        
+        if (files?.pdfFile && files.pdfFile[0]) {
+          console.log(`📤 Uploading new PDF: ${files.pdfFile[0].originalname}`);
+          const result = await uploadFileToSupabase(files.pdfFile[0], "event-pdfs", eventId);
+          if (result?.publicUrl) {
+            console.log(`✅ PDF uploaded successfully: ${result.publicUrl}`);
+            uploadedFilePaths.pdf = result.publicUrl;
+          } else {
+            console.warn(`⚠️ PDF upload returned no URL - keeping existing PDF`);
+          }
+        } else if (req.body.removePdfFile === "true") {
+          console.log(`🗑️ PDF removal requested.`);
+          uploadedFilePaths.pdf = null;
+        }
+      } catch (fileError) {
+        console.error("❌ File upload error during event update:", fileError.message);
+        throw fileError; // Re-throw to be caught by main try-catch
       }
 
-      if (files?.bannerImage && files.bannerImage[0]) {
-        const result = await uploadFileToSupabase(files.bannerImage[0], "event-banners", eventId);
-        uploadedFilePaths.banner = result?.publicUrl || null;
-      }
-      
-      if (files?.pdfFile && files.pdfFile[0]) {
-        const result = await uploadFileToSupabase(files.pdfFile[0], "event-pdfs", eventId);
-        uploadedFilePaths.pdf = result?.publicUrl || null;
-      }
+      console.log("📁 Updated file paths after upload:");
+      console.log(`  image: ${uploadedFilePaths.image}`);
+      console.log(`  banner: ${uploadedFilePaths.banner}`);
+      console.log(`  pdf: ${uploadedFilePaths.pdf}`);
 
       const {
         title,
@@ -395,6 +878,7 @@ router.put(
         registration_fee,
         organizing_dept,
         fest,
+        fest_id,
         department_access,
         rules,
         schedule,
@@ -444,8 +928,8 @@ router.put(
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
 
       // Prepare update payload
+      // Note: Only include event_id if it's NOT changing (to avoid primary key update issues)
       const updateData = {
-        event_id: newEventId, // Include new event_id (will be same as old if title didn't change)
         title: title.trim(),
         description: description || null,
         event_date: event_date || null,
@@ -468,7 +952,7 @@ router.put(
         organizer_phone: req.body.organizer_phone || null,
         whatsapp_invite_link: req.body.whatsapp_invite_link || null,
         organizing_dept: organizing_dept || null,
-        fest: fest || null,
+        fest_id: normalizeFestReference(fest_id ?? fest),
         registration_deadline: req.body.registration_deadline || null,
         // Preserve existing total_participants unless there is a specific admin action to modify it.
         // Include outsider-related settings so toggles persist from the client.
@@ -479,9 +963,13 @@ router.put(
         allowed_campuses: Array.isArray(req.body.allowed_campuses)
           ? req.body.allowed_campuses
           : parseJsonField(req.body.allowed_campuses, []),
-        updated_at: new Date().toISOString(),
-        updated_by: req.userInfo.email
+        updated_at: new Date().toISOString()
       };
+
+      console.log("🔄 UPDATE DATA - File URLs being saved to database:");
+      console.log(`  event_image_url: ${updateData.event_image_url}`);
+      console.log(`  banner_url: ${updateData.banner_url}`);
+      console.log(`  pdf_url: ${updateData.pdf_url}`);
 
       // If event_id changed, update related records first
       if (newEventId !== eventId) {
@@ -516,13 +1004,60 @@ router.put(
 
       const updated = await update("events", updateData, { event_id: eventId });
 
-      if (!updated || updated.length === 0) {
-        throw new Error("Event update failed.");
+      console.log("💾 Database update result:");
+      if (updated && updated.length > 0) {
+        console.log(`✅ Event updated successfully`);
+        console.log(`  Saved image URL: ${updated[0].event_image_url}`);
+        console.log(`  Saved banner URL: ${updated[0].banner_url}`);
+        console.log(`  Saved PDF URL: ${updated[0].pdf_url}`);
       }
+
+      if (!updated || updated.length === 0) {
+        console.warn("⚠️ Update query returned no data, fetching event from database...");
+        try {
+          const refetchedEvent = await queryOne("events", { where: { event_id: eventId } });
+          if (!refetchedEvent) {
+            throw new Error("Could not fetch updated event after update");
+          }
+          console.log(`✅ Event updated and refetched successfully: ${eventId}`);
+          
+          // Push to UniversityGated if outsiders were enabled/changed (non-blocking)
+          if (isGatedEnabled()) {
+            shouldPushEventToGated(refetchedEvent, queryOne).then(async (shouldPush) => {
+              if (shouldPush) {
+                try {
+                  await pushEventToGated(
+                    refetchedEvent,
+                    req.userInfo?.email || req.body.organizer_email,
+                    req.userInfo?.name || 'SOCIO Organiser'
+                  );
+                  console.log(`✅ Pushed updated event "${refetchedEvent.title}" to UniversityGated`);
+                } catch (gatedError) {
+                  console.error(`❌ Failed to push updated event to Gated:`, gatedError.message);
+                }
+              }
+            }).catch((err) => {
+              console.error('❌ Error checking Gated push eligibility on update:', err.message);
+            });
+          }
+
+          return res.status(200).json({ 
+            message: "Event updated successfully", 
+            event: refetchedEvent,
+            event_id: newEventId,
+            id_changed: newEventId !== eventId
+          });
+        } catch (refetchError) {
+          console.error("❌ Failed to refetch event after update:", refetchError.message);
+          throw new Error("Event update failed - could not verify update");
+        }
+      }
+
+      // At this point, updated is guaranteed to have data (either from update or refetch)
+      const updatedEvent = updated[0];
 
       // Push to UniversityGated if outsiders were enabled/changed (non-blocking)
       if (isGatedEnabled()) {
-        const updatedEvent = updated[0];
         shouldPushEventToGated(updatedEvent, queryOne).then(async (shouldPush) => {
           if (shouldPush) {
             try {
@@ -543,14 +1078,41 @@ router.put(
 
       return res.status(200).json({ 
         message: "Event updated successfully", 
-        event: updated[0],
+        event: updatedEvent,
         event_id: newEventId,
         id_changed: newEventId !== eventId
       });
 
     } catch (error) {
-      console.error("Server error PUT /api/events/:eventId:", error);
-      return res.status(500).json({ error: "Internal server error while updating event." });
+      console.error("❌ Server error PUT /api/events/:eventId:", error);
+      console.error("🔴 Detailed error info:", {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        requestBodyKeys: Object.keys(req.body || {}),
+        userId: req.userId,
+        userEmail: req.userInfo?.email,
+        isOrganiser: req.userInfo?.is_organiser,
+        eventId: req.params.eventId,
+        supabaseError: error.status || error.statusCode || "N/A",
+        errorType: error.constructor.name
+      });
+      
+      // More detailed logging for debugging
+      if (error.message && error.message.includes('Supabase')) {
+        console.error("🔴 Supabase-specific error detected - checking connectivity...");
+      }
+      
+      return res.status(500).json({ 
+        error: "Internal server error while updating event.",
+        details: error.message,
+        context: {
+          endpoint: `/api/events/${req.params.eventId}`,
+          method: "PUT",
+          userId: req.userId,
+          timestamp: new Date().toISOString()
+        }
+      });
     }
   }
 );

@@ -30,15 +30,18 @@ export const FestCard = ({
   const slug = id || formattedTitle;
 
   return (
-    <Link href={`/${baseUrl}/${slug}`} className="w-full">
-      <div className="bg-[#F9F9F9] rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer transform transition duration-100 ease-in-out hover:scale-101">
-        <div className="h-40 bg-gray-200">
+    <Link href={`/${baseUrl}/${slug}`} className="block w-full h-full min-w-0">
+      <div className="bg-[#F9F9F9] rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0">
+        <div className="relative h-40 bg-gray-200 overflow-hidden rounded-t-lg">
           {image ? (
-            <img
-              src={image}
-              alt={title}
-              className="bg-white w-full h-full object-cover"
-            />
+            <>
+              <div className="absolute inset-0 rounded-t-lg bg-gradient-to-t from-[#063168]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none"></div>
+              <img
+                src={image}
+                alt={title}
+                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
+              />
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-white">
               <svg
@@ -61,15 +64,15 @@ export const FestCard = ({
           )}
         </div>
 
-        <div className="p-4 rounded-b-lg">
-          <h3 className="text-lg font-bold mb-1">{title}</h3>
-          <p className="text-sm text-gray-500 mb-3 font-semibold">{dept}</p>
+        <div className="p-4 rounded-b-lg min-w-0">
+          <h3 className="text-lg font-bold mb-1 group-hover:text-[#3D75BD] transition-colors duration-200 break-words line-clamp-2">{title}</h3>
+          <p className="text-sm text-gray-500 mb-3 font-semibold break-words line-clamp-2">{dept}</p>
 
           <p className="text-sm text-gray-600 mb-4 line-clamp-3">
             {description}
           </p>
 
-          <div className="flex items-center gap-1 text-sm text-[#154CB3]">
+          <div className="flex items-center gap-1 text-sm text-[#154CB3] group-hover:underline transition-all duration-200">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-4 w-4 -mt-0.5"

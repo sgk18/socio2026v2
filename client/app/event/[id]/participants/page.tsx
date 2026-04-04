@@ -3,8 +3,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import ExcelJS from "exceljs";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import {
+  addThemedChartsSheet,
+  addStructuredTableSheet,
+  createThemedWorkbook,
+  downloadWorkbook,
+  type ThemedSheetColumn,
+} from "@/lib/xlsxTheme";
 
 interface CustomField {
   id: string;
@@ -55,7 +61,7 @@ export default function StudentsPage() {
       setIsDataLoading(true);
       setError(null);
       try {
-        const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
         
         // Fetch event details, registrations, and attendance status in parallel
         const [eventResponse, registrationsResponse, attendanceResponse] = await Promise.all([
@@ -144,133 +150,103 @@ export default function StudentsPage() {
       return;
     }
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Participants");
+    const workbook = createThemedWorkbook("SOCIO - Christ University");
 
-    // Build headers dynamically including custom fields
-    const baseHeaders = [
-      "Name",
-      "Register No.",
-      "Course",
-      "Department",
-      "E-mail",
+    const customFieldColumns = customFields.map((field) => ({
+      field,
+      key: `custom_${field.id}`,
+    }));
+
+    type ParticipantExportRow = Record<string, string | number | null | undefined>;
+
+    const columns: Array<ThemedSheetColumn<ParticipantExportRow>> = [
+      { header: "Name", key: "name", width: 25 },
+      { header: "Register No.", key: "register_number", width: 16, horizontal: "center" },
+      { header: "Course", key: "course", width: 20 },
+      { header: "Department", key: "department", width: 20 },
+      { header: "E-mail", key: "email", width: 35, kind: "email" },
+      ...customFieldColumns.map(({ field, key }) => ({
+        header: field.label,
+        key,
+        width: 30,
+        kind: (field.type === "url" ? "link" : "text") as "link" | "text",
+      })),
+      { header: "Attendance", key: "attendance", width: 14, kind: "status" },
     ];
-    
-    // Add custom field labels as additional headers
-    const customFieldHeaders = customFields.map(field => field.label);
-    const headers = [...baseHeaders, ...customFieldHeaders, "Attendance"];
-    
-    const headerRow = worksheet.addRow(headers);
 
-    headerRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "ff154cb3" }, // Theme blue
+    const rows: ParticipantExportRow[] = students.map((student) => {
+      const row: ParticipantExportRow = {
+        name: student.name || "",
+        register_number: student.register_number || "",
+        course: student.course || "",
+        department: student.department || "",
+        email: student.email || "",
       };
-      cell.alignment = { horizontal: "center", vertical: "middle" };
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFB0C4DE" } },
-        bottom: { style: "thin", color: { argb: "FFB0C4DE" } },
-        left: { style: "thin", color: { argb: "FFB0C4DE" } },
-        right: { style: "thin", color: { argb: "FFB0C4DE" } },
-      };
-    });
-    headerRow.height = 30;
 
-    students.forEach((student, index) => {
-      // Build row data with custom field responses
-      const baseData = [
-        student.name || "",
-        student.register_number || "",
-        student.course || "",
-        student.department || "",
-        student.email || "",
-      ];
-      
-      // Add custom field values in the same order as headers
-      const customFieldValues = customFields.map(field => {
+      customFieldColumns.forEach(({ field, key }) => {
         const value = student.custom_field_responses?.[field.id];
-        return value !== undefined && value !== null ? String(value) : "";
+        row[key] = value !== undefined && value !== null ? String(value) : "";
       });
-      
+
       const attendanceKey = String(student.registration_id || student.id || "");
-      const attendanceStatus = attendanceMap[attendanceKey] || student.attendance_status || "absent";
-      const rowData = [...baseData, ...customFieldValues, attendanceStatus];
-      const row = worksheet.addRow(rowData);
+      row.attendance = attendanceMap[attendanceKey] || student.attendance_status || "absent";
 
-      row.eachCell((cell, colNumber) => {
-        cell.font = { size: 11, color: { argb: "FF333333" } }; // Dark grey text
-        cell.alignment = { vertical: "middle", wrapText: true };
-        cell.border = {
-          top: { style: "thin", color: { argb: "FFD3D3D3" } },
-          bottom: { style: "thin", color: { argb: "FFD3D3D3" } },
-          left: { style: "thin", color: { argb: "FFD3D3D3" } },
-          right: { style: "thin", color: { argb: "FFD3D3D3" } },
-        };
-        cell.fill =
-          index % 2 === 0
-            ? {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFE6F0FA" },
-              }
-            : {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFFFFFFF" },
-              };
-
-        if (headers[colNumber - 1] === "Register No.") {
-          cell.alignment = { ...cell.alignment, horizontal: "center" };
-        }
-        // Make URLs clickable for email and URL-type custom fields
-        const headerName = headers[colNumber - 1];
-        if (headerName === "E-mail") {
-          cell.font = { ...cell.font, color: { argb: "FF1E90FF" } };
-        }
-        // Check if this is a URL-type custom field
-        const customFieldIndex = colNumber - baseHeaders.length - 1;
-        if (customFieldIndex >= 0 && customFieldIndex < customFields.length) {
-          const field = customFields[customFieldIndex];
-          if (field.type === 'url' && cell.value) {
-            cell.font = { ...cell.font, color: { argb: "FF1E90FF" }, underline: true };
-          }
-        }
-      });
-
-      let estimatedHeight = 30;
-      const emailCell = row.getCell(5);
-      const emailLength = (student.email || "").length;
-      if (emailLength > 30) {
-        estimatedHeight = Math.max(
-          estimatedHeight,
-          30 + Math.ceil((emailLength - 30) / 30) * 15
-        );
-      }
-      row.height = estimatedHeight;
+      return row;
     });
 
-    // Set column widths dynamically
-    const baseWidths = [25, 15, 20, 20, 35];
-    const customFieldWidths = customFields.map(() => 30); // 30 width for each custom field
-    worksheet.columns = [
-      ...baseWidths.map(width => ({ width })),
-      ...customFieldWidths.map(width => ({ width })),
-      { width: 12 }, // Attendance column
+    addStructuredTableSheet(workbook, {
+      sheetName: "Participants",
+      columns,
+      rows,
+      rowHeight: 24,
+    });
+
+    const attendanceChartData = [
+      {
+        label: "Attended",
+        value: rows.filter((row) => String(row.attendance ?? "").toLowerCase() === "attended").length,
+      },
+      {
+        label: "Absent",
+        value: rows.filter((row) => String(row.attendance ?? "").toLowerCase() === "absent").length,
+      },
+      {
+        label: "Pending",
+        value: rows.filter((row) => String(row.attendance ?? "").toLowerCase() === "pending").length,
+      },
+      {
+        label: "Unmarked",
+        value: rows.filter((row) => String(row.attendance ?? "").toLowerCase() === "unmarked").length,
+      },
     ];
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    const departmentChartData = Object.entries(
+      rows.reduce<Record<string, number>>((acc, row) => {
+        const dept = String(row.department || "Unknown");
+        acc[dept] = (acc[dept] || 0) + 1;
+        return acc;
+      }, {})
+    )
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    addThemedChartsSheet(workbook, {
+      title: "Participants Visual Overview",
+      subtitle: "Chart snapshots are embedded for quick review.",
+      primaryChart: {
+        title: "Participants by Department",
+        type: "bar",
+        data: departmentChartData,
+      },
+      secondaryChart: {
+        title: "Attendance Status Mix",
+        type: "donut",
+        data: attendanceChartData,
+      },
     });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `participants-${event_id}.xlsx`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+
+    await downloadWorkbook(workbook, `participants-${event_id}.xlsx`);
     console.log("Excel file generated.");
   };
 

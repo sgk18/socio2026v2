@@ -16,18 +16,18 @@ const AnimatedText: React.FC<AnimatedTextProps> = ({ className = "" }) => {
 
   useEffect(() => {
     console.log("AnimatedText component mounted");
-    
+
     // Register GSAP plugins
     gsap.registerPlugin(ScrollTrigger);
-    
+
     if (!textRef.current) return;
-    
+
     // Get all character elements
     const chars = Array.from(textRef.current.querySelectorAll('.char'));
     charElements.current = chars as HTMLSpanElement[];
-    
+
     // Initialize positions
-    gsap.set(charElements.current, { 
+    gsap.set(charElements.current, {
       y: 0,
       opacity: 0,
       rotateX: -90,
@@ -52,6 +52,7 @@ const AnimatedText: React.FC<AnimatedTextProps> = ({ className = "" }) => {
       rotateX: 0,
       stagger: 0.03,
       ease: "back.out(1.7)",
+      clearProps: "transform,opacity,transformOrigin",
     });
 
     // Cleanup function
@@ -66,16 +67,16 @@ const AnimatedText: React.FC<AnimatedTextProps> = ({ className = "" }) => {
   const splitText = (text: string) => {
     // Split by bullet point with spaces to get the words
     const words = text.split(' • ');
-    
+
     return words.map((word, wordIndex) => (
       <span key={wordIndex} className="word-group" data-word-index={wordIndex}>
         {word.split('').map((char, charIndex) => (
-          <span 
+          <span
             key={`${wordIndex}-${charIndex}`}
-            className={`char`} 
+            className={`char`}
             data-word={wordIndex}
-            style={{ 
-              display: 'inline-block', 
+            style={{
+              display: 'inline-block',
               position: 'relative',
               padding: '0 1px'
             }}
@@ -93,8 +94,8 @@ const AnimatedText: React.FC<AnimatedTextProps> = ({ className = "" }) => {
   };
 
   return (
-    <div 
-      ref={textRef} 
+    <div
+      ref={textRef}
       className={`animated-text-container py-8 sm:py-10 md:py-12 ${className} relative z-20`}
       style={{
         perspective: '1000px',
@@ -106,40 +107,40 @@ const AnimatedText: React.FC<AnimatedTextProps> = ({ className = "" }) => {
       {/* Background elements */}
       <div className="absolute inset-0 opacity-10 pointer-events-none z-0">
         <div className="absolute top-0 left-0 w-full h-full">
-          <img 
-            src="/images/animated-dots.svg" 
-            alt="" 
+          <img
+            src="/images/animated-dots.svg"
+            alt=""
             className="w-full h-full object-cover opacity-40"
             style={{ filter: 'blur(1px)' }}
           />
         </div>
       </div>
-      
+
       {/* Floating graphics */}
       <div className="absolute top-1/4 left-1/6 w-24 h-24 md:w-32 md:h-32 pointer-events-none z-0">
-        <img 
-          src="/images/blob.svg" 
-          alt="" 
-          className="w-full h-full object-contain opacity-10 animate-float" 
-          style={{ 
+        <img
+          src="/images/blob.svg"
+          alt=""
+          className="w-full h-full object-contain opacity-10 animate-float"
+          style={{
             animationDuration: '8s',
             transform: 'rotate(45deg) scale(1.2)'
           }}
         />
       </div>
       <div className="absolute bottom-1/4 right-1/6 w-24 h-24 md:w-32 md:h-32 pointer-events-none z-0">
-        <img 
-          src="/images/blob.svg" 
-          alt="" 
-          className="w-full h-full object-contain opacity-10 animate-float" 
-          style={{ 
+        <img
+          src="/images/blob.svg"
+          alt=""
+          className="w-full h-full object-contain opacity-10 animate-float"
+          style={{
             animationDuration: '6s',
             transform: 'rotate(-30deg) scale(0.8)',
             animationDelay: '1s'
           }}
         />
       </div>
-      
+
       {/* Icon elements */}
       <div className="absolute top-1/2 left-[15%] transform -translate-y-1/2 hidden md:block pointer-events-none z-0">
         <div className="opacity-30 animate-bounce" style={{ animationDuration: '3s' }}>
@@ -156,24 +157,15 @@ const AnimatedText: React.FC<AnimatedTextProps> = ({ className = "" }) => {
           </svg>
         </div>
       </div>
-      
-      <div className="container mx-auto text-center px-4 relative z-10">
-        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 inline-block animated-heading shine" 
+
+      <div className="container mx-auto text-center px-4 relative z-10 clip-fix-container">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 inline-block"
           id="animated-text"
-          style={{ 
-            backgroundImage: 'linear-gradient(45deg, #063168, #3D75BD, #FFCC00, #3D75BD, #063168)',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            color: 'transparent',
-            backgroundSize: '300% 100%',
-            animation: 'gradient-flow 8s ease infinite'
-          }}
         >
           {splitText("CONNECT • DISCOVER • EXPERIENCE")}
         </h2>
       </div>
-      
+
       <style jsx>{`
         @keyframes gradient-flow {
           0% { background-position: 0% 50% }

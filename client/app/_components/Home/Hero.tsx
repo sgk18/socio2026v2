@@ -13,7 +13,7 @@ const Hero = () => {
   const { session, isLoading } = useAuth();
   const router = useRouter();
   const [startTyping, setStartTyping] = useState(false);
-  
+
 
   const handleSignInWithGoogle = async () => {
     const supabase = createBrowserClient(
@@ -83,19 +83,19 @@ const Hero = () => {
   const buttonsDisabled = isLoading;
 
   return (
-      <div
-        ref={heroRef}
-        className="flex flex-col sm:flex-row justify-between items-center w-full px-4 sm:px-8 md:px-16 lg:px-36 py-12 sm:py-16 md:py-24"
-      >
+    <div
+      ref={heroRef}
+      className="flex flex-col sm:flex-row justify-between items-center w-full px-4 sm:px-8 md:px-16 lg:px-36 py-12 sm:py-16 md:py-24"
+    >
       <div className="w-full sm:w-1/2 mb-8 sm:mb-0">
         <div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight" style={{ 
-              backgroundImage: 'linear-gradient(45deg, #063168, #3D75BD)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundSize: '200% 200%',
-              animation: 'gradient-shift 5s ease infinite'
-            }}>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight" style={{
+            backgroundImage: 'linear-gradient(45deg, #063168, #3D75BD)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundSize: '200% 200%',
+            animation: 'gradient-shift 5s ease infinite'
+          }}>
             Discover Christ University events and&nbsp;
             {startTyping ? (
               <TypeAnimation
@@ -133,16 +133,14 @@ const Hero = () => {
           </p>
         </div>
         <div className="flex mt-6 sm:mt-8 gap-4 sm:gap-5 items-center select-none flex-row">
-          <FunkyButton 
-            text="Get Started" 
-            onClick={() => {
-              if (session && !isLoading) {
-                router.push("/Discover");
-              } else {
+          {!session && !isLoading && (
+            <FunkyButton
+              text="Get Started"
+              onClick={() => {
                 router.push("/auth");
-              }
-            }}
-          />
+              }}
+            />
+          )}
           <button
             onClick={handleExploreClick}
             disabled={buttonsDisabled}
@@ -159,12 +157,12 @@ const Hero = () => {
         <div className="absolute w-full h-full flex items-center justify-center">
           <div className="w-72 h-72 sm:w-88 sm:h-88 rounded-full bg-yellow-100 opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
-        <div className="image-container w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 rounded-full overflow-hidden shadow-xl relative z-10" 
-             style={{ 
-               boxShadow: '0 10px 25px -5px rgba(21, 76, 179, 0.4), 0 8px 10px -6px rgba(21, 76, 179, 0.3)',
-               border: '5px solid rgba(255, 255, 255, 0.7)'
-             }}>
-          <img 
+        <div className="image-container w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 rounded-full overflow-hidden shadow-xl relative z-10"
+          style={{
+            boxShadow: '0 10px 25px -5px rgba(21, 76, 179, 0.4), 0 8px 10px -6px rgba(21, 76, 179, 0.3)',
+            border: '5px solid rgba(255, 255, 255, 0.7)'
+          }}>
+          <img
             src="/images/christuniversity.jpg"
             alt="Christ University Campus"
             className="w-full h-full object-cover transform transition-transform duration-10000 hover:scale-110"

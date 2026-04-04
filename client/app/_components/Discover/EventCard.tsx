@@ -18,6 +18,9 @@ interface EventCardProps {
   baseUrl?: string;
   idForLink?: string;
   authToken?: string;
+  isArchived?: boolean;
+  onArchiveToggle?: (eventId: string, shouldArchive: boolean) => Promise<void>;
+  isArchiveLoading?: boolean;
 }
 
 export const EventCard = ({
@@ -33,11 +36,15 @@ export const EventCard = ({
   baseUrl = "event",
   idForLink,
   authToken,
+  isArchived = false,
+  onArchiveToggle,
+  isArchiveLoading = false,
 }: EventCardProps) => {
   const { userData, isLoading: authLoading } = useAuth();
 
   const isOutsiderUser = userData?.organization_type === "outsider";
   const showOutsiderBadge = !authLoading && isOutsiderUser && Boolean(allowOutsiders);
+  const isAdminOrOrganizer = !authLoading && (userData?.is_organiser || userData?.is_masteradmin);
 
   const eventSlug = idForLink;
   // No longer generating slugs from title; always use the actual event_id
@@ -48,18 +55,23 @@ export const EventCard = ({
   const displayTime = formatTime(time, "Time TBD");
 
   return (
-    <div className="bg-[#f9f9f9] rounded-lg overflow-hidden border-2 border-gray-200 transform transition duration-100 ease-in-out hover:scale-101 flex flex-col">
+    <div className="bg-[#f9f9f9] rounded-lg overflow-hidden border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0">
       <Link href={eventPageUrl} className="w-full block">
-        <div className="relative h-40 bg-white">
+        <div className="relative h-40 overflow-hidden bg-white">
           {showOutsiderBadge && (
             <div className="absolute top-2 left-2 z-10">
               <span className="text-xs font-semibold px-2 py-1 rounded-full bg-[#F59E0B] text-black shadow-sm">
-                PUBLIC
+                Public
               </span>
             </div>
           )}
           {tags.length > 0 && (
-            <div className="absolute top-2 right-2 flex gap-2 z-10 items-center flex-wrap justify-end">
+            <div className="absolute top-2 right-2 flex gap-1.5 z-10 items-center flex-wrap justify-end max-w-[75%]">
+              {isArchived && isAdminOrOrganizer && (
+                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800 shadow-sm">
+                  ARCHIVED
+                </span>
+              )}
               {(tags || []).map((tag, index) => {
                 if (!tag || typeof tag !== 'string') return null;
 
@@ -93,7 +105,7 @@ export const EventCard = ({
                 if (titleTag === "Claims") bgColor = "bg-[#73ec66] text-black";
 
                 return (
-                  <span key={index} className={`${base} ${bgColor}`}>
+                  <span key={index} className={`${base} ${bgColor} max-w-full truncate`}>
                     {titleTag}
                   </span>
                 );
@@ -101,11 +113,14 @@ export const EventCard = ({
             </div>
           )}
           {image ? (
-            <img
-              src={image}
-              alt={title}
-              className="w-full h-full object-cover object-top relative z-0"
-            />
+            <>
+              <div className="absolute inset-0 bg-gradient-to-t from-[#063168]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+              <img
+                src={image}
+                alt={title}
+                className="w-full h-full object-cover object-top relative z-0 transition-all duration-700 group-hover:scale-110"
+              />
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-white">
               <svg
@@ -131,7 +146,7 @@ export const EventCard = ({
       <div className="p-4 rounded-b-lg flex-grow flex flex-col justify-between">
         <div>
           <Link href={eventPageUrl} className="block">
-            <h3 className="text-lg font-bold mb-1 hover:underline truncate">
+            <h3 className="text-lg font-bold mb-1 hover:underline truncate group-hover:text-[#3D75BD] transition-colors duration-200">
               {title}
             </h3>
           </Link>
@@ -196,7 +211,7 @@ export const EventCard = ({
             <span className="truncate">{location}</span>
           </div>
         </div>
-        {!authLoading && userData?.is_organiser ? (
+        {!authLoading && isAdminOrOrganizer ? (
           <div className="mt-auto pt-2 border-t border-gray-200 flex flex-wrap gap-x-4 gap-y-2">
             <Link
               href={participantsPageUrl}
@@ -243,6 +258,29 @@ export const EventCard = ({
               </svg>
               Mark Attendance
             </Link>
+            {onArchiveToggle && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onArchiveToggle(idForLink || "", !isArchived);
+                }}
+                disabled={isArchiveLoading}
+                className={`inline-flex items-center gap-1 text-sm font-semibold transition-colors cursor-pointer ${
+                  isArchiveLoading
+                    ? "text-slate-400 cursor-not-allowed"
+                    : isArchived
+                      ? "text-emerald-700 hover:text-emerald-800"
+                      : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-history">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                {isArchiveLoading ? "Saving..." : isArchived ? "Unarchive" : "Archive"}
+              </button>
+            )}
             {authToken && baseUrl === "edit/event" && (
               <EventReminderButton
                 eventId={eventSlug || ""}
@@ -254,9 +292,9 @@ export const EventCard = ({
         ) : (
           <Link
             href={eventPageUrl}
-            className="items-center gap-1 text-sm text-[#154CB3] font-semibold hover:underline"
+            className="items-center gap-1 text-sm text-[#154CB3] font-semibold"
           >
-            <div className="mt-auto pt-2 border-t border-gray-200 flex items-center justify-between">
+            <div className="mt-auto pt-2 border-t border-gray-200 flex items-center justify-between group-hover:underline">
               View event
               <svg
                 xmlns="http://www.w3.org/2000/svg"

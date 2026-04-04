@@ -1,9 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import ExcelJS from "exceljs";
-import { EventCard } from "../_components/Discover/EventCard";
-import { FestCard } from "../_components/Discover/FestCard";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   useEvents,
@@ -11,9 +8,30 @@ import {
 } from "../../context/EventContext";
 import { formatDateFull, formatTime } from "@/lib/dateUtils";
 import Link from "next/link";
-import { getFests } from "@/lib/api";
 import { createBrowserClient } from "@supabase/ssr";
+import { toast } from "sonner";
+import {
+  addThemedChartsSheet,
+  addStructuredSummarySheet,
+  addStructuredTableSheet,
+  createThemedWorkbook,
+  downloadWorkbook,
+} from "@/lib/xlsxTheme";
+import AnimatedListDropdown from "@/app/_components/UI/AnimatedListDropdown";
+import {
+  Search,
+  SlidersHorizontal,
+  ArrowRight,
+  Calendar,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  History,
+  Pencil,
+} from "lucide-react";
 
+// ─── TYPES & CONSTANTS ──────────────────────────────────────────────────────
 interface Fest {
   fest_id: string;
   fest_title: string;
@@ -23,9 +41,43 @@ interface Fest {
   fest_image_url: string;
   organizing_dept: string;
   created_by?: string;
+  contact_email?: string | null;
+  event_heads?: Array<{ email?: string | null } | string>;
+  campus_hosted_at?: string | null;
+  is_archived?: boolean;
+  archived_at?: string | null;
 }
 
 const ITEMS_PER_PAGE = 12;
+
+type StatusFilter = "all" | "upcoming" | "past" | "archived";
+
+const FEST_STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "past", label: "Past" },
+  { value: "archived", label: "Archived" },
+];
+
+const EVENT_STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "past", label: "Past" },
+  { value: "archived", label: "Archived" },
+];
+
+const AUTO_ARCHIVE_DAYS = 15;
+const AUTO_ARCHIVE_MS = AUTO_ARCHIVE_DAYS * 24 * 60 * 60 * 1000;
+const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
+
+const CAMPUSES = [
+  "Central Campus (Main)",
+  "Bannerghatta Road Campus",
+  "Yeshwanthpur Campus",
+  "Kengeri Campus",
+  "Delhi NCR Campus",
+  "Pune Lavasa Campus"
+];
 
 const ACCREDITATION_BODIES = [
   {
@@ -79,69 +131,356 @@ const ACCREDITATION_BODIES = [
   },
 ];
 
-const Page = () => {
-  const [searchTerm, setSearchTerm] = useState<string>("");
+
+// ─── UI COMPONENTS ────────────────────────────────────────────────────────
+interface MappedFestCardProps {
+  fest: Fest;
+  baseUrl: string;
+  isArchiveUpdating?: boolean;
+  onArchiveToggle?: (festId: string, shouldArchive: boolean) => void;
+}
+
+const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveToggle }: MappedFestCardProps) => {
+  const isPast = fest.closing_date ? new Date(fest.closing_date) < new Date() : false;
+  const isArchived = fest.is_archived ?? false;
+
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-all duration-300 ${
+      isArchived ? "opacity-60 grayscale" : ""
+    }`}>
+      <div className="h-48 relative bg-slate-100">
+        <img
+          src={fest.fest_image_url || process.env.NEXT_PUBLIC_EVENT_BANNER_PLACEHOLDER_URL!}
+          alt={fest.fest_title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute top-3 right-3">
+          <span
+            className={`px-3 py-1.5 text-[10px] font-bold rounded-full tracking-wider shadow-sm flex items-center ${
+              isArchived ? "bg-purple-600 text-white" : isPast ? "bg-[#333333] text-white" : "bg-white text-emerald-600"
+            }`}
+          >
+            {isArchived ? "ARCHIVED" : isPast ? "PAST" : "UPCOMING"}
+          </span>
+        </div>
+      </div>
+      <div className="p-5 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 line-clamp-1">
+          {fest.organizing_dept || "DEPARTMENT"}
+        </p>
+        <h3 className="text-xl font-bold text-[#0f2557] mt-1 mb-2 line-clamp-1">
+          {fest.fest_title}
+        </h3>
+        <p className="text-sm text-slate-500 line-clamp-2">
+          {fest.description || "No description provided. Click manage to add one."}
+        </p>
+      </div>
+      <div className="px-5 py-3.5 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+          <Calendar className="w-4 h-4 text-slate-400" />
+          {formatDateFull(fest.opening_date, "TBD")}
+        </div>
+        {isArchived ? (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onArchiveToggle?.(fest.fest_id, false);
+            }}
+            disabled={isArchiveUpdating}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isArchiveUpdating ? "Restoring..." : "Restore"} <History className="w-4 h-4" />
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                onArchiveToggle?.(fest.fest_id, true);
+              }}
+              disabled={isArchiveUpdating}
+              className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isArchiveUpdating ? "Archiving..." : "Archive"} <History className="w-4 h-4" />
+            </button>
+            <Link href={`/${baseUrl}/${fest.fest_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
+              Manage <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+type EventArchiveSource = "manual" | "auto" | null;
+
+const MappedEventCard = ({
+  event,
+  baseUrl,
+  isArchived,
+  archiveSource,
+  onToggleArchive,
+  isArchiveActionLoading,
+}: {
+  event: ContextEvent;
+  baseUrl: string;
+  isArchived: boolean;
+  archiveSource: EventArchiveSource;
+  onToggleArchive: (eventId: string, shouldArchive: boolean) => void;
+  isArchiveActionLoading: boolean;
+}) => {
+  const isPast = event.event_date ? new Date(event.event_date) < new Date() : false;
+  const statusLabel = isArchived ? "ARCHIVED" : isPast ? "PAST" : "UPCOMING";
+  const statusClassName = isArchived
+    ? "bg-amber-100 text-amber-800"
+    : isPast
+      ? "bg-[#333333] text-white"
+      : "bg-white text-emerald-600";
+
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-all duration-300 ${
+      isArchived ? "opacity-60 grayscale" : ""
+    }`}>
+      <div className="h-48 relative bg-slate-100">
+        <img
+          src={event.event_image_url || process.env.NEXT_PUBLIC_EVENT_BANNER_PLACEHOLDER_URL!}
+          alt={event.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute top-3 right-3">
+          <span className={`px-3 py-1.5 text-[10px] font-bold rounded-full tracking-wider shadow-sm flex items-center ${statusClassName}`}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+      <div className="p-5 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 line-clamp-1">
+          {event.organizing_dept || "DEPARTMENT"}
+        </p>
+        <h3 className="text-xl font-bold text-[#0f2557] mt-1 mb-2 line-clamp-1">
+          {event.title}
+        </h3>
+        <p className="text-sm text-slate-500 line-clamp-2">
+          {(event as any).short_description || (event as any).description || "No description provided."}
+        </p>
+        {isArchived && archiveSource === "auto" && (
+          <p className="text-xs font-semibold text-amber-700 mt-2">
+            Auto-archived after event end date.
+          </p>
+        )}
+      </div>
+      <div className="px-5 py-3.5 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+          <Calendar className="w-4 h-4 text-slate-400" />
+          {formatDateFull(event.event_date, "TBD")}
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={isArchiveActionLoading}
+            onClick={() => onToggleArchive(event.event_id, !isArchived)}
+            className={`flex items-center gap-1.5 font-semibold text-sm transition-colors cursor-pointer ${
+              isArchiveActionLoading
+                ? "text-slate-400 cursor-not-allowed"
+                : isArchived
+                  ? "text-emerald-700 hover:text-emerald-800"
+                  : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {isArchiveActionLoading ? "Saving..." : isArchived ? "Unarchive" : "Archive"} <History className="w-4 h-4" />
+          </button>
+          <Link href={`/${baseUrl}/${event.event_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
+            Edit <Pencil className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// ─── MAIN DASHBOARD COMPONENT ───────────────────────────────────────────────
+export default function ManageDashboard() {
+  const [activeTab, setActiveTab] = useState<"fests" | "events" | "report">("fests");
+  const [searchTerm, setSearchTerm] = useState("");
   const [eventsPage, setEventsPage] = useState(1);
   const [festsPage, setFestsPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<"fests" | "events" | "report">("fests");
+  const [campusFilter, setCampusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
+  const statusFilterRef = useRef<HTMLDivElement>(null);
+  const topOfPageRef = useRef<HTMLDivElement>(null);
+  const previousPagesRef = useRef({ eventsPage: 1, festsPage: 1 });
+  
+  // Auth Context & Session
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const { userData, isMasterAdmin } = useAuth();
+  
+  // Fests Data
+  const [fests, setFests] = useState<Fest[]>([]);
+  const [isLoadingFests, setIsLoadingFests] = useState(true);
+  
+  // Events Data
+  const { allEvents: contextAllEvents, isLoading: isLoadingContextEvents } = useEvents();
+
+  // Report State
   const [selectedReportFest, setSelectedReportFest] = useState<string>("");
   const [selectedAccreditation, setSelectedAccreditation] = useState<string>("");
   const [reportMode, setReportMode] = useState<"fest" | "events">("fest");
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const [searchTermReport, setSearchTermReport] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const { userData, isMasterAdmin } = useAuth();
-  const {
-    allEvents: contextAllEvents,
-    isLoading: isLoadingContextEvents,
-    error: contextEventsError,
-  } = useEvents();
+  const [archiveOverrides, setArchiveOverrides] = useState<Record<string, { is_archived: boolean; archived_at: string | null }>>({});
+  const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Set<string>>(new Set());
+  const [localArchivedIds, setLocalArchivedIds] = useState<Set<string>>(new Set());
+  const [festArchiveOverrides, setFestArchiveOverrides] = useState<Record<string, { is_archived: boolean; archived_at: string | null }>>({});
+  const [festArchiveUpdatingIds, setFestArchiveUpdatingIds] = useState<Set<string>>(new Set());
+  const [localFestArchivedIds, setLocalFestArchivedIds] = useState<Set<string>>(new Set());
 
-  const [fests, setFests] = useState<Fest[]>([]);
-  const [isLoadingFests, setIsLoadingFests] = useState(true);
-  const [festsError, setFestsError] = useState<string | null>(null);
+  const normalizeEmail = (value: string | null | undefined) =>
+    String(value || "").trim().toLowerCase();
+  const currentUserEmail = normalizeEmail(userData?.email);
+  const isCurrentUserFestHead = (fest: Fest) => {
+    if (!currentUserEmail) return false;
+    const heads = Array.isArray(fest.event_heads) ? fest.event_heads : [];
+
+    return heads.some((head) => {
+      if (!head) return false;
+      if (typeof head === "string") {
+        return normalizeEmail(head) === currentUserEmail;
+      }
+
+      return normalizeEmail((head as { email?: string | null }).email) === currentUserEmail;
+    });
+  };
+  const isOwnedByCurrentUser = (...ownerCandidates: Array<string | null | undefined>) => {
+    if (isMasterAdmin) return true;
+    if (!currentUserEmail) return false;
+
+    const normalizedOwners = ownerCandidates
+      .map((owner) => normalizeEmail(owner))
+      .filter(Boolean);
+
+    // Legacy records may not have ownership metadata populated.
+    if (normalizedOwners.length === 0) return true;
+    return normalizedOwners.includes(currentUserEmail);
+  };
+
+  const festsCacheKey = currentUserEmail ? `manage:fests:${currentUserEmail}` : null;
 
   useEffect(() => {
+    if (!festsCacheKey) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      const cachedRaw = window.sessionStorage.getItem(festsCacheKey);
+      if (!cachedRaw) return;
+
+      const cachedPayload = JSON.parse(cachedRaw);
+      if (Array.isArray(cachedPayload?.fests)) {
+        setFests(cachedPayload.fests);
+        setIsLoadingFests(false);
+      }
+    } catch (error) {
+      console.warn("Failed to hydrate fest cache:", error);
+    }
+  }, [festsCacheKey]);
+
+  const refreshFests = useCallback(async () => {
     if (!userData?.email) {
-      setIsLoadingFests(false);
       setFests([]);
+      setIsLoadingFests(false);
       return;
     }
-    setIsLoadingFests(true);
-    setFestsError(null);
-    getFests()
-      .then((data) => {
-        const mappedFests: Fest[] = Array.isArray(data)
-          ? data.map((fest: any) => ({
-              fest_id: fest.fest_id,
-              fest_title: fest.fest_title || fest.title || "Untitled fest",
-              description: fest.description || "",
-              opening_date: fest.opening_date || null,
-              closing_date: fest.closing_date || null,
-              fest_image_url: fest.fest_image_url || "",
-              organizing_dept: fest.organizing_dept || "",
-              created_by: fest.created_by || null,
-            }))
+
+    if (!authToken) {
+      return;
+    }
+
+    const hasWarmData = fests.length > 0;
+    if (!hasWarmData) {
+      setIsLoadingFests(true);
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/fests?sortBy=created_at&sortOrder=desc`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch fests (status: ${response.status})`);
+      }
+
+      const payload = await response.json();
+      const rawFests = Array.isArray(payload?.fests)
+        ? payload.fests
+        : Array.isArray(payload)
+          ? payload
           : [];
 
-        // Show all fests for master admin, otherwise filter by created_by
-        const userSpecificFests = isMasterAdmin 
-          ? mappedFests 
-          : mappedFests.filter((fest) => fest.created_by === userData.email);
+      const mappedFests: Fest[] = rawFests.map((fest: any) => ({
+        fest_id: String(fest.fest_id || fest.id || fest.festId || fest.fest_title || fest.title || ""),
+        fest_title: fest.fest_title || fest.title || "Untitled",
+        description: fest.description || "",
+        opening_date: fest.opening_date || null,
+        closing_date: fest.closing_date || null,
+        fest_image_url: fest.fest_image_url || "",
+        organizing_dept: fest.organizing_dept || "",
+        created_by: fest.created_by || fest.createdBy || fest.user_email || fest.organiser_email || null,
+        contact_email: fest.contact_email || fest.contactEmail || null,
+        event_heads: Array.isArray(fest.event_heads)
+          ? fest.event_heads
+          : Array.isArray(fest.eventHeads)
+            ? fest.eventHeads
+            : [],
+        campus_hosted_at: fest.campus_hosted_at || fest.campus || null,
+        is_archived: fest.is_archived === true,
+        archived_at: fest.archived_at || null,
+      }));
 
-        setFests(userSpecificFests);
-      })
-      .catch((error: any) => {
+      const userSpecificFests = mappedFests.filter(
+        (fest) =>
+          isOwnedByCurrentUser(fest.created_by, fest.contact_email) ||
+          isCurrentUserFestHead(fest)
+      );
+
+      setFests(userSpecificFests);
+
+      if (festsCacheKey && typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          festsCacheKey,
+          JSON.stringify({
+            fests: userSpecificFests,
+            cachedAt: Date.now(),
+          })
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching fests:", error);
+      if (!hasWarmData) {
         setFests([]);
-        setFestsError(error?.message || "Failed to fetch fests.");
-      })
-      .finally(() => {
-        setIsLoadingFests(false);
-      });
-  }, [userData?.email, isMasterAdmin]);
+      }
+    } finally {
+      setIsLoadingFests(false);
+    }
+  }, [API_URL, authToken, userData?.email, currentUserEmail, isMasterAdmin, fests.length, festsCacheKey]);
 
-  // Get auth token for reminder notifications
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!statusFilterRef.current?.contains(event.target as Node)) {
+        setIsStatusFilterOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Load Auth Token for Reports
   useEffect(() => {
     const getToken = async () => {
       const supabase = createBrowserClient(
@@ -156,24 +495,157 @@ const Page = () => {
     getToken();
   }, []);
 
-  // Show all events for master admin, otherwise filter by created_by
-  const userSpecificContextEvents = userData?.email
-    ? isMasterAdmin
-      ? (contextAllEvents as ContextEvent[])
-      : (contextAllEvents as ContextEvent[]).filter(
-          (event) => event.created_by === userData.email
-        )
-    : [];
+  // Fetch Fests secure logic
+  useEffect(() => {
+    refreshFests();
+  }, [refreshFests]);
 
+  // Fetch fresh events from Supabase directly on page load to ensure archive status is current
+  // This bypasses the cached events from EventContext to show real-time archive changes
+  const [liveEvents, setLiveEvents] = useState<ContextEvent[]>([]);
+  const [isLoadingLiveEvents, setIsLoadingLiveEvents] = useState(false);
+
+  useEffect(() => {
+    const fetchLiveEvents = async () => {
+      try {
+        setIsLoadingLiveEvents(true);
+        if (!authToken) {
+          setLiveEvents(contextAllEvents);
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/api/events?sortBy=created_at&sortOrder=desc`, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch events (status: ${response.status})`);
+        }
+
+        const payload = await response.json();
+        setLiveEvents(Array.isArray(payload?.events) ? payload.events : []);
+      } catch (err) {
+        console.error("Error fetching live events:", err);
+        // Fall back to context events if fetch fails
+        setLiveEvents(contextAllEvents);
+      } finally {
+        setIsLoadingLiveEvents(false);
+      }
+    };
+
+    fetchLiveEvents();
+  }, [authToken, contextAllEvents]);
+
+
+  // Permissions & Campus logic for Events
+  const getValidDate = (date: string | null | undefined) => {
+    if (!date) return null;
+    const parsedDate = new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) return null;
+    return parsedDate;
+  };
+
+  const isPastDate = (date: string | null | undefined) => {
+    const parsedDate = getValidDate(date);
+    if (!parsedDate) return false;
+    return parsedDate < new Date();
+  };
+
+  const isAutoArchivedEvent = (event: ContextEvent) => {
+    const eventDate = getValidDate(event.event_date);
+    if (!eventDate) return false;
+    return Date.now() - eventDate.getTime() >= AUTO_ARCHIVE_MS;
+  };
+
+  const toBoolean = (value: unknown) =>
+    value === true || value === 1 || value === "1" || value === "true";
+
+  const getEffectiveArchiveState = (event: ContextEvent): { isArchived: boolean; archiveSource: EventArchiveSource } => {
+    const override = archiveOverrides[event.event_id];
+    const manualArchived = override
+      ? override.is_archived
+      : toBoolean(event.is_archived);
+    const autoArchived = isAutoArchivedEvent(event);
+
+    if (manualArchived) {
+      return { isArchived: true, archiveSource: "manual" };
+    }
+
+    if (autoArchived) {
+      return { isArchived: true, archiveSource: "auto" };
+    }
+
+    return { isArchived: false, archiveSource: null };
+  };
+
+  const getEffectiveFestArchiveState = (fest: Fest) => {
+    const override = festArchiveOverrides[fest.fest_id];
+    if (override) {
+      return override.is_archived;
+    }
+
+    if (localFestArchivedIds.has(fest.fest_id)) {
+      return true;
+    }
+
+    return toBoolean(fest.is_archived);
+  };
+
+  const matchesStatus = (isPast: boolean, isArchived: boolean) => {
+    if (statusFilter === "all") return !isArchived;
+    if (statusFilter === "archived") return isArchived;
+    if (statusFilter === "past") return !isArchived && isPast;
+    return !isArchived && !isPast;
+  };
+
+  const matchesEventStatus = (isPast: boolean, isArchived: boolean) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "archived") return isArchived;
+    if (statusFilter === "past") return !isArchived && isPast;
+    return !isArchived && !isPast;
+  };
+
+  const matchesFestStatus = (isPast: boolean, isArchived: boolean) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "archived") return isArchived;
+    if (statusFilter === "past") return !isArchived && isPast;
+    return !isArchived && !isPast;
+  };
+
+  const userSpecificContextEvents = (liveEvents.length > 0 ? liveEvents : contextAllEvents as ContextEvent[]).filter((e) => {
+    const isOwnerOrMaster = isOwnedByCurrentUser(
+      e.created_by,
+      (e as any).organizer_email,
+      (e as any).organiser_email
+    );
+    const matchesCampus = campusFilter === "all" || (e as any).campus_hosted_at === campusFilter;
+    const eventIsPast = isPastDate(e.event_date);
+    const archiveState = getEffectiveArchiveState(e);
+    return isOwnerOrMaster && matchesCampus && matchesEventStatus(eventIsPast, archiveState.isArchived);
+  });
+
+  // Filter Grids
   const searchedUserEvents = userSpecificContextEvents.filter((event) =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const searchedUserFests = fests.filter((fest) => {
+    const matchesSearch = fest.fest_title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCampus = campusFilter === "all" || (fest as any).campus_hosted_at === campusFilter;
+    const festIsPast = isPastDate(fest.closing_date);
+    const festIsArchived = getEffectiveFestArchiveState(fest);
+    return matchesSearch && matchesCampus && matchesFestStatus(festIsPast, festIsArchived);
+  });
 
-  const searchedUserFests = fests.filter((fest) =>
-    fest.fest_title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const activeStatusFilterOptions =
+    activeTab === "events" ? EVENT_STATUS_FILTER_OPTIONS : FEST_STATUS_FILTER_OPTIONS;
 
-  // Pagination helpers
+  const selectedStatusLabel =
+    activeStatusFilterOptions.find((option) => option.value === statusFilter)?.label || "All";
+
+  // Pagination Helper
   const paginateArray = <T,>(array: T[], page: number) => {
     const startIndex = (page - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -188,779 +660,878 @@ const Page = () => {
   const paginatedFests = paginateArray(searchedUserFests, festsPage);
   const paginatedEvents = paginateArray(searchedUserEvents, eventsPage);
 
-  const getDisplayTagsForEvent = (event: ContextEvent): string[] => {
-    const tags: string[] = [];
-    if (event.category) {
-      tags.push(event.category);
-    }
-    if (event.registration_fee === 0 || event.registration_fee === null) {
-      tags.push("Free");
-    } else if (
-      typeof event.registration_fee === "number" &&
-      event.registration_fee > 0
-    ) {
-      tags.push("Paid");
-    }
-    if (event.claims_applicable) {
-      tags.push("Claims");
-    }
-    return tags.filter((tag) => tag).slice(0, 3);
+  const scrollToTop = () => {
+    const performScroll = () => {
+      topOfPageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+      document.body.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    requestAnimationFrame(performScroll);
+    setTimeout(performScroll, 0);
   };
 
-  const formatDate = (dateString: string | null) => {
-    return formatDateFull(dateString, "Date TBD");
+  useEffect(() => {
+    const prev = previousPagesRef.current;
+    const pageChanged = prev.eventsPage !== eventsPage || prev.festsPage !== festsPage;
+
+    if (pageChanged) {
+      scrollToTop();
+    }
+
+    previousPagesRef.current = { eventsPage, festsPage };
+  }, [eventsPage, festsPage]);
+
+  // Helper function to refresh live events from Supabase
+  const refreshLiveEvents = async () => {
+    try {
+      if (!authToken) {
+        setLiveEvents(contextAllEvents);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/events?sortBy=created_at&sortOrder=desc`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to refresh events (status: ${response.status})`);
+      }
+
+      const payload = await response.json();
+      setLiveEvents(Array.isArray(payload?.events) ? payload.events : []);
+    } catch (err) {
+      console.error("Error refreshing live events:", err);
+      setLiveEvents(contextAllEvents);
+    }
   };
 
-  const formatTimeStr = (timeString: string | null) => {
-    return formatTime(timeString, "Time TBD");
+  // ─── REPORT GENERATION HANDLER ────────────────────────
+  const handleGenerateReport = async () => {
+    setIsGenerating(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+      const response = await fetch(`${API_URL}/api/report/data`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          eventIds: Array.from(selectedEventIds),
+          festId: reportMode === "fest" ? selectedReportFest : null,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch report data");
+
+      const data = await response.json();
+
+      const workbook = createThemedWorkbook("SOCIO - Christ University");
+      const accBody = ACCREDITATION_BODIES.find((body) => body.id === selectedAccreditation);
+      const reportEvents = Array.isArray(data.events) ? data.events : [];
+      const totalRegs = reportEvents.reduce(
+        (sum: number, event: any) => sum + Number(event.total_registrations ?? 0),
+        0
+      );
+      const totalParticipants = reportEvents.reduce(
+        (sum: number, event: any) => sum + Number(event.total_participants ?? 0),
+        0
+      );
+      const totalAttended = reportEvents.reduce(
+        (sum: number, event: any) => sum + Number(event.attended_count ?? 0),
+        0
+      );
+
+      addStructuredSummarySheet(workbook, {
+        title: "Accreditation Report Export",
+        subtitle: "Consistent SOCIO workbook structure with sectioned metadata, filters, and KPIs.",
+        sections: [
+          {
+            title: "Report Metadata",
+            rows: [
+              { label: "Institution", value: "Christ University" },
+              {
+                label: "Accreditation Body",
+                value: accBody ? `${accBody.name} - ${accBody.fullName}` : "Not selected",
+              },
+              { label: "Generated On", value: new Date().toLocaleString("en-GB") },
+              { label: "Generated By", value: String(data.generated_by ?? "-") },
+            ],
+          },
+          {
+            title: "Report Filters",
+            rows: [
+              { label: "Report Type", value: reportMode === "fest" ? "Fest-based" : "Event-based" },
+              { label: "Fest", value: data.fest?.fest_title ?? "All selected events" },
+              { label: "Selected Events", value: reportEvents.length },
+            ],
+          },
+          {
+            title: "KPI Snapshot",
+            rows: [
+              { label: "Total Registrations", value: totalRegs },
+              { label: "Total Participants", value: totalParticipants },
+              { label: "Total Attended", value: totalAttended },
+              {
+                label: "Attendance Rate",
+                value:
+                  totalParticipants > 0
+                    ? `${((totalAttended / totalParticipants) * 100).toFixed(1)}%`
+                    : "N/A",
+              },
+            ],
+          },
+        ],
+      });
+
+      type EventReportRow = {
+        event_id: string;
+        title: string;
+        date: string;
+        venue: string;
+        dept: string;
+        category: string;
+        fee: number;
+        regs: number;
+        participants: number;
+        attended: number;
+        absent: number;
+      };
+
+      const eventRows: EventReportRow[] = reportEvents.map((event: any) => ({
+        event_id: String(event.event_id ?? "-"),
+        title: String(event.title ?? "Untitled Event"),
+        date: String(event.event_date ?? "N/A"),
+        venue: String(event.venue ?? "TBD"),
+        dept: String(event.organizing_dept ?? "N/A"),
+        category: String(event.category ?? "N/A"),
+        fee: Number(event.registration_fee ?? 0) || 0,
+        regs: Number(event.total_registrations ?? 0) || 0,
+        participants: Number(event.total_participants ?? 0) || 0,
+        attended: Number(event.attended_count ?? 0) || 0,
+        absent: Number(event.absent_count ?? 0) || 0,
+      }));
+
+      addStructuredTableSheet(workbook, {
+        sheetName: "Event List",
+        columns: [
+          { header: "Event ID", key: "event_id", width: 22 },
+          { header: "Title", key: "title", width: 35 },
+          { header: "Date", key: "date", width: 14, horizontal: "center" },
+          { header: "Venue", key: "venue", width: 22 },
+          { header: "Department", key: "dept", width: 22 },
+          { header: "Category", key: "category", width: 16 },
+          { header: "Fee", key: "fee", width: 12, kind: "currency" },
+          { header: "Registrations", key: "regs", width: 14, kind: "number" },
+          { header: "Participants", key: "participants", width: 14, kind: "number" },
+          { header: "Attended", key: "attended", width: 12, kind: "number" },
+          { header: "Absent", key: "absent", width: 12, kind: "number" },
+        ],
+        rows: eventRows,
+      });
+
+      type ParticipantReportRow = {
+        name: string;
+        reg_num: string;
+        email: string;
+        event: string;
+        status: string;
+        attended_at: string;
+      };
+
+      const participantRows: ParticipantReportRow[] = reportEvents.flatMap((event: any) => {
+        const participants = Array.isArray(event.participants) ? event.participants : [];
+        return participants.map((participant: any) => ({
+          name: String(participant.name ?? "-"),
+          reg_num: String(participant.register_number ?? "-"),
+          email: String(participant.email ?? ""),
+          event: String(event.title ?? "Untitled Event"),
+          status: String(participant.status ?? "unmarked"),
+          attended_at: participant.attended_at
+            ? new Date(participant.attended_at).toLocaleString("en-GB")
+            : "",
+        }));
+      });
+
+      addStructuredTableSheet(workbook, {
+        sheetName: "Participant Details",
+        columns: [
+          { header: "Participant Name", key: "name", width: 28 },
+          { header: "Register Number", key: "reg_num", width: 16, horizontal: "center" },
+          { header: "Email", key: "email", width: 32, kind: "email" },
+          { header: "Event", key: "event", width: 34 },
+          { header: "Status", key: "status", width: 12, kind: "status" },
+          { header: "Attended At", key: "attended_at", width: 22 },
+        ],
+        rows: participantRows,
+      });
+
+      const deptChartData = Object.entries(
+        eventRows.reduce<Record<string, number>>((acc, row) => {
+          const dept = row.dept || "Unknown";
+          acc[dept] = (acc[dept] || 0) + row.regs;
+          return acc;
+        }, {})
+      )
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+
+      const attendanceChartData = [
+        {
+          label: "Attended",
+          value: participantRows.filter((row) => row.status.toLowerCase() === "attended").length,
+        },
+        {
+          label: "Absent",
+          value: participantRows.filter((row) => row.status.toLowerCase() === "absent").length,
+        },
+        {
+          label: "Pending",
+          value: participantRows.filter((row) => row.status.toLowerCase() === "pending").length,
+        },
+        {
+          label: "Unmarked",
+          value: participantRows.filter((row) => row.status.toLowerCase() === "unmarked").length,
+        },
+      ];
+
+      addThemedChartsSheet(workbook, {
+        title: "Report Visual Overview",
+        subtitle: "Embedded chart snapshots for fast review.",
+        primaryChart: {
+          title: "Registrations by Department",
+          type: "bar",
+          data: deptChartData,
+        },
+        secondaryChart: {
+          title: "Participant Attendance Mix",
+          type: "donut",
+          data: attendanceChartData,
+        },
+      });
+
+      const filename = reportMode === "fest" && data.fest
+        ? `report_${data.fest.fest_id}_${new Date().toISOString().split("T")[0]}.xlsx`
+        : `report_events_${new Date().toISOString().split("T")[0]}.xlsx`;
+      await downloadWorkbook(workbook, filename);
+      
+      toast.success("Report generated successfully!");
+    } catch (error) {
+      console.error("Error generating report:", error);
+      toast.error("Failed to generate report");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleToggleArchive = async (eventId: string, shouldArchive: boolean) => {
+    console.log(`🔄 Archive toggle initiated: eventId=${eventId}, shouldArchive=${shouldArchive}`);
+    
+    if (!authToken) {
+      toast.error("Please sign in again to update archive status.");
+      console.error("❌ No access token available");
+      return;
+    }
+
+    setArchiveUpdatingIds((prev) => {
+      const next = new Set(prev);
+      next.add(eventId);
+      return next;
+    });
+
+    try {
+      const endpoint = `/api/events/${eventId}/archive`;
+      console.log(`📤 Sending PATCH request to: ${endpoint}`);
+      
+      const response = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ archive: shouldArchive }),
+      });
+
+      console.log(`📨 Response status: ${response.status}`);
+      const payload = await response.json().catch(() => null);
+      console.log(`📋 Response payload:`, payload);
+
+      if (!response.ok) {
+        const errorMsg = payload?.error || `HTTP ${response.status}: Failed to update archive status.`;
+        throw new Error(errorMsg);
+      }
+
+      const event = payload?.event as Partial<ContextEvent> | undefined;
+      setArchiveOverrides((prev) => ({
+        ...prev,
+        [eventId]: {
+          is_archived: Boolean(event?.is_archived ?? shouldArchive),
+          archived_at:
+            typeof event?.archived_at === "string"
+              ? event.archived_at
+              : shouldArchive
+                ? new Date().toISOString()
+                : null,
+        },
+      }));
+
+      // Immediately update local state to reflect change in UI
+      if (shouldArchive) {
+        setLocalArchivedIds((prev) => new Set(prev).add(eventId));
+      } else {
+        setLocalArchivedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(eventId);
+          return next;
+        });
+      }
+
+      toast.success(shouldArchive ? "✅ Event archived successfully." : "✅ Event moved back to active list.");
+      console.log(`✅ Archive update successful`);
+      
+      // Refresh live events to reflect the latest archive status
+      await refreshLiveEvents();
+    } catch (error: any) {
+      console.error("❌ Archive update failed:", error);
+      toast.error(`❌ ${error?.message || "Unable to update archive status."}`);
+    } finally {
+      setArchiveUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(eventId);
+        return next;
+      });
+    }
+  };
+
+  const handleToggleArchiveFest = async (festId: string, shouldArchive: boolean) => {
+    console.log(`🔄 Fest archive toggle initiated: festId=${festId}, shouldArchive=${shouldArchive}`);
+    
+    if (!authToken) {
+      toast.error("Please sign in again to update archive status.");
+      console.error("❌ No access token available");
+      return;
+    }
+
+    setFestArchiveUpdatingIds((prev) => {
+      const next = new Set(prev);
+      next.add(festId);
+      return next;
+    });
+
+    try {
+      const endpoint = `/api/fests/${festId}/archive`;
+      console.log(`📤 Sending PATCH request to: ${endpoint}`);
+      
+      const response = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ archive: shouldArchive }),
+      });
+
+      console.log(`📨 Response status: ${response.status}`);
+      const payload = await response.json().catch(() => null);
+      console.log(`📋 Response payload:`, payload);
+
+      if (!response.ok) {
+        const errorMsg = payload?.error || `HTTP ${response.status}: Failed to update fest archive status.`;
+        throw new Error(errorMsg);
+      }
+
+      // Update fest archive state
+      setFestArchiveOverrides((prev) => ({
+        ...prev,
+        [festId]: {
+          is_archived: Boolean(shouldArchive),
+          archived_at: shouldArchive ? new Date().toISOString() : null,
+        },
+      }));
+
+      // Immediately update local state for fest
+      if (shouldArchive) {
+        setLocalFestArchivedIds((prev) => new Set(prev).add(festId));
+      } else {
+        setLocalFestArchivedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(festId);
+          return next;
+        });
+      }
+
+      // Also update all events under this fest
+      const nowIso = new Date().toISOString();
+      setArchiveOverrides((prev) => {
+        const updated = { ...prev };
+        // Find all events with this fest_id and update them
+        const eventsToCheck = liveEvents.length > 0 ? liveEvents : contextAllEvents;
+        eventsToCheck?.forEach((event) => {
+          if (event.fest === festId || (event as any).fest_id === festId) {
+            updated[event.event_id] = {
+              is_archived: Boolean(shouldArchive),
+              archived_at: shouldArchive ? nowIso : null,
+            };
+            
+            // Also update local archived ids for cascading events
+            if (shouldArchive) {
+              setLocalArchivedIds((prev) => new Set(prev).add(event.event_id));
+            } else {
+              setLocalArchivedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(event.event_id);
+                return next;
+              });
+            }
+          }
+        });
+        return updated;
+      });
+
+      const eventsAffected = payload?.events_affected || 0;
+      toast.success(
+        shouldArchive
+          ? `✅ Fest and ${eventsAffected} events archived successfully.`
+          : "✅ Fest and associated events moved back to active list."
+      );
+      console.log(`✅ Fest archive update successful: ${eventsAffected} events affected`);
+
+      // Refresh both datasets so archive UI does not snap back to stale state.
+      await Promise.all([refreshLiveEvents(), refreshFests()]);
+    } catch (error: any) {
+      console.error("❌ Fest archive update failed:", error);
+      toast.error(`❌ ${error?.message || "Unable to update fest archive status."}`);
+    } finally {
+      setFestArchiveUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(festId);
+        return next;
+      });
+    }
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <main className="container mx-auto px-4 py-6 max-w-7xl">
-        <section className="mb-12">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-6 mb-10">
-            <div className="flex-1 w-full">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-                <h1 className="text-3xl sm:text-4xl font-black text-[#154CB3] mb-1 sm:mb-3 mt-6">
-                  Manage fests and events
-                </h1>
-                <div className="hidden sm:flex flex-row items-center space-x-2 flex-nowrap">
-                  <Link href="/create/fest">
-                    <button
-                      type="button"
-                      title="Fest = a group of related events"
-                      className="bg-[#154CB3] cursor-pointer text-white text-sm py-3 px-4 rounded-full font-medium flex items-center hover:bg-[#154cb3eb] hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] transition-all"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 mr-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
-                      Create fest
-                    </button>
-                  </Link>
-                  <Link href="/create/event">
-                    <button
-                      type="button"
-                      title="Event = a single activity users register for"
-                      className="bg-[#154CB3] cursor-pointer text-white text-sm py-3 px-4 rounded-full font-medium flex items-center hover:bg-[#154cb3eb] hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] transition-all"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 mr-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
-                      Create event
-                    </button>
-                  </Link>
-                </div>
-              </div>
-              <div className="flex flex-row justify-end items-center space-x-2 mb-4 sm:hidden -mt-1">
-                <Link href="/create/fest">
-                  <button
-                    type="button"
-                    title="Fest = a group of related events"
-                    className="bg-[#154CB3] cursor-pointer text-white text-xs py-2 px-3 rounded-full font-medium flex items-center hover:bg-[#154cb3eb] hover:-translate-y-0.5 active:scale-[0.98] transition-all"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-3 w-3 mr-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
-                    Create fest
-                  </button>
-                </Link>
-                <Link href="/create/event">
-                  <button
-                    type="button"
-                    title="Event = a single activity users register for"
-                    className="bg-[#154CB3] cursor-pointer text-white text-xs py-2 px-3 rounded-full font-medium flex items-center hover:bg-[#154cb3eb] hover:-translate-y-0.5 active:scale-[0.98] transition-all"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-3 w-3 mr-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
-                    Create event
-                  </button>
-                </Link>
-              </div>
-              <div className="relative flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="lucide lucide-search-icon lucide-search text-gray-400"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.3-4.3" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search your fests and events"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent"
-                />
-              </div>
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <div ref={topOfPageRef} />
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* 1. Page Header & Primary Actions */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+          <h1 className="text-3xl font-extrabold text-[#0f2557] tracking-tight">
+            Manage Fests & Events
+          </h1>
 
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#154CB3]/10 text-[#154CB3]">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M5 7l1 12h12l1-12M9 11v6m6-6v6" /></svg>
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Fest</p>
-                      <p className="text-sm text-gray-600">A group of related events under one theme.</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#154CB3]/10 text-[#154CB3]">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10m-12 9h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Event</p>
-                      <p className="text-sm text-gray-600">A single activity people can register for.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="flex items-center gap-3">
+            <Link href="/create/fest">
+                <button className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#154cb3] font-semibold border-2 border-[#154cb3] rounded-full hover:bg-blue-50 transition-colors shadow-sm text-sm">
+                <Plus className="w-4 h-4" /> Create Fest
+                </button>
+            </Link>
+            <Link href="/create/event">
+                <button className="flex items-center gap-2 px-4 py-2.5 bg-[#154cb3] text-white font-semibold rounded-full hover:bg-[#124099] transition-colors shadow-sm border-2 border-[#154cb3] text-sm">
+                <Plus className="w-4 h-4" /> Create Event
+                </button>
+            </Link>
           </div>
+        </div>
 
-          {/* Toggle Buttons */}
-          <div className="flex gap-2 mb-8 bg-gray-100 p-1 rounded-full w-fit border border-gray-200">
+        {/* 2. The Control Bar (Tabs & Search) */}
+        <div className="flex flex-col md:flex-row justify-between md:items-center border-b border-slate-200 gap-4 mb-6">
+          <div className="flex items-center gap-8 overflow-x-auto overflow-y-hidden pb-2 text-sm w-full md:w-auto [&::-webkit-scrollbar]:hidden [-moz-scrollbar-width:none]">
             <button
               onClick={() => setActiveTab("fests")}
-              className={`px-4 py-2 font-semibold text-sm sm:text-base rounded-full transition-all ${
+              className={`pb-4 transition-colors whitespace-nowrap -mb-[1px] cursor-pointer ${
                 activeTab === "fests"
-                  ? "text-[#154CB3] bg-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "text-[#154cb3] font-bold border-b-[3px] border-[#154cb3]"
+                  : "text-slate-500 font-medium hover:text-slate-800 border-b-[3px] border-transparent"
               }`}
             >
-              Your fests {searchedUserFests.length > 0 && `(${searchedUserFests.length})`}
+              Your fests ({searchedUserFests.length})
             </button>
             <button
               onClick={() => setActiveTab("events")}
-              className={`px-4 py-2 font-semibold text-sm sm:text-base rounded-full transition-all ${
+              className={`pb-4 transition-colors whitespace-nowrap -mb-[1px] cursor-pointer ${
                 activeTab === "events"
-                  ? "text-[#154CB3] bg-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "text-[#154cb3] font-bold border-b-[3px] border-[#154cb3]"
+                  : "text-slate-500 font-medium hover:text-slate-800 border-b-[3px] border-transparent"
               }`}
             >
-              Your events {searchedUserEvents.length > 0 && `(${searchedUserEvents.length})`}
+              Your events ({searchedUserEvents.length})
             </button>
             <button
               onClick={() => setActiveTab("report")}
-              className={`px-4 py-2 font-semibold text-sm sm:text-base rounded-full transition-all ${
+              className={`pb-4 transition-colors whitespace-nowrap -mb-[1px] cursor-pointer ${
                 activeTab === "report"
-                  ? "text-[#154CB3] bg-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "text-[#154cb3] font-bold border-b-[3px] border-[#154cb3]"
+                  : "text-slate-500 font-medium hover:text-slate-800 border-b-[3px] border-transparent"
               }`}
             >
               Report
             </button>
           </div>
 
-          {/* Fests Section */}
-          {activeTab === "fests" && (
-            <div>
-              {isLoadingFests ? (
-                <p className="text-gray-500">Loading your fests...</p>
-              ) : festsError ? (
-                <p className="text-red-500">Error loading fests: {festsError}</p>
-              ) : paginatedFests.items.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
-                    {paginatedFests.items.map((fest) => (
-                      <div key={fest.fest_id} className="transition-all duration-300 hover:-translate-y-1 hover:drop-shadow-lg">
-                        <FestCard
-                          id={fest.fest_id}
-                          title={fest.fest_title}
-                          dept={fest.organizing_dept}
-                          description={fest.description}
-                          dateRange={`${formatDate(fest.opening_date)} - ${formatDate(
-                            fest.closing_date
-                          )}`}
-                          image={
-                            fest.fest_image_url ||
-                            "https://placehold.co/400x250/e2e8f0/64748b?text=No+Image"
-                          }
-                          baseUrl="edit/fest"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  {paginatedFests.totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-4 mt-8">
-                      <button
-                        onClick={() => setFestsPage(p => p - 1)}
-                        disabled={!paginatedFests.hasPrev}
-                        className="px-4 py-2 bg-[#154CB3] text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-[#154cb3eb] transition-colors"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-gray-700 font-medium">
-                        Page {festsPage} of {paginatedFests.totalPages}
-                      </span>
-                      <button
-                        onClick={() => setFestsPage(p => p + 1)}
-                        disabled={!paginatedFests.hasNext}
-                        className="px-4 py-2 bg-[#154CB3] text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-[#154cb3eb] transition-colors"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-gray-500">
-                  {searchTerm && !isLoadingFests
-                    ? "No fests found matching your search."
-                    : "No fests created yet."}
-                </p>
-              )}
-            </div>
-          )}
+          {(activeTab === "fests" || activeTab === "events") && (
+            <div className="flex items-center gap-3 pb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white rounded-lg border border-slate-200 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#154cb3]/20 focus:border-[#154cb3] transition-all placeholder:text-slate-400 text-slate-800"
+                />
+              </div>
+              <div className="relative" ref={statusFilterRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsStatusFilterOpen((prev) => !prev)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors shadow-sm text-sm font-semibold cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+                  Filter: {selectedStatusLabel}
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-500 transition-transform ${
+                      isStatusFilterOpen ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
+                </button>
 
-          {/* Events Section */}
-          {activeTab === "events" && (
-            <div>
-              {isLoadingContextEvents ? (
-                <p className="text-gray-500">Loading your events...</p>
-              ) : contextEventsError ? (
-                <p className="text-red-500">
-                  Error loading events: {contextEventsError}
-                </p>
-              ) : paginatedEvents.items.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
-                    {paginatedEvents.items.map((event) => (
-                      <div key={event.id} className="transition-all duration-300 hover:-translate-y-1 hover:drop-shadow-lg">
-                        <EventCard
-                          idForLink={event.event_id}
-                          title={event.title}
-                          festName={event.fest || ""}
-                          dept={event.organizing_dept || "N/A"}
-                          date={formatDate(event.event_date)}
-                          time={formatTimeStr(event.event_time)}
-                          location={event.venue || "TBD"}
-                          tags={getDisplayTagsForEvent(event)}
-                          image={
-                            event.event_image_url ||
-                            "https://placehold.co/400x250/e2e8f0/64748b?text=No+Image"
-                          }
-                          baseUrl="edit/event"
-                          authToken={authToken || undefined}
-                        />
-                      </div>
+                {isStatusFilterOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-30 overflow-hidden">
+                    {activeStatusFilterOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(option.value);
+                          setIsStatusFilterOpen(false);
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors cursor-pointer ${
+                          statusFilter === option.value
+                            ? "bg-blue-50 text-[#154cb3] font-semibold"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
                     ))}
                   </div>
-                  {paginatedEvents.totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-4 mt-8">
-                      <button
-                        onClick={() => setEventsPage(p => p - 1)}
-                        disabled={!paginatedEvents.hasPrev}
-                        className="px-4 py-2 bg-[#154CB3] text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-[#154cb3eb] transition-colors"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-gray-700 font-medium">
-                        Page {eventsPage} of {paginatedEvents.totalPages}
-                      </span>
-                      <button
-                        onClick={() => setEventsPage(p => p + 1)}
-                        disabled={!paginatedEvents.hasNext}
-                        className="px-4 py-2 bg-[#154CB3] text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-[#154cb3eb] transition-colors"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-gray-500">
-                  {searchTerm && !isLoadingContextEvents
-                    ? "No events found matching your search."
-                    : "No events created yet."}
-                </p>
-              )}
+                )}
+              </div>
+              <AnimatedListDropdown
+                value={campusFilter}
+                onChange={setCampusFilter}
+                options={[
+                  { value: "all", label: "All Campuses" },
+                  ...CAMPUSES.map((campus) => ({ value: campus, label: campus })),
+                ]}
+                placeholder="All Campuses"
+                className="w-full sm:w-64"
+                triggerClassName="shadow-sm font-semibold border-slate-200 cursor-pointer"
+              />
             </div>
           )}
-          {/* Report Section */}
-          {activeTab === "report" && (
-            <div className="space-y-6">
+        </div>
+
+        {/* 3. Data Grids */}
+        {activeTab === "fests" && (
+            <>
+              {isLoadingFests ? (
+                <div className="text-center text-slate-500 py-10 text-sm font-medium animate-pulse">Loading Your Fests...</div>
+              ) : paginatedFests.items.length === 0 ? (
+                <div className="text-center text-slate-500 py-10 text-sm font-medium">No results found.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {paginatedFests.items.map((fest) => {
+                      const archiveOverride = festArchiveOverrides[fest.fest_id];
+                      const festWithOverride = archiveOverride
+                        ? { ...fest, ...archiveOverride }
+                        : fest;
+                      return (
+                        <MappedFestCard
+                          key={fest.fest_id}
+                          fest={festWithOverride}
+                          baseUrl="edit/fest"
+                          isArchiveUpdating={festArchiveUpdatingIds.has(fest.fest_id)}
+                          onArchiveToggle={handleToggleArchiveFest}
+                        />
+                      );
+                    })}
+                </div>
+              )}
+            </>
+        )}
+
+        {activeTab === "events" && (
+            <>
+              {isLoadingContextEvents ? (
+                <div className="text-center text-slate-500 py-10 text-sm font-medium animate-pulse">Loading Your Events...</div>
+              ) : paginatedEvents.items.length === 0 ? (
+                <div className="text-center text-slate-500 py-10 text-sm font-medium">
+                  {statusFilter === "archived"
+                    ? `No archived events found. Events auto-archive after ${AUTO_ARCHIVE_DAYS} days.`
+                    : "No results found."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {paginatedEvents.items.map((event) => {
+                        const archiveState = getEffectiveArchiveState(event);
+                        return (
+                          <MappedEventCard
+                            key={event.event_id}
+                            event={event}
+                            baseUrl="edit/event"
+                            isArchived={archiveState.isArchived}
+                            archiveSource={archiveState.archiveSource}
+                            onToggleArchive={handleToggleArchive}
+                            isArchiveActionLoading={archiveUpdatingIds.has(event.event_id)}
+                          />
+                        );
+                    })}
+                </div>
+              )}
+            </>
+        )}
+
+        {/* 4. Report Engine */}
+        {activeTab === "report" && (
+            <div className="space-y-6 max-w-4xl">
               {/* Mode Toggle */}
-              <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-3">Report Mode</h2>
+              <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                <h2 className="text-lg font-bold text-[#0f2557] mb-3">Report Scope</h2>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => {
-                      setReportMode("fest");
-                      setSelectedEventIds(new Set());
-                      setSearchTermReport("");
-                    }}
-                    className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                      reportMode === "fest"
-                        ? "bg-[#154CB3] text-white shadow-lg"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    onClick={() => { setReportMode("fest"); setSelectedEventIds(new Set()); setSearchTermReport(""); }}
+                    className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                      reportMode === "fest" ? "bg-[#154cb3] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    By Fest
+                    By Complete Fest
                   </button>
                   <button
-                    onClick={() => {
-                      setReportMode("events");
-                      setSelectedEventIds(new Set());
-                      setSelectedReportFest("");
-                      setSearchTermReport("");
-                    }}
-                    className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                      reportMode === "events"
-                        ? "bg-[#154CB3] text-white shadow-lg"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    onClick={() => { setReportMode("events"); setSelectedEventIds(new Set()); setSelectedReportFest(""); setSearchTermReport(""); }}
+                    className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                      reportMode === "events" ? "bg-[#154cb3] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    By Events
+                    By Independent Events
                   </button>
                 </div>
               </div>
 
-              {/* Fest Mode */}
+              {/* Fest Mode Logic */}
               {reportMode === "fest" && (
                 <>
-                  {/* Select Fest */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-1">Select Fest</h2>
-                    <p className="text-sm text-gray-500 mb-4">Choose a fest to generate a report for its events.</p>
-                    <select
+                  <div className="bg-slate-100/50 border border-slate-200 rounded-xl p-6">
+                    <h2 className="text-sm font-bold text-slate-800 mb-1">Select Fest Context</h2>
+                    <p className="text-xs text-slate-500 mb-4">Choose a fest to generate a comprehensive report of all its combined events.</p>
+                    <AnimatedListDropdown
                       value={selectedReportFest}
-                      onChange={(e) => {
-                        setSelectedReportFest(e.target.value);
+                      onChange={(nextValue) => {
+                        setSelectedReportFest(nextValue);
                         setSelectedEventIds(new Set());
                       }}
-                      className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent transition-all"
-                    >
-                      <option value="">-- Select a fest --</option>
-                      {fests.map((fest) => (
-                        <option key={fest.fest_id} value={fest.fest_id}>
-                          {fest.fest_title}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: "", label: "-- Dropdown Selection --" },
+                        ...fests.map((fest) => ({ value: fest.fest_id, label: fest.fest_title })),
+                      ]}
+                      placeholder="-- Dropdown Selection --"
+                      className="w-full md:w-1/2"
+                    />
                   </div>
 
-                  {/* Event Checklist */}
                   {selectedReportFest && (() => {
                     const selectedFestObj = fests.find(f => f.fest_id === selectedReportFest);
-                    const festEvents = contextAllEvents.filter(e => e.fest === selectedFestObj?.fest_title);
+                    const eventsToFilter = liveEvents.length > 0 ? liveEvents : contextAllEvents;
+                    const festEvents = eventsToFilter.filter((event) => {
+                      const matchesByFestId =
+                        Boolean(selectedFestObj?.fest_id) &&
+                        String((event as any).fest_id || "") === String(selectedFestObj?.fest_id || "");
+
+                      const matchesByFestTitle =
+                        String(event.fest || "").toLowerCase() ===
+                        String(selectedFestObj?.fest_title || "").toLowerCase();
+
+                      return matchesByFestId || matchesByFestTitle;
+                    });
                     if (festEvents.length === 0) {
-                      return (
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                          <p className="text-gray-500 text-center">No events found under this fest.</p>
-                        </div>
-                      );
+                      return <div className="p-6 bg-white border border-slate-200 rounded-xl text-slate-500 text-sm">No specific events have been organized under this fest umbrella yet.</div>;
                     }
                     return (
-                      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
                         <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-xl font-bold text-gray-900">Select Events ({festEvents.length})</h2>
+                          <h2 className="text-sm font-bold text-slate-800">Available Fest Events ({festEvents.length})</h2>
                           <button
                             onClick={() => {
-                              if (selectedEventIds.size === festEvents.length) {
-                                setSelectedEventIds(new Set());
-                              } else {
-                                setSelectedEventIds(new Set(festEvents.map(e => e.event_id)));
-                              }
+                              if (selectedEventIds.size === festEvents.length) setSelectedEventIds(new Set());
+                              else setSelectedEventIds(new Set(festEvents.map(e => e.event_id)));
                             }}
-                            className="text-sm text-[#154CB3] hover:underline font-semibold"
+                            className="text-xs text-[#154cb3] font-semibold hover:underline"
                           >
-                            {selectedEventIds.size === festEvents.length ? "Deselect All" : "Select All"}
+                            {selectedEventIds.size === festEvents.length ? "Deselect All" : "Quick Select All"}
                           </button>
                         </div>
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                           {festEvents.map(event => (
-                            <label
-                              key={event.event_id}
-                              className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                            >
+                            <label key={event.event_id} className="flex items-start gap-3 p-3 border border-slate-100 bg-slate-50/50 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors">
                               <input
                                 type="checkbox"
                                 checked={selectedEventIds.has(event.event_id)}
                                 onChange={(e) => {
                                   const newSet = new Set(selectedEventIds);
-                                  if (e.target.checked) {
-                                    newSet.add(event.event_id);
-                                  } else {
-                                    newSet.delete(event.event_id);
-                                  }
+                                  e.target.checked ? newSet.add(event.event_id) : newSet.delete(event.event_id);
                                   setSelectedEventIds(newSet);
                                 }}
-                                className="mt-1 h-4 w-4 text-[#154CB3] border-gray-300 rounded focus:ring-[#154CB3]"
+                                className="mt-0.5 h-4 w-4 text-[#154cb3] border-slate-300 rounded cursor-pointer"
                               />
                               <div className="flex-1">
-                                <p className="font-semibold text-gray-900">{event.title}</p>
-                                <p className="text-xs text-gray-500">{event.organizing_dept} • {event.event_date}</p>
+                                <p className="text-sm font-bold text-slate-800">{event.title}</p>
+                                <p className="text-[11px] font-semibold text-slate-500 uppercase mt-0.5">{event.organizing_dept} ΓÇó {formatDateFull(event.event_date, "TBD")}</p>
                               </div>
                             </label>
                           ))}
                         </div>
-                        <p className="text-sm text-gray-600 mt-3">
-                          <span className="font-semibold text-[#154CB3]">{selectedEventIds.size}</span> event(s) selected
-                        </p>
                       </div>
                     );
                   })()}
                 </>
               )}
 
-              {/* Events Mode */}
+              {/* Events Mode Logic */}
               {reportMode === "events" && (() => {
-                const userEvents = isMasterAdmin
-                  ? contextAllEvents
-                  : contextAllEvents.filter(e => e.created_by === userData?.email);
-                
+                const eventsForReport = liveEvents.length > 0 ? liveEvents : contextAllEvents;
+                const userEvents = isMasterAdmin ? eventsForReport : eventsForReport.filter(e => e.created_by === userData?.email);
                 const filteredEvents = userEvents.filter(e => 
                   e.title.toLowerCase().includes(searchTermReport.toLowerCase()) ||
                   (e.organizing_dept || "").toLowerCase().includes(searchTermReport.toLowerCase())
                 );
-
                 return (
                   <>
-                    {/* Search */}
-                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-                      <h2 className="text-xl font-bold text-gray-900 mb-1">Search Events</h2>
-                      <input
-                        type="text"
-                        placeholder="Search by title or department..."
-                        value={searchTermReport}
-                        onChange={(e) => setSearchTermReport(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent transition-all"
-                      />
+                    <div className="bg-slate-100/50 border border-slate-200 rounded-xl p-6">
+                      <h2 className="text-sm font-bold text-slate-800 mb-2">Search Event Targets</h2>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search individual events..."
+                          value={searchTermReport}
+                          onChange={(e) => setSearchTermReport(e.target.value)}
+                          className="w-full md:w-2/3 pl-9 pr-4 py-2 border border-slate-300 rounded-lg bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#154cb3]/30"
+                        />
+                      </div>
                     </div>
 
-                    {/* Event Checklist */}
-                    {filteredEvents.length === 0 ? (
-                      <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                        <p className="text-gray-500 text-center">No events found.</p>
-                      </div>
-                    ) : (
-                      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
                         <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-xl font-bold text-gray-900">Your Events ({filteredEvents.length})</h2>
+                          <h2 className="text-sm font-bold text-slate-800">Your Target Events ({filteredEvents.length})</h2>
                           <button
                             onClick={() => {
-                              if (selectedEventIds.size === filteredEvents.length) {
-                                setSelectedEventIds(new Set());
-                              } else {
-                                setSelectedEventIds(new Set(filteredEvents.map(e => e.event_id)));
-                              }
+                              if (selectedEventIds.size === filteredEvents.length) setSelectedEventIds(new Set());
+                              else setSelectedEventIds(new Set(filteredEvents.map(e => e.event_id)));
                             }}
-                            className="text-sm text-[#154CB3] hover:underline font-semibold"
+                            className="text-xs text-[#154cb3] font-semibold hover:underline"
                           >
-                            {selectedEventIds.size === filteredEvents.length ? "Deselect All" : "Select All"}
+                            {selectedEventIds.size === filteredEvents.length ? "Clear Targets" : "Select Entire View"}
                           </button>
                         </div>
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
                           {filteredEvents.map(event => (
-                            <label
-                              key={event.event_id}
-                              className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                            >
+                            <label key={event.event_id} className="flex items-center gap-3 p-3 border border-slate-100 bg-slate-50/50 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors">
                               <input
                                 type="checkbox"
                                 checked={selectedEventIds.has(event.event_id)}
                                 onChange={(e) => {
                                   const newSet = new Set(selectedEventIds);
-                                  if (e.target.checked) {
-                                    newSet.add(event.event_id);
-                                  } else {
-                                    newSet.delete(event.event_id);
-                                  }
+                                  e.target.checked ? newSet.add(event.event_id) : newSet.delete(event.event_id);
                                   setSelectedEventIds(newSet);
                                 }}
-                                className="mt-1 h-4 w-4 text-[#154CB3] border-gray-300 rounded focus:ring-[#154CB3]"
+                                className="h-4 w-4 text-[#154cb3] border-slate-300 rounded cursor-pointer"
                               />
                               <div className="flex-1">
-                                <p className="font-semibold text-gray-900">{event.title}</p>
-                                <p className="text-xs text-gray-500">{event.organizing_dept} • {event.event_date} • {event.fest || "No fest"}</p>
+                                <p className="text-sm font-bold text-slate-800">{event.title}</p>
+                                <p className="text-[11px] font-semibold text-slate-500 uppercase mt-0.5">{event.organizing_dept} ΓÇó {formatDateFull(event.event_date, "TBD")} ΓÇó {event.fest || "No Parent Fest"}</p>
                               </div>
                             </label>
                           ))}
                         </div>
-                        <p className="text-sm text-gray-600 mt-3">
-                          <span className="font-semibold text-[#154CB3]">{selectedEventIds.size}</span> event(s) selected
-                        </p>
-                      </div>
-                    )}
+                    </div>
                   </>
                 );
               })()}
 
-              {/* Accreditation Selection */}
+              {/* Accreditation Select */}
               {selectedEventIds.size > 0 && (
-                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">Select Accreditation Body</h2>
-                  <p className="text-sm text-gray-500 mb-4">Choose the accreditation body for the report.</p>
-                  <select
+                <div className="bg-slate-100/50 border border-slate-200 rounded-xl p-6">
+                  <h2 className="text-sm font-bold text-slate-800 mb-1">Accreditation Template Standard</h2>
+                  <p className="text-xs text-slate-500 mb-4">This defines the formal schema embedded inside the exported document.</p>
+                  <AnimatedListDropdown
                     value={selectedAccreditation}
-                    onChange={(e) => setSelectedAccreditation(e.target.value)}
-                    className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent transition-all"
-                  >
-                    <option value="">-- Select accreditation body --</option>
-                    {ACCREDITATION_BODIES.map((body) => (
-                      <option key={body.id} value={body.id}>
-                        {body.name} - {body.fullName}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedAccreditation}
+                    options={[
+                      { value: "", label: "-- Blank Document / Custom --" },
+                      ...ACCREDITATION_BODIES.map((body) => ({
+                        value: body.id,
+                        label: `${body.name} Formats - ${body.fullName}`,
+                      })),
+                    ]}
+                    placeholder="-- Blank Document / Custom --"
+                    className="w-full md:w-1/2"
+                  />
                 </div>
               )}
 
-              {/* Selected Accreditation Details */}
-              {selectedAccreditation && selectedEventIds.size > 0 && (
-                <div className="bg-white border border-[#154CB3]/20 rounded-2xl p-6 shadow-sm">
-                  {(() => {
-                    const body = ACCREDITATION_BODIES.find((b) => b.id === selectedAccreditation);
-                    if (!body) return null;
-                    return (
-                      <div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 bg-[#154CB3]/10 rounded-full flex items-center justify-center">
-                            <svg className="w-5 h-5 text-[#154CB3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-900">{body.name}</h3>
-                            <p className="text-sm text-gray-500">{body.fullName}</p>
-                          </div>
-                        </div>
-                        <p className="text-gray-700 mb-2">{body.description}</p>
-                        <div className="bg-gray-50 rounded-lg px-4 py-3">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-semibold text-gray-800">Focus: </span>
-                            {body.focus}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Generate Report Button */}
+              {/* Action */}
               {selectedEventIds.size > 0 && selectedAccreditation && (
-                <div className="flex justify-start">
+                <div className="pt-2">
                   <button
                     disabled={isGenerating}
-                    className={`bg-[#154CB3] hover:bg-[#0d3580] text-white font-semibold py-3 px-8 rounded-full transition-all hover:shadow-lg ${
-                      isGenerating ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                    }`}
-                    onClick={async () => {
-                      setIsGenerating(true);
-                      try {
-                        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                        const response = await fetch(`${API_URL}/api/report/data`, {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${authToken}`,
-                          },
-                          body: JSON.stringify({
-                            eventIds: Array.from(selectedEventIds),
-                            festId: reportMode === "fest" ? selectedReportFest : null,
-                          }),
-                        });
-
-                        if (!response.ok) throw new Error("Failed to fetch report data");
-
-                        const data = await response.json();
-                        
-                        // Generate Excel using ExcelJS
-                        const workbook = new ExcelJS.Workbook();
-                        workbook.creator = "SOCIO - Christ University";
-                        workbook.created = new Date();
-
-                        // Sheet 1: Summary
-                        const summarySheet = workbook.addWorksheet("Summary");
-                        summarySheet.columns = [
-                          { header: "Field", key: "field", width: 30 },
-                          { header: "Value", key: "value", width: 50 },
-                        ];
-                        
-                        const accBody = ACCREDITATION_BODIES.find(b => b.id === selectedAccreditation);
-                        const totalRegs = data.events.reduce((sum: number, e: any) => sum + e.total_registrations, 0);
-                        const totalParticipants = data.events.reduce((sum: number, e: any) => sum + e.total_participants, 0);
-                        const totalAttended = data.events.reduce((sum: number, e: any) => sum + e.attended_count, 0);
-
-                        summarySheet.addRows([
-                          { field: "Institution", value: "Christ University" },
-                          { field: "Accreditation Body", value: `${accBody?.name} - ${accBody?.fullName}` },
-                          { field: "Report Generated On", value: new Date().toLocaleString() },
-                          { field: "Generated By", value: data.generated_by },
-                          { field: "", value: "" },
-                          { field: "Report Type", value: reportMode === "fest" ? "Fest-based" : "Event-based" },
-                          ...(data.fest ? [{ field: "Fest", value: data.fest.fest_title }] : []),
-                          { field: "Total Events", value: data.events.length },
-                          { field: "Total Registrations", value: totalRegs },
-                          { field: "Total Participants", value: totalParticipants },
-                          { field: "Total Attended", value: totalAttended },
-                          { field: "Attendance Rate", value: totalParticipants > 0 ? `${((totalAttended/totalParticipants)*100).toFixed(1)}%` : "N/A" },
-                        ]);
-
-                        summarySheet.getRow(1).font = { bold: true, size: 12 };
-                        summarySheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
-                        summarySheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-
-                        // Sheet 2: Event List
-                        const eventsSheet = workbook.addWorksheet("Event List");
-                        eventsSheet.columns = [
-                          { header: "Event ID", key: "event_id", width: 20 },
-                          { header: "Title", key: "title", width: 35 },
-                          { header: "Date", key: "date", width: 12 },
-                          { header: "Venue", key: "venue", width: 20 },
-                          { header: "Department", key: "dept", width: 20 },
-                          { header: "Category", key: "category", width: 15 },
-                          { header: "Fee", key: "fee", width: 10 },
-                          { header: "Registrations", key: "regs", width: 12 },
-                          { header: "Participants", key: "participants", width: 12 },
-                          { header: "Attended", key: "attended", width: 10 },
-                          { header: "Absent", key: "absent", width: 10 },
-                        ];
-
-                        data.events.forEach((event: any) => {
-                          eventsSheet.addRow({
-                            event_id: event.event_id,
-                            title: event.title,
-                            date: event.event_date || "N/A",
-                            venue: event.venue || "TBD",
-                            dept: event.organizing_dept || "N/A",
-                            category: event.category || "N/A",
-                            fee: event.registration_fee > 0 ? `₹${event.registration_fee}` : "Free",
-                            regs: event.total_registrations,
-                            participants: event.total_participants,
-                            attended: event.attended_count,
-                            absent: event.absent_count,
-                          });
-                        });
-
-                        eventsSheet.getRow(1).font = { bold: true };
-                        eventsSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
-                        eventsSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-
-                        // Sheet 3: Participant Details
-                        const participantsSheet = workbook.addWorksheet("Participant Details");
-                        participantsSheet.columns = [
-                          { header: "Registration ID", key: "reg_id", width: 20 },
-                          { header: "Participant Name", key: "name", width: 30 },
-                          { header: "Register Number", key: "reg_num", width: 15 },
-                          { header: "Email", key: "email", width: 30 },
-                          { header: "Event", key: "event", width: 35 },
-                          { header: "Team", key: "team", width: 20 },
-                          { header: "Status", key: "status", width: 12 },
-                          { header: "Attended At", key: "attended_at", width: 20 },
-                        ];
-
-                        data.events.forEach((event: any) => {
-                          event.participants.forEach((p: any) => {
-                            participantsSheet.addRow({
-                              reg_id: p.registration_id,
-                              name: p.name,
-                              reg_num: p.register_number,
-                              email: p.email,
-                              event: event.title,
-                              team: p.team_name || "Individual",
-                              status: p.status,
-                              attended_at: p.attended_at ? new Date(p.attended_at).toLocaleString() : "",
-                            });
-                          });
-                        });
-
-                        participantsSheet.getRow(1).font = { bold: true };
-                        participantsSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
-                        participantsSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-
-                        // Download
-                        const buffer = await workbook.xlsx.writeBuffer();
-                        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        const filename = reportMode === "fest" && data.fest
-                          ? `report_${data.fest.fest_id}_${new Date().toISOString().split("T")[0]}.xlsx`
-                          : `report_events_${new Date().toISOString().split("T")[0]}.xlsx`;
-                        a.download = filename;
-                        a.click();
-                        URL.revokeObjectURL(url);
-
-                        alert("Report generated successfully!");
-                      } catch (error) {
-                        console.error("Error generating report:", error);
-                        alert("Failed to generate report. Please try again.");
-                      } finally {
-                        setIsGenerating(false);
-                      }
-                    }}
+                    onClick={handleGenerateReport}
+                    className={`flex items-center gap-2 px-6 py-3 bg-[#154cb3] text-white text-sm font-bold rounded-lg shadow-md hover:bg-[#124099] transition-all ${isGenerating ? "opacity-50 cursor-wait" : ""}`}
                   >
-                    {isGenerating ? "Generating..." : "Generate Report"}
+                    {isGenerating ? "Generating Analytics..." : "Generate Master Sheet"} <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               )}
             </div>
-          )}
-        </section>
+        )}
+
+        {/* 5. Pagination */}
+        {(activeTab === "fests" || activeTab === "events") && (
+          <div className="mt-10 flex justify-center items-center gap-1.5 pb-8">
+            <button
+              onClick={() => activeTab === "fests" ? setFestsPage(p => p - 1) : setEventsPage(p => p - 1)}
+              disabled={activeTab === "fests" ? !paginatedFests.hasPrev : !paginatedEvents.hasPrev}
+              className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-semibold text-slate-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Previous
+            </button>
+            <div className="px-4 py-2 rounded-md font-semibold text-sm text-slate-600">
+              Page {activeTab === "fests" ? festsPage : eventsPage} of {activeTab === "fests" ? (paginatedFests.totalPages || 1) : (paginatedEvents.totalPages || 1)}
+            </div>
+            <button
+              onClick={() => {
+                if (activeTab === "fests") {
+                  setFestsPage((p) => p + 1);
+                } else {
+                  setEventsPage((p) => p + 1);
+                }
+                scrollToTop();
+              }}
+              disabled={activeTab === "fests" ? !paginatedFests.hasNext : !paginatedEvents.hasNext}
+              className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-semibold text-[#154cb3] hover:bg-blue-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
       </main>
     </div>
   );
-};
-
-export default Page;
+}

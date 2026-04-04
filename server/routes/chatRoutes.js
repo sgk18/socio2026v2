@@ -2,8 +2,10 @@ import express from "express";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
 import { authenticateUser } from "../middleware/authMiddleware.js";
+import { getFestTableForSupabase } from "../utils/festTableResolver.js";
 
 const router = express.Router();
+const isProduction = process.env.NODE_ENV === "production";
 
 // Lazy-init Gemini — don't crash if key is missing at startup
 let genAI = null;
@@ -41,7 +43,7 @@ Rules:
 const dailyLimitMap = new Map();
 
 // Clean up old entries every hour
-setInterval(() => {
+const dailyLimitCleanupInterval = setInterval(() => {
   const today = new Date().toDateString();
   for (const [key] of dailyLimitMap.entries()) {
     if (!key.includes(today)) {
@@ -50,22 +52,23 @@ setInterval(() => {
   }
 }, 3600000);
 
-// Health check — no auth, shows config status for debugging
+if (typeof dailyLimitCleanupInterval.unref === "function") {
+  dailyLimitCleanupInterval.unref();
+}
+
+// Health check — no auth, no sensitive details.
 router.get("/health", (req, res) => {
   const hasGeminiKey = !!process.env.GEMINI_API_KEY;
   const hasSupabaseUrl = !!process.env.SUPABASE_URL;
   const hasSupabaseKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const keyPrefix = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 6) + "..." : "NOT SET";
-  
+
   res.json({
     status: "ok",
-    config: {
-      geminiKey: hasGeminiKey,
-      geminiKeyPrefix: keyPrefix,
-      supabaseUrl: hasSupabaseUrl,
-      supabaseServiceKey: hasSupabaseKey,
+    services: {
+      ai: hasGeminiKey ? "configured" : "missing",
+      database: hasSupabaseUrl && hasSupabaseKey ? "configured" : "missing",
     },
-    sdkVersion: "@google/generative-ai loaded"
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -111,6 +114,11 @@ router.post("/", authenticateUser, async (req, res) => {
 
     if (sb) {
       try {
+        let festTable = null;
+        if (sb) {
+          festTable = await getFestTableForSupabase(sb);
+        }
+
         // If on a specific event page, fetch that event
         if (currentPage.startsWith("/event/")) {
           const eventId = currentPage.split("/event/")[1];
@@ -132,7 +140,7 @@ router.post("/", authenticateUser, async (req, res) => {
           const festId = currentPage.split("/fest/")[1];
           if (festId) {
             const { data: fest } = await sb
-              .from("fests")
+              .from(festTable || "fests")
               .select("*")
               .eq("fest_id", festId)
               .single();
@@ -168,6 +176,7 @@ router.post("/", authenticateUser, async (req, res) => {
     let platformContext = "No platform data available.";
     if (sb) {
       try {
+        const festTable = await getFestTableForSupabase(sb);
         const { data: events } = await sb
           .from("events")
           .select("title, event_date, venue, organizing_dept, category")
@@ -176,7 +185,7 @@ router.post("/", authenticateUser, async (req, res) => {
           .limit(10);
 
         const { data: fests } = await sb
-          .from("fests")
+          .from(festTable)
           .select("fest_title, opening_date, closing_date, venue")
           .gte("closing_date", new Date().toISOString())
           .limit(5);
@@ -247,10 +256,15 @@ ${fests?.map((f) => `- ${f.fest_title} | ${new Date(f.opening_date).toLocaleDate
       });
     }
 
-    res.status(500).json({ 
+    const payload = {
       error: "Failed to generate response. Please try again.",
-      debug: error.message 
-    });
+    };
+
+    if (!isProduction) {
+      payload.details = error.message;
+    }
+
+    res.status(500).json(payload);
   }
 });
 

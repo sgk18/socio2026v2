@@ -114,15 +114,19 @@ export const getUserInfo = () => {
   return async (req, res, next) => {
     try {
       if (!req.userId) {
+        console.warn('[UserInfo] ❌ No req.userId set by previous middleware');
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
+      console.log(`[UserInfo] 🔍 Fetching user info for UUID: ${req.userId}`);
       const user = await queryOne('users', { where: { auth_uuid: req.userId } });
 
       if (!user) {
+        console.warn(`[UserInfo] ❌ User not found in database for UUID: ${req.userId}`);
         return res.status(404).json({ error: 'User not found in database' });
       }
 
+      console.log(`[UserInfo] ✅ Found user: ${user.email}`);
       req.userInfo = user;
       next();
     } catch (error) {
@@ -137,13 +141,22 @@ export const getUserInfo = () => {
  */
 export const requireOrganiser = (req, res, next) => {
   if (!req.userInfo) {
+    console.error("[ORGANISER CHECK] ❌ No req.userInfo available");
     return res.status(401).json({ error: 'User info not available' });
   }
 
+  console.log(`[ORGANISER CHECK] Checking user: ${req.userInfo.email}, is_organiser: ${req.userInfo.is_organiser}`);
+  
   if (!req.userInfo.is_organiser) {
-    return res.status(403).json({ error: 'Access denied: Organiser privileges required' });
+    console.warn(`[ORGANISER CHECK] ❌ User ${req.userInfo.email} is NOT an organiser. Access denied.`);
+    return res.status(403).json({ 
+      error: 'Access denied: Organiser privileges required',
+      userEmail: req.userInfo.email,
+      currentRole: 'regular_user'
+    });
   }
 
+  console.log(`[ORGANISER CHECK] ✅ User ${req.userInfo.email} IS an organiser. Proceeding.`);
   next();
 };
 
@@ -156,11 +169,14 @@ export const requireMasterAdmin = (req, res, next) => {
   }
 
   if (!req.userInfo.is_masteradmin) {
-    return res.status(403).json({ error: 'Access denied: Master Admin privileges required' });
+    console.warn(`[MasterAdmin] Access denied for ${req.userInfo.email} - Master Admin privileges required`);
+    return res.status(403).json({
+      error: 'Access denied: Master Admin privileges required'
+    });
   }
 
-  console.log(`[MasterAdmin] ✅ Access granted to ${req.userInfo.email}`);
-  next();
+  console.log(`[MasterAdmin] Access granted to ${req.userInfo.email}`);
+  return next();
 };
 
 /**
@@ -172,6 +188,31 @@ export const requireMasterAdmin = (req, res, next) => {
 export const requireOwnership = (table, paramName, ownerField = 'auth_uuid') => {
   return async (req, res, next) => {
     try {
+      const resolveResource = async (tableName, whereClause) => {
+        const isMissingRelationError = (error) => {
+          const code = String(error?.code || '').toUpperCase();
+          const message = String(error?.message || '').toLowerCase();
+          return (
+            code === '42P01' ||
+            code === 'PGRST205' ||
+            (message.includes('relation') && message.includes('does not exist')) ||
+            (message.includes('could not find') && message.includes('schema cache'))
+          );
+        };
+
+        try {
+          return await queryOne(tableName, { where: whereClause });
+        } catch (error) {
+          const canFallbackFestTable = (tableName === 'fest' || tableName === 'fests') && isMissingRelationError(error);
+          if (!canFallbackFestTable) {
+            throw error;
+          }
+
+          const fallbackTable = tableName === 'fest' ? 'fests' : 'fest';
+          return await queryOne(fallbackTable, { where: whereClause });
+        }
+      };
+
       // Master admin bypass - can access any resource
       if (req.userInfo?.is_masteradmin) {
         console.log(`[Ownership] ✅ BYPASSED for master admin: ${req.userInfo.email}`);
@@ -186,7 +227,7 @@ export const requireOwnership = (table, paramName, ownerField = 'auth_uuid') => 
         const dbColumnName = columnMapping[paramName] || paramName;
         
         try {
-          const resource = await queryOne(table, { where: { [dbColumnName]: resourceId } });
+          const resource = await resolveResource(table, { [dbColumnName]: resourceId });
           if (resource) {
             req.resource = resource;
           }
@@ -219,7 +260,7 @@ export const requireOwnership = (table, paramName, ownerField = 'auth_uuid') => 
       // Query the resource using the correct database column name
       let resource;
       try {
-        resource = await queryOne(table, { where: { [dbColumnName]: resourceId } });
+        resource = await resolveResource(table, { [dbColumnName]: resourceId });
       } catch (queryError) {
         console.error('[Ownership] Database query failed:', {
           error: queryError.message,
@@ -258,8 +299,7 @@ export const requireOwnership = (table, paramName, ownerField = 'auth_uuid') => 
           req.resource = resource;
           return next();
         } else {
-          console.log(`[Ownership] ❌ FAILED: auth_uuid mismatch (${resource.auth_uuid} !== ${req.userId})`);
-          return res.status(403).json({ error: 'Access denied: You can only modify your own resources' });
+          console.log(`[Ownership] ⚠️ auth_uuid mismatch (${resource.auth_uuid} !== ${req.userId}), checking legacy created_by fallback...`);
         }
       }
       
@@ -304,7 +344,6 @@ export const requireOwnership = (table, paramName, ownerField = 'auth_uuid') => 
       console.error('[Ownership] Error stack:', error.stack);
       console.error('[Ownership] Context:', {
         table,
-        idField,
         ownerField,
         userId: req.userId,
         userEmail: req.userInfo?.email
@@ -331,6 +370,16 @@ export const optionalAuth = async (req, res, next) => {
       if (!error && user) {
         req.user = user;
         req.userId = user.id;
+
+        // Best-effort user profile hydration for role-aware optional routes.
+        try {
+          const localUser = await queryOne('users', { where: { auth_uuid: user.id } });
+          if (localUser) {
+            req.userInfo = localUser;
+          }
+        } catch (dbError) {
+          console.warn('[optionalAuth] Failed to hydrate req.userInfo:', dbError?.message || dbError);
+        }
       }
     }
     

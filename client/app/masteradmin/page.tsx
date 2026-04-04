@@ -1,17 +1,37 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import ExcelJS from "exceljs";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import supabase from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import {
+  addThemedChartsSheet,
+  addStructuredSummarySheet,
+  addStructuredTableSheet,
+  createThemedWorkbook,
+  downloadWorkbook,
+} from "@/lib/xlsxTheme";
 import DateTimePickerAdmin from "../_components/DateTimePickerAdmin";
 import dynamic from "next/dynamic";
+import {
+  LayoutDashboard,
+  Users,
+  CalendarDays,
+  Trophy,
+  Bell,
+  BarChart2,
+  LineChart,
+  Settings,
+  UserCog,
+  Eye,
+  ChevronRight,
+} from "lucide-react";
+import AdminDashboardView from "../_components/Admin/AdminDashboardView";
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 const ITEMS_PER_PAGE = 20;
 
 const AnalyticsDashboard = dynamic(
@@ -40,6 +60,19 @@ const AdminNotifications = dynamic(
   }
 );
 
+const DataExplorerDashboard = dynamic(
+  () => import("../_components/Admin/DataExplorerDashboard"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
+        <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <div className="text-gray-600">Loading data explorer...</div>
+      </div>
+    ),
+  }
+);
+
 type User = {
   id: number;
   email: string;
@@ -60,11 +93,17 @@ type Event = {
   title: string;
   organizing_dept: string;
   event_date: string;
+  end_date?: string | null;
   created_by: string;
   created_at: string;
   registration_fee: number;
   registration_count?: number;
   fest?: string | null;
+  is_archived?: boolean | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archived_effective?: boolean | null;
+  archive_source?: "manual" | "auto" | null;
 };
 
 type Fest = {
@@ -72,9 +111,13 @@ type Fest = {
   fest_title: string;
   organizing_dept: string;
   opening_date: string;
+  closing_date?: string | null;
   created_by: string;
   created_at: string;
   registration_count?: number;
+  is_archived?: boolean | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
 };
 
 type Registration = {
@@ -86,6 +129,24 @@ type Registration = {
   participant_organization?: string;
   teammates?: any[];
 };
+
+type PaginationState = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+const createDefaultPagination = (page = 1): PaginationState => ({
+  page,
+  pageSize: ITEMS_PER_PAGE,
+  totalItems: 0,
+  totalPages: 1,
+  hasNext: false,
+  hasPrev: page > 1,
+});
 
 const ACCREDITATION_BODIES = [
   { id: "naac", name: "NAAC", fullName: "National Assessment and Accreditation Council", description: "India's primary accreditation body for higher education institutions.", focus: "Governance, teaching learning, research, infrastructure, student support, best practices." },
@@ -100,7 +161,9 @@ const ACCREDITATION_BODIES = [
 export default function MasterAdminPage() {
   const { userData, isMasterAdmin, isLoading: authLoading, session } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"dashboard" | "users" | "events" | "fests" | "notifications" | "report">("dashboard");
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "insights" | "dataExplorer" | "users" | "events" | "fests" | "notifications" | "report" | "settings"
+  >("dashboard");
   const authToken = session?.access_token || null;
 
   // Helper to get a fresh access token (avoids stale token from session state)
@@ -115,7 +178,7 @@ export default function MasterAdminPage() {
   
   // User management state
   const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [userPagination, setUserPagination] = useState<PaginationState>(createDefaultPagination());
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
@@ -125,7 +188,7 @@ export default function MasterAdminPage() {
   
   // Event management state
   const [events, setEvents] = useState<Event[]>([]);
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
+  const [eventPagination, setEventPagination] = useState<PaginationState>(createDefaultPagination());
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [showDeleteEventConfirm, setShowDeleteEventConfirm] = useState<string | null>(null);
   const [eventPage, setEventPage] = useState(1);
@@ -139,7 +202,7 @@ export default function MasterAdminPage() {
 
   // Fest management state
   const [fests, setFests] = useState<Fest[]>([]);
-  const [filteredFests, setFilteredFests] = useState<Fest[]>([]);
+  const [festPagination, setFestPagination] = useState<PaginationState>(createDefaultPagination());
   const [festSearchQuery, setFestSearchQuery] = useState("");
   const [showDeleteFestConfirm, setShowDeleteFestConfirm] = useState<string | null>(null);
   const [festPage, setFestPage] = useState(1);
@@ -166,10 +229,19 @@ export default function MasterAdminPage() {
   const debouncedFestSearch = useDebounce(festSearchQuery, 300);
 
   useEffect(() => {
-    if (!authLoading && !isMasterAdmin) {
+    const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    if (!authLoading && !isMasterAdmin && !isLocalhost) {
       router.push("/");
     }
   }, [authLoading, isMasterAdmin, router]);
+
+  // Check if user is on localhost for dev access
+  const [isLocalhostDev, setIsLocalhostDev] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsLocalhostDev(window.location.hostname === 'localhost');
+    }
+  }, []);
 
   useEffect(() => {
     if (!isMasterAdmin || !authToken) return;
@@ -184,8 +256,8 @@ export default function MasterAdminPage() {
       fetchDashboardData();
     } else if (activeTab === "notifications") {
       // Ensure users/events are loaded for the notification composer
-      if (users.length === 0) fetchUsers();
-      if (events.length === 0) fetchEvents();
+      if (users.length === 0) fetchUsers({ unpaged: true });
+      if (events.length === 0) fetchEvents({ unpaged: true });
     } else if (activeTab === "report") {
       // Fetch events and fests for report tab
       fetchReportData();
@@ -193,52 +265,18 @@ export default function MasterAdminPage() {
   }, [activeTab, isMasterAdmin, authToken]);
 
   useEffect(() => {
-    let filtered = users;
-
-    if (debouncedUserSearch) {
-      const query = debouncedUserSearch.toLowerCase();
-      filtered = filtered.filter(
-        (user) =>
-          user.email.toLowerCase().includes(query) ||
-          user.name?.toLowerCase().includes(query)
-      );
-    }
-
-    if (roleFilter !== "all") {
-      switch (roleFilter) {
-        case "organiser":
-          filtered = filtered.filter((u) => u.is_organiser);
-          break;
-        case "support":
-          filtered = filtered.filter((u) => u.is_support);
-          break;
-        case "masteradmin":
-          filtered = filtered.filter((u) => u.is_masteradmin);
-          break;
-      }
-    }
-
-    setFilteredUsers(filtered);
     setUserPage(1);
-  }, [users, debouncedUserSearch, roleFilter]);
-
-  // Sort users
-  const sortedFilteredUsers = useMemo(() => {
-    return [...filteredUsers].sort((a, b) => {
-      let cmp = 0;
-      switch (userSortKey) {
-        case "name": cmp = (a.name || "").localeCompare(b.name || ""); break;
-        case "email": cmp = a.email.localeCompare(b.email); break;
-        case "date": cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime(); break;
-      }
-      return userSortDir === "asc" ? cmp : -cmp;
-    });
-  }, [filteredUsers, userSortKey, userSortDir]);
+  }, [debouncedUserSearch, roleFilter, userSortKey, userSortDir]);
 
   // Event status helper
-  const getEventStatus = (dateStr: string) => {
+  const getEventStatus = (event: Event) => {
+    const isArchived = event.archived_effective === true || event.is_archived === true;
+    if (isArchived) {
+      return { label: "Archived", color: "bg-amber-100 text-amber-700" };
+    }
+
     const now = new Date();
-    const eventDate = new Date(dateStr);
+    const eventDate = new Date(event.event_date);
     const diffMs = eventDate.getTime() - now.getTime();
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
     if (diffDays < -1) return { label: "Past", color: "bg-gray-100 text-gray-600" };
@@ -271,74 +309,36 @@ export default function MasterAdminPage() {
   );
 
   useEffect(() => {
-    let filtered = events;
-
-    if (debouncedEventSearch) {
-      const query = debouncedEventSearch.toLowerCase();
-      filtered = filtered.filter(
-        (event) =>
-          event.title.toLowerCase().includes(query) ||
-          event.organizing_dept?.toLowerCase().includes(query)
-      );
-    }
-
-    // Status filter
-    if (eventStatusFilter !== "all") {
-      filtered = filtered.filter((event) => {
-        const status = getEventStatus(event.event_date).label.toLowerCase().replace(" ", "");
-        return status === eventStatusFilter;
-      });
-    }
-
-    // Sort
-    filtered = [...filtered].sort((a, b) => {
-      let cmp = 0;
-      switch (eventSortKey) {
-        case "title": cmp = a.title.localeCompare(b.title); break;
-        case "dept": cmp = (a.organizing_dept || "").localeCompare(b.organizing_dept || ""); break;
-        case "date": cmp = new Date(a.event_date).getTime() - new Date(b.event_date).getTime(); break;
-        case "registrations": cmp = (a.registration_count || 0) - (b.registration_count || 0); break;
-      }
-      return eventSortDir === "asc" ? cmp : -cmp;
-    });
-
-    setFilteredEvents(filtered);
     setEventPage(1);
-  }, [events, debouncedEventSearch, eventStatusFilter, eventSortKey, eventSortDir]);
+  }, [debouncedEventSearch, eventStatusFilter, eventSortKey, eventSortDir]);
 
   useEffect(() => {
-    let filtered = fests;
-
-    if (debouncedFestSearch) {
-      const query = debouncedFestSearch.toLowerCase();
-      filtered = filtered.filter(
-        (fest) =>
-          fest.fest_title.toLowerCase().includes(query) ||
-          fest.organizing_dept?.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredFests(filtered);
     setFestPage(1);
-  }, [fests, debouncedFestSearch]);
+  }, [debouncedFestSearch, festSortKey, festSortDir]);
 
-  // Sort fests
-  const sortedFilteredFests = useMemo(() => {
-    return [...filteredFests].sort((a, b) => {
-      let cmp = 0;
-      switch (festSortKey) {
-        case "title": cmp = a.fest_title.localeCompare(b.fest_title); break;
-        case "dept": cmp = (a.organizing_dept || "").localeCompare(b.organizing_dept || ""); break;
-        case "date": cmp = new Date(a.opening_date).getTime() - new Date(b.opening_date).getTime(); break;
-        case "registrations": cmp = (a.registration_count || 0) - (b.registration_count || 0); break;
-      }
-      return festSortDir === "asc" ? cmp : -cmp;
-    });
-  }, [filteredFests, festSortKey, festSortDir]);
+  useEffect(() => {
+    if (!isMasterAdmin || !authToken || activeTab !== "users") return;
+    fetchUsers();
+  }, [activeTab, isMasterAdmin, authToken, userPage, debouncedUserSearch, roleFilter, userSortKey, userSortDir]);
+
+  useEffect(() => {
+    if (!isMasterAdmin || !authToken || activeTab !== "events") return;
+    fetchEvents();
+  }, [activeTab, isMasterAdmin, authToken, eventPage, debouncedEventSearch, eventStatusFilter, eventSortKey, eventSortDir]);
+
+  useEffect(() => {
+    if (!isMasterAdmin || !authToken || activeTab !== "fests") return;
+    fetchFests();
+  }, [activeTab, isMasterAdmin, authToken, festPage, debouncedFestSearch, festSortKey, festSortDir]);
 
   const fetchRegistrations = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/registrations`);
+      const token = await getFreshToken();
+      const response = await fetch(`${API_URL}/api/registrations`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (!response.ok) throw new Error("Failed to fetch registrations");
       const data = await response.json();
       setRegistrations(data.registrations || []);
@@ -350,7 +350,12 @@ export default function MasterAdminPage() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      await Promise.all([fetchUsers(), fetchEvents(), fetchFests(), fetchRegistrations()]);
+      await Promise.all([
+        fetchUsers({ unpaged: true }),
+        fetchEvents({ unpaged: true }),
+        fetchFests({ unpaged: true }),
+        fetchRegistrations()
+      ]);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -358,67 +363,126 @@ export default function MasterAdminPage() {
     }
   };
 
-  const fetchUsers = async () => {
+  const getPaginationState = (
+    pagination: any,
+    fallbackPage: number,
+    fallbackSize: number,
+    fallbackTotal: number
+  ): PaginationState => {
+    if (pagination) {
+      return {
+        page: pagination.page || fallbackPage,
+        pageSize: pagination.pageSize || fallbackSize,
+        totalItems: pagination.totalItems ?? fallbackTotal,
+        totalPages: pagination.totalPages || 1,
+        hasNext: Boolean(pagination.hasNext),
+        hasPrev: Boolean(pagination.hasPrev),
+      };
+    }
+
+    const totalPages = Math.max(Math.ceil(fallbackTotal / fallbackSize), 1);
+    return {
+      page: fallbackPage,
+      pageSize: fallbackSize,
+      totalItems: fallbackTotal,
+      totalPages,
+      hasNext: fallbackPage < totalPages,
+      hasPrev: fallbackPage > 1,
+    };
+  };
+
+  const fetchUsers = async (options?: { unpaged?: boolean }) => {
     try {
       setIsLoading(true);
       const token = await getFreshToken();
-      
-      const response = await fetch(`${API_URL}/api/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+
+      if (!token) {
+        // Session can be briefly unavailable right after reload; avoid noisy hard failures.
+        throw new Error("Authentication session is still loading. Please retry.");
+      }
+
+      const query = new URLSearchParams();
+      if (!options?.unpaged) {
+        query.set("page", String(userPage));
+        query.set("pageSize", String(ITEMS_PER_PAGE));
+        if (debouncedUserSearch.trim()) query.set("search", debouncedUserSearch.trim());
+        if (roleFilter !== "all") query.set("role", roleFilter);
+        query.set("sortBy", userSortKey === "date" ? "created_at" : userSortKey);
+        query.set("sortOrder", userSortDir);
+      }
+
+      const url = `${API_URL}/api/users${query.toString() ? `?${query.toString()}` : ""}`;
+
+      const makeRequest = async (authToken: string) =>
+        fetch(url, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+
+      let response = await makeRequest(token);
+
+      if (response.status === 401 || response.status === 403) {
+        const refreshedToken = await getFreshToken();
+        if (refreshedToken) {
+          response = await makeRequest(refreshedToken);
+        }
+      }
 
       if (!response.ok) {
-        throw new Error("Failed to fetch users");
+        let errorMessage = "Failed to fetch users";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          // Fallback to generic status text
+          errorMessage = `${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      setUsers(data.users || []);
-    } catch (error) {
+      const nextUsers = data.users || [];
+      setUsers(nextUsers);
+      setUserPagination(getPaginationState(data.pagination, userPage, ITEMS_PER_PAGE, nextUsers.length));
+    } catch (error: any) {
       console.error("Error fetching users:", error);
-      toast.error("Failed to load users. Check console for details.");
+      toast.error(`Failed to load users: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (options?: { unpaged?: boolean }) => {
     try {
       setIsLoading(true);
-      
-      const [eventsResponse, registrationsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/events`),
-        fetch(`${API_URL}/api/registrations`)
-      ]);
+      const token = await getFreshToken();
+
+      const query = new URLSearchParams();
+      if (!options?.unpaged) {
+        query.set("page", String(eventPage));
+        query.set("pageSize", String(ITEMS_PER_PAGE));
+        if (debouncedEventSearch.trim()) query.set("search", debouncedEventSearch.trim());
+        if (eventStatusFilter !== "all") query.set("status", eventStatusFilter);
+        query.set("sortBy", eventSortKey === "date" ? "event_date" : eventSortKey);
+        query.set("sortOrder", eventSortDir);
+      }
+
+      const url = `${API_URL}/api/events${query.toString() ? `?${query.toString()}` : ""}`;
+      const eventsResponse = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!eventsResponse.ok) {
         throw new Error("Failed to fetch events");
       }
 
       const data = await eventsResponse.json();
-      const eventsList = data.events || [];
-
-      // Get registration counts by event_id
-      let eventRegistrationCounts: Record<string, number> = {};
-      if (registrationsResponse.ok) {
-        const regData = await registrationsResponse.json();
-        if (regData.registrations) {
-          regData.registrations.forEach((reg: any) => {
-            if (reg.event_id) {
-              eventRegistrationCounts[reg.event_id] = (eventRegistrationCounts[reg.event_id] || 0) + 1;
-            }
-          });
-        }
-      }
-
-      // Add registration counts to events
-      const eventsWithCounts = eventsList.map((event: Event) => ({
-        ...event,
-        registration_count: eventRegistrationCounts[event.event_id] || 0
-      }));
-
-      setEvents(eventsWithCounts);
+      const nextEvents = data.events || [];
+      setEvents(nextEvents);
+      setEventPagination(getPaginationState(data.pagination, eventPage, ITEMS_PER_PAGE, nextEvents.length));
     } catch (error) {
       console.error("Error fetching events:", error);
       toast.error("Failed to load events");
@@ -427,64 +491,31 @@ export default function MasterAdminPage() {
     }
   };
 
-  const fetchFests = async () => {
+  const fetchFests = async (options?: { unpaged?: boolean }) => {
     try {
       setIsLoading(true);
-      
-      const [festsResponse, eventsResponse, registrationsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/fests`),
-        fetch(`${API_URL}/api/events`),
-        fetch(`${API_URL}/api/registrations`)
-      ]);
+      const token = await getFreshToken();
+
+      const query = new URLSearchParams();
+      if (!options?.unpaged) {
+        query.set("page", String(festPage));
+        query.set("pageSize", String(ITEMS_PER_PAGE));
+        if (debouncedFestSearch.trim()) query.set("search", debouncedFestSearch.trim());
+        query.set("sortBy", festSortKey === "date" ? "opening_date" : festSortKey);
+        query.set("sortOrder", festSortDir);
+      }
+
+      const url = `${API_URL}/api/fests${query.toString() ? `?${query.toString()}` : ""}`;
+      const festsResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
       if (!festsResponse.ok) {
         throw new Error("Failed to fetch fests");
       }
 
       const festsData = await festsResponse.json();
-      const festsList = festsData.fests || festsData || [];
-
-      // Get events data
-      let eventsData: any[] = [];
-      if (eventsResponse.ok) {
-        const eventsJson = await eventsResponse.json();
-        eventsData = eventsJson.events || [];
-      }
-
-      // Get registration counts by event_id
-      let eventRegistrationCounts: Record<string, number> = {};
-      if (registrationsResponse.ok) {
-        const regData = await registrationsResponse.json();
-        if (regData.registrations) {
-          regData.registrations.forEach((reg: any) => {
-            if (reg.event_id) {
-              eventRegistrationCounts[reg.event_id] = (eventRegistrationCounts[reg.event_id] || 0) + 1;
-            }
-          });
-        }
-      }
-
-      // Calculate fest registration counts: sum of all registrations for events belonging to that fest
-      const festRegistrationCounts: Record<string, number> = {};
-      eventsData.forEach((event: any) => {
-        // Match by fest NAME (the 'fest' column contains fest title, not ID)
-        if (event.fest) {
-          const eventRegCount = eventRegistrationCounts[event.event_id] || 0;
-          // Find fest by matching title
-          const matchingFest = festsList.find((f: any) => f.fest_title === event.fest);
-          if (matchingFest) {
-            festRegistrationCounts[matchingFest.fest_id] = (festRegistrationCounts[matchingFest.fest_id] || 0) + eventRegCount;
-          }
-        }
-      });
-
-      // Add registration counts to fests
-      const festsWithCounts = festsList.map((fest: Fest) => ({
-        ...fest,
-        registration_count: festRegistrationCounts[fest.fest_id] || 0
-      }));
-
-      setFests(festsWithCounts);
+      const nextFests = festsData.fests || festsData || [];
+      setFests(nextFests);
+      setFestPagination(getPaginationState(festsData.pagination, festPage, ITEMS_PER_PAGE, nextFests.length));
     } catch (error) {
       console.error("Error fetching fests:", error);
       toast.error("Failed to load fests");
@@ -495,9 +526,10 @@ export default function MasterAdminPage() {
 
   const fetchReportData = async () => {
     try {
+      const token = await getFreshToken();
       const [eventsRes, festsRes] = await Promise.all([
-        fetch(`${API_URL}/api/events`),
-        fetch(`${API_URL}/api/fests`),
+        fetch(`${API_URL}/api/events`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/fests`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (eventsRes.ok) {
         const data = await eventsRes.json();
@@ -595,7 +627,7 @@ export default function MasterAdminPage() {
         throw new Error(error.error || "Failed to delete user");
       }
 
-      setUsers((prev) => prev.filter((u) => u.email !== email));
+      await fetchUsers();
       setShowDeleteUserConfirm(null);
       toast.success("User deleted successfully");
     } catch (error: any) {
@@ -619,7 +651,7 @@ export default function MasterAdminPage() {
         throw new Error(error.error || "Failed to delete event");
       }
 
-      setEvents((prev) => prev.filter((e) => e.event_id !== eventId));
+      await fetchEvents();
       setShowDeleteEventConfirm(null);
       toast.success("Event deleted successfully");
     } catch (error: any) {
@@ -643,25 +675,13 @@ export default function MasterAdminPage() {
         throw new Error(error.error || "Failed to delete fest");
       }
 
-      setFests((prev) => prev.filter((f) => f.fest_id !== festId));
+      await fetchFests();
       setShowDeleteFestConfirm(null);
       toast.success("Fest deleted successfully");
     } catch (error: any) {
       console.error("Error deleting fest:", error);
       toast.error(error.message || "Failed to delete fest");
     }
-  };
-
-  // Pagination helpers
-  const paginateArray = <T,>(array: T[], page: number) => {
-    const start = (page - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
-    return {
-      items: array.slice(start, end),
-      totalPages: Math.ceil(array.length / ITEMS_PER_PAGE),
-      hasNext: end < array.length,
-      hasPrev: page > 1
-    };
   };
 
   const PaginationControls = ({ 
@@ -715,10 +735,6 @@ export default function MasterAdminPage() {
     </div>
   );
 
-  const paginatedUsers = paginateArray(sortedFilteredUsers, userPage);
-  const paginatedEvents = paginateArray(filteredEvents, eventPage);
-  const paginatedFests = paginateArray(sortedFilteredFests, festPage);
-
   if (authLoading || !authToken) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -734,197 +750,157 @@ export default function MasterAdminPage() {
     return null;
   }
 
+  // ── Sidebar nav config ──
+  const sidebarNav = [
+    { id: "dashboard" as const, label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: "dataExplorer" as const, label: "Data Explorer", icon: <LineChart className="w-4 h-4" /> },
+    { id: "users" as const, label: "Users", icon: <Users className="w-4 h-4" />, count: users.length },
+    { id: "events" as const, label: "Events", icon: <CalendarDays className="w-4 h-4" />, count: events.length },
+    { id: "fests" as const, label: "Fests", icon: <Trophy className="w-4 h-4" />, count: fests.length },
+    { id: "notifications" as const, label: "Notifications", icon: <Bell className="w-4 h-4" /> },
+    { id: "report" as const, label: "Reports", icon: <BarChart2 className="w-4 h-4" /> },
+  ];
+
+  const managementNav = [
+    { id: "users" as const, label: "Manage Users", icon: <UserCog className="w-4 h-4" />, href: undefined },
+    { label: "Organiser View", icon: <Eye className="w-4 h-4" />, href: "/manage" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Admin Panel
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="/create/fest"
-              className="inline-flex items-center gap-2 bg-[#154CB3] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#154cb3eb] hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] transition-all"
-              title="Fest = group of related events"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Create fest
-            </a>
-            <a
-              href="/create/event"
-              className="inline-flex items-center gap-2 bg-[#154CB3] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#154cb3eb] hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] transition-all"
-              title="Event = single activity users register for"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Create event
-            </a>
-          </div>
-        </div>
+    <div className="flex h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-8.5rem)] lg:h-[calc(100dvh-7.75rem)] bg-slate-50 overflow-hidden">
 
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="group bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#154CB3]/10 text-[#154CB3]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M5 7l1 12h12l1-12M9 11v6m6-6v6" /></svg>
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Fest</p>
-                <p className="text-sm text-gray-600">A themed collection that groups multiple related events.</p>
-              </div>
-            </div>
-          </div>
-          <div className="group bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#154CB3]/10 text-[#154CB3]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10m-12 9h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Event</p>
-                <p className="text-sm text-gray-600">A single session or activity that users can register for.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm mb-6 border border-gray-200">
-          <div className="flex border-b border-gray-200 overflow-x-auto">
-            {[
-              { id: "dashboard", label: "Dashboard" },
-              { id: "users", label: "Users", count: users.length },
-              { id: "events", label: "Events", count: events.length },
-              { id: "fests", label: "Fests", count: fests.length },
-              { id: "notifications", label: "Notifications" },
-              { id: "report", label: "Report" }
-            ].map((tab) => (
+      {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+      <aside className="sticky top-0 h-full w-56 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+        <nav className="px-3 pt-4 pb-2 space-y-0.5">
+          {sidebarNav.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-5 py-3 font-medium transition-all whitespace-nowrap text-sm ${
-                  activeTab === tab.id
-                    ? "border-b-2 border-[#154CB3] text-[#154CB3]"
-                    : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${
+                  isActive
+                    ? "bg-blue-50 text-[#154cb3] font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                 }`}
               >
-                {tab.label}
-                {"count" in tab && tab.count !== undefined && tab.count > 0 && (
-                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.id ? "bg-[#154CB3]/10 text-[#154CB3]" : "bg-gray-100 text-gray-500"
-                  }`}>
-                    {tab.count}
-                  </span>
+                {isActive && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[#154cb3] rounded-r-full" />
+                )}
+                <span className={isActive ? "text-[#154cb3]" : "text-slate-400 group-hover:text-slate-600"}>
+                  {item.icon}
+                </span>
+                <span className="flex-1 text-left">{item.label}</span>
+                {"count" in item && item.count !== undefined && item.count > 0 && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    isActive ? "bg-[#154cb3]/10 text-[#154cb3]" : "bg-slate-100 text-slate-500"
+                  }`}>{item.count}</span>
                 )}
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </nav>
+
+        {/* Management section */}
+        <div className="mt-1 px-3 pb-4">
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5">Management</p>
+          {managementNav.map((item, i) => {
+            const content = (
+              <span className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-medium">
+                <span className="text-slate-400">{item.icon}</span>
+                {item.label}
+              </span>
+            );
+            if (item.href) {
+              return <Link key={i} href={item.href}>{content}</Link>;
+            }
+            return (
+              <button key={i} onClick={() => item.id && setActiveTab(item.id as any)} className="w-full text-left">
+                {content}
+              </button>
+            );
+          })}
         </div>
+      </aside>
+
+      {/* ── Main Content ──────────────────────────────────────────────────── */}
+      <main className="min-w-0 flex-1 bg-slate-50 overflow-y-auto">
 
         {/* Dashboard Tab */}
         {activeTab === "dashboard" && (
-          <div>
+          <div className="w-full">
             {isLoading ? (
               <div className="p-12 text-center">
-                <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                 <div className="text-gray-600">Loading analytics...</div>
               </div>
             ) : (
-              <div className="space-y-6">
-                <AnalyticsDashboard
-                  users={users}
-                  events={events}
-                  fests={fests}
-                  registrations={registrations}
-                />
-
-                {/* Bottom row: Activity + Quick Actions */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Recent Activity */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-5">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
-                      {(() => {
-                        type ActivityItem = { text: string; time: Date };
-                        const activities: ActivityItem[] = [];
-
-                        events.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 4).forEach(e => {
-                          activities.push({ text: `"${e.title}" created`, time: new Date(e.created_at) });
-                        });
-
-                        registrations.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 4).forEach(r => {
-                          const event = events.find(e => e.event_id === r.event_id);
-                          activities.push({ text: `Registration for "${event?.title || '...'}"`, time: new Date(r.created_at) });
-                        });
-
-                        users.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3).forEach(u => {
-                          activities.push({ text: `${u.name || u.email} joined`, time: new Date(u.created_at) });
-                        });
-
-                        activities.sort((a, b) => b.time.getTime() - a.time.getTime());
-
-                        if (activities.length === 0) {
-                          return <div className="text-center py-4 text-gray-400 text-sm">No recent activity</div>;
-                        }
-
-                        return activities.slice(0, 8).map((activity, idx) => {
-                          const now = new Date();
-                          const diff = now.getTime() - activity.time.getTime();
-                          const mins = Math.floor(diff / 60000);
-                          const hours = Math.floor(diff / 3600000);
-                          const days = Math.floor(diff / 86400000);
-                          const timeAgo = mins < 1 ? "now" : mins < 60 ? `${mins}m` : hours < 24 ? `${hours}h` : `${days}d`;
-
-                          return (
-                            <div key={idx} className="flex items-center justify-between py-2 px-1 rounded hover:bg-gray-50">
-                              <span className="text-sm text-gray-700">{activity.text}</span>
-                              <span className="text-xs text-gray-400 ml-3 whitespace-nowrap">{timeAgo}</span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-5">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                    <div className="space-y-1">
-                      {[
-                        { tab: "users", title: "Manage Users" },
-                        { tab: "events", title: "Manage Events" },
-                        { tab: "fests", title: "Manage Fests" },
-                        { tab: "notifications", title: "Send Notification" }
-                      ].map((action, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveTab(action.tab as any)}
-                          className="w-full flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors text-left text-sm text-gray-700"
-                        >
-                          {action.title}
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                      ))}
-                      <div className="pt-2 mt-2 border-t border-gray-100">
-                        <a
-                          href="/manage"
-                          className="w-full flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors text-left text-sm text-gray-500"
-                        >
-                          Organiser View
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <AdminDashboardView
+                users={users}
+                events={events}
+                fests={fests}
+                registrations={registrations}
+                onViewPerformanceInsights={() => setActiveTab("insights")}
+              />
             )}
           </div>
         )}
+
+        {/* Non-dashboard tabs get padding wrapper */}
+        {activeTab !== "dashboard" && (
+          <div className="p-6 space-y-6">
+        {/* Performance Insights Tab */}
+        {activeTab === "insights" && (
+          <div className="space-y-6">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Performance Insights</h2>
+              <p className="text-sm text-gray-500 mb-0">
+                Deep analytics with filters, trends, top performers, role and pricing distributions, and CSV exports.
+              </p>
+            </div>
+
+            {isLoading ? (
+              <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
+                <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <div className="text-gray-600">Loading performance insights...</div>
+              </div>
+            ) : (
+              <AnalyticsDashboard
+                users={users}
+                events={events}
+                fests={fests}
+                registrations={registrations}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Data Explorer Tab */}
+        {activeTab === "dataExplorer" && (
+          <div className="space-y-6">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Advanced Analytics Data Explorer</h2>
+            </div>
+            <DataExplorerDashboard />
+          </div>
+        )}
+
+        {/* Settings placeholder */}
+        {activeTab === "settings" && (
+          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400">
+            <Settings className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <p className="font-medium text-slate-600">Settings</p>
+            <p className="text-sm mt-1">Platform configuration coming soon.</p>
+          </div>
+        )}
+
+
+
+
+
+
+
+
 
         {/* User Management Tab */}
         {activeTab === "users" && (
@@ -952,19 +928,21 @@ export default function MasterAdminPage() {
                   <select
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value)}
+                    aria-label="Filter users by role"
+                    title="Filter users by role"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
                   >
-                    <option value="all">All Users ({users.length})</option>
-                    <option value="organiser">Organisers ({users.filter((u) => u.is_organiser).length})</option>
-                    <option value="support">Support ({users.filter((u) => u.is_support).length})</option>
-                    <option value="masteradmin">Master Admins ({users.filter((u) => u.is_masteradmin).length})</option>
+                    <option value="all">All Users</option>
+                    <option value="organiser">Organisers</option>
+                    <option value="support">Support</option>
+                    <option value="masteradmin">Master Admins</option>
                   </select>
                 </div>
               </div>
               {/* Result summary */}
               <div className="mt-3 text-sm text-gray-500">
-                Showing <strong className="text-gray-700">{sortedFilteredUsers.length}</strong> of{" "}
-                <strong className="text-gray-700">{users.length}</strong> users
+                Showing <strong className="text-gray-700">{users.length}</strong> of{" "}
+                <strong className="text-gray-700">{userPagination.totalItems}</strong> users
               </div>
             </div>
 
@@ -975,7 +953,7 @@ export default function MasterAdminPage() {
                   <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                   <div className="text-gray-600">Loading users...</div>
                 </div>
-              ) : paginatedUsers.items.length === 0 ? (
+              ) : users.length === 0 ? (
                 <div className="p-12 text-center">
                   <div className="text-xl font-semibold text-gray-700 mb-2">No users found</div>
                   <div className="text-gray-500">Try adjusting your search or filter</div>
@@ -1013,7 +991,7 @@ export default function MasterAdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {paginatedUsers.items.map((user) => {
+                        {users.map((user) => {
                           const isEditing = editingUserId === user.id;
                           const displayRoles = isEditing ? editingUserRoles : user;
 
@@ -1176,11 +1154,12 @@ export default function MasterAdminPage() {
                   </div>
                   <PaginationControls
                     currentPage={userPage}
-                    totalPages={paginatedUsers.totalPages}
-                    hasNext={paginatedUsers.hasNext}
-                    hasPrev={paginatedUsers.hasPrev}
+                    totalPages={userPagination.totalPages}
+                    hasNext={userPagination.hasNext}
+                    hasPrev={userPagination.hasPrev}
                     onNext={() => setUserPage(p => p + 1)}
                     onPrev={() => setUserPage(p => p - 1)}
+                    totalItems={userPagination.totalItems}
                   />
                 </>
               )}
@@ -1210,21 +1189,23 @@ export default function MasterAdminPage() {
                   <select
                     value={eventStatusFilter}
                     onChange={(e) => setEventStatusFilter(e.target.value as any)}
+                    aria-label="Filter events by status"
+                    title="Filter events by status"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
                   >
-                    <option value="all">All Events ({events.length})</option>
-                    <option value="live">Live ({events.filter(e => getEventStatus(e.event_date).label === "Live").length})</option>
-                    <option value="thisweek">This Week ({events.filter(e => getEventStatus(e.event_date).label === "This Week").length})</option>
-                    <option value="upcoming">Upcoming ({events.filter(e => getEventStatus(e.event_date).label === "Upcoming").length})</option>
-                    <option value="past">Past ({events.filter(e => getEventStatus(e.event_date).label === "Past").length})</option>
+                    <option value="all">All Events</option>
+                    <option value="live">Live</option>
+                    <option value="thisweek">This Week</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="past">Past</option>
                   </select>
                 </div>
               </div>
               {/* Result summary */}
               <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
                 <span>
-                  Showing <strong className="text-gray-700">{filteredEvents.length}</strong> of{" "}
-                  <strong className="text-gray-700">{events.length}</strong> events
+                  Showing <strong className="text-gray-700">{events.length}</strong> of{" "}
+                  <strong className="text-gray-700">{eventPagination.totalItems}</strong> events
                   {eventStatusFilter !== "all" && (
                     <button onClick={() => setEventStatusFilter("all")} className="ml-2 text-[#154CB3] hover:underline">
                       Clear filter
@@ -1243,7 +1224,7 @@ export default function MasterAdminPage() {
                   <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                   <div className="text-gray-600">Loading events...</div>
                 </div>
-              ) : paginatedEvents.items.length === 0 ? (
+              ) : events.length === 0 ? (
                 <div className="p-12 text-center">
                   <div className="text-xl font-semibold text-gray-700 mb-2">No events found</div>
                   <div className="text-gray-500">Try adjusting your search or filter</div>
@@ -1284,8 +1265,8 @@ export default function MasterAdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {paginatedEvents.items.map((event) => {
-                          const status = getEventStatus(event.event_date);
+                        {events.map((event) => {
+                          const status = getEventStatus(event);
                           return (
                             <tr key={event.event_id} className="hover:bg-gray-50 transition-all duration-200">
                               <td className="px-6 py-4">
@@ -1342,11 +1323,12 @@ export default function MasterAdminPage() {
                   </div>
                   <PaginationControls
                     currentPage={eventPage}
-                    totalPages={paginatedEvents.totalPages}
-                    hasNext={paginatedEvents.hasNext}
-                    hasPrev={paginatedEvents.hasPrev}
+                    totalPages={eventPagination.totalPages}
+                    hasNext={eventPagination.hasNext}
+                    hasPrev={eventPagination.hasPrev}
                     onNext={() => setEventPage(p => p + 1)}
                     onPrev={() => setEventPage(p => p - 1)}
+                    totalItems={eventPagination.totalItems}
                   />
                 </>
               )}
@@ -1368,8 +1350,8 @@ export default function MasterAdminPage() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3] transition-all"
               />
               <div className="mt-3 text-sm text-gray-500">
-                Showing <strong className="text-gray-700">{sortedFilteredFests.length}</strong> of{" "}
-                <strong className="text-gray-700">{fests.length}</strong> fests
+                Showing <strong className="text-gray-700">{fests.length}</strong> of{" "}
+                <strong className="text-gray-700">{festPagination.totalItems}</strong> fests
               </div>
             </div>
 
@@ -1379,7 +1361,7 @@ export default function MasterAdminPage() {
                   <div className="w-12 h-12 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                   <div className="text-gray-600">Loading fests...</div>
                 </div>
-              ) : paginatedFests.items.length === 0 ? (
+              ) : fests.length === 0 ? (
                 <div className="p-12 text-center">
                   <div className="text-xl font-semibold text-gray-700 mb-2">No fests found</div>
                   <div className="text-gray-500">Try adjusting your search</div>
@@ -1387,76 +1369,80 @@ export default function MasterAdminPage() {
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[1080px] table-fixed">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                           <th
                             onClick={() => toggleSort("title", festSortKey, festSortDir, setFestSortKey, setFestSortDir)}
-                            className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                            className="w-[24%] px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
                           >
                             Fest <SortIcon active={festSortKey === "title"} dir={festSortDir} />
                           </th>
                           <th
                             onClick={() => toggleSort("dept", festSortKey, festSortDir, setFestSortKey, setFestSortDir)}
-                            className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                            className="w-[24%] px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
                           >
                             Department <SortIcon active={festSortKey === "dept"} dir={festSortDir} />
                           </th>
                           <th
                             onClick={() => toggleSort("date", festSortKey, festSortDir, setFestSortKey, setFestSortDir)}
-                            className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                            className="w-[12%] px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
                           >
                             Opening Date <SortIcon active={festSortKey === "date"} dir={festSortDir} />
                           </th>
                           <th
                             onClick={() => toggleSort("registrations", festSortKey, festSortDir, setFestSortKey, setFestSortDir)}
-                            className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                            className="w-[14%] px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase cursor-pointer hover:bg-gray-100 select-none"
                           >
                             Registrations <SortIcon active={festSortKey === "registrations"} dir={festSortDir} />
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Created By</th>
-                          <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                          <th className="w-[16%] px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Created By</th>
+                          <th className="w-[20%] px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {paginatedFests.items.map((fest) => (
+                        {fests.map((fest) => (
                           <tr key={fest.fest_id} className="hover:bg-gray-50 transition-all duration-200">
-                            <td className="px-6 py-4">
-                              <div className="font-semibold text-gray-900">{fest.fest_title}</div>
-                              <div className="text-sm text-gray-500">ID: {fest.fest_id}</div>
+                            <td className="px-6 py-5 align-top">
+                              <div className="font-semibold text-gray-900 leading-6 break-words">{fest.fest_title}</div>
+                              <div className="text-xs text-gray-500 mt-1">ID: {fest.fest_id}</div>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 font-medium">{fest.organizing_dept}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
+                            <td className="px-6 py-5 text-sm text-gray-600 font-medium leading-6 align-top break-words">{fest.organizing_dept}</td>
+                            <td className="px-6 py-5 text-sm text-gray-600 align-top whitespace-nowrap">
                               {new Date(fest.opening_date).toLocaleDateString('en-US', { 
                                 month: 'short', 
                                 day: 'numeric', 
                                 year: 'numeric' 
                               })}
                             </td>
-                            <td className="px-6 py-4">
-                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800">
-                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
-                                {fest.registration_count || 0} Registered
+                            <td className="px-6 py-5 align-top">
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-600"></span>
+                                {fest.registration_count || 0}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{fest.created_by}</td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
+                            <td className="px-6 py-5 text-sm text-gray-600 align-top">
+                              <span className="inline-block max-w-full truncate" title={fest.created_by}>
+                                {fest.created_by}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 text-right align-top">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
                                 <a
                                   href={`/edit/fest/${fest.fest_id}`}
-                                  className="px-4 py-2 bg-[#154CB3] text-white text-sm font-medium rounded-lg hover:bg-[#154cb3df] hover:-translate-y-0.5 transition-all"
+                                  className="px-3.5 py-1.5 bg-[#154CB3] text-white text-xs font-semibold rounded-lg hover:bg-[#154cb3df] hover:-translate-y-0.5 transition-all"
                                 >
                                   Edit
                                 </a>
                                 <a
                                   href={`/fest/${fest.fest_id}`}
-                                  className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 hover:-translate-y-0.5 transition-all"
+                                  className="px-3.5 py-1.5 bg-gray-600 text-white text-xs font-semibold rounded-lg hover:bg-gray-700 hover:-translate-y-0.5 transition-all"
                                 >
                                   View
                                 </a>
                                 <button
                                   onClick={() => setShowDeleteFestConfirm(fest.fest_id)}
-                                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 hover:-translate-y-0.5 transition-all"
+                                  className="px-3.5 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 hover:-translate-y-0.5 transition-all"
                                 >
                                   Delete
                                 </button>
@@ -1469,11 +1455,12 @@ export default function MasterAdminPage() {
                   </div>
                   <PaginationControls
                     currentPage={festPage}
-                    totalPages={paginatedFests.totalPages}
-                    hasNext={paginatedFests.hasNext}
-                    hasPrev={paginatedFests.hasPrev}
+                    totalPages={festPagination.totalPages}
+                    hasNext={festPagination.hasNext}
+                    hasPrev={festPagination.hasPrev}
                     onNext={() => setFestPage(p => p + 1)}
                     onPrev={() => setFestPage(p => p - 1)}
+                    totalItems={festPagination.totalItems}
                   />
                 </>
               )}
@@ -1521,6 +1508,8 @@ export default function MasterAdminPage() {
                   <select
                     value={selectedReportFest}
                     onChange={(e) => { setSelectedReportFest(e.target.value); setSelectedEventIds(new Set()); }}
+                    aria-label="Select fest for report"
+                    title="Select fest for report"
                     className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent transition-all"
                   >
                     <option value="">-- Select a fest --</option>
@@ -1658,6 +1647,8 @@ export default function MasterAdminPage() {
                 <select
                   value={selectedAccreditation}
                   onChange={(e) => setSelectedAccreditation(e.target.value)}
+                  aria-label="Select accreditation body"
+                  title="Select accreditation body"
                   className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent transition-all"
                 >
                   <option value="">-- Select accreditation body --</option>
@@ -1711,110 +1702,201 @@ export default function MasterAdminPage() {
                       if (!response.ok) throw new Error("Failed to fetch report data");
                       const data = await response.json();
 
-                      const workbook = new ExcelJS.Workbook();
-                      workbook.creator = "SOCIO - Christ University";
-                      workbook.created = new Date();
+                      const workbook = createThemedWorkbook("SOCIO - Christ University");
+                      const accBody = ACCREDITATION_BODIES.find((body) => body.id === selectedAccreditation);
+                      const reportEvents = Array.isArray(data.events) ? data.events : [];
+                      const totalRegs = reportEvents.reduce(
+                        (sum: number, event: any) => sum + Number(event.total_registrations ?? 0),
+                        0
+                      );
+                      const totalParticipants = reportEvents.reduce(
+                        (sum: number, event: any) => sum + Number(event.total_participants ?? 0),
+                        0
+                      );
+                      const totalAttended = reportEvents.reduce(
+                        (sum: number, event: any) => sum + Number(event.attended_count ?? 0),
+                        0
+                      );
 
-                      // Summary sheet
-                      const summarySheet = workbook.addWorksheet("Summary");
-                      summarySheet.columns = [
-                        { header: "Field", key: "field", width: 30 },
-                        { header: "Value", key: "value", width: 50 },
-                      ];
-                      const accBody = ACCREDITATION_BODIES.find(b => b.id === selectedAccreditation);
-                      const totalRegs = data.events.reduce((s: number, e: any) => s + e.total_registrations, 0);
-                      const totalParticipants = data.events.reduce((s: number, e: any) => s + e.total_participants, 0);
-                      const totalAttended = data.events.reduce((s: number, e: any) => s + e.attended_count, 0);
-                      summarySheet.addRows([
-                        { field: "Institution", value: "Christ University" },
-                        { field: "Accreditation Body", value: `${accBody?.name} - ${accBody?.fullName}` },
-                        { field: "Report Generated On", value: new Date().toLocaleString() },
-                        { field: "Generated By", value: data.generated_by },
-                        { field: "", value: "" },
-                        { field: "Report Type", value: reportMode === "fest" ? "Fest-based" : "Event-based" },
-                        ...(data.fest ? [{ field: "Fest", value: data.fest.fest_title }] : []),
-                        { field: "Total Events", value: data.events.length },
-                        { field: "Total Registrations", value: totalRegs },
-                        { field: "Total Participants", value: totalParticipants },
-                        { field: "Total Attended", value: totalAttended },
-                        { field: "Attendance Rate", value: totalParticipants > 0 ? `${((totalAttended / totalParticipants) * 100).toFixed(1)}%` : "N/A" },
-                      ]);
-                      summarySheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
-                      summarySheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-
-                      // Event List sheet
-                      const eventsSheet = workbook.addWorksheet("Event List");
-                      eventsSheet.columns = [
-                        { header: "Event ID", key: "event_id", width: 20 },
-                        { header: "Title", key: "title", width: 35 },
-                        { header: "Date", key: "date", width: 12 },
-                        { header: "Venue", key: "venue", width: 20 },
-                        { header: "Department", key: "dept", width: 20 },
-                        { header: "Category", key: "category", width: 15 },
-                        { header: "Fee", key: "fee", width: 10 },
-                        { header: "Registrations", key: "regs", width: 12 },
-                        { header: "Participants", key: "participants", width: 12 },
-                        { header: "Attended", key: "attended", width: 10 },
-                        { header: "Absent", key: "absent", width: 10 },
-                      ];
-                      data.events.forEach((event: any) => {
-                        eventsSheet.addRow({
-                          event_id: event.event_id,
-                          title: event.title,
-                          date: event.event_date || "N/A",
-                          venue: event.venue || "TBD",
-                          dept: event.organizing_dept || "N/A",
-                          category: event.category || "N/A",
-                          fee: event.registration_fee > 0 ? `₹${event.registration_fee}` : "Free",
-                          regs: event.total_registrations,
-                          participants: event.total_participants,
-                          attended: event.attended_count,
-                          absent: event.absent_count,
-                        });
+                      addStructuredSummarySheet(workbook, {
+                        title: "Accreditation Report Export",
+                        subtitle: "Consistent SOCIO workbook structure with sectioned metadata, filters, and KPIs.",
+                        sections: [
+                          {
+                            title: "Report Metadata",
+                            rows: [
+                              { label: "Institution", value: "Christ University" },
+                              {
+                                label: "Accreditation Body",
+                                value: accBody ? `${accBody.name} - ${accBody.fullName}` : "Not selected",
+                              },
+                              { label: "Generated On", value: new Date().toLocaleString("en-GB") },
+                              { label: "Generated By", value: String(data.generated_by ?? "-") },
+                            ],
+                          },
+                          {
+                            title: "Report Filters",
+                            rows: [
+                              { label: "Report Type", value: reportMode === "fest" ? "Fest-based" : "Event-based" },
+                              { label: "Fest", value: data.fest?.fest_title ?? "All selected events" },
+                              { label: "Selected Events", value: reportEvents.length },
+                            ],
+                          },
+                          {
+                            title: "KPI Snapshot",
+                            rows: [
+                              { label: "Total Registrations", value: totalRegs },
+                              { label: "Total Participants", value: totalParticipants },
+                              { label: "Total Attended", value: totalAttended },
+                              {
+                                label: "Attendance Rate",
+                                value:
+                                  totalParticipants > 0
+                                    ? `${((totalAttended / totalParticipants) * 100).toFixed(1)}%`
+                                    : "N/A",
+                              },
+                            ],
+                          },
+                        ],
                       });
-                      eventsSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
-                      eventsSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
 
-                      // Participant Details sheet
-                      const participantsSheet = workbook.addWorksheet("Participant Details");
-                      participantsSheet.columns = [
-                        { header: "Registration ID", key: "reg_id", width: 20 },
-                        { header: "Participant Name", key: "name", width: 30 },
-                        { header: "Register Number", key: "reg_num", width: 15 },
-                        { header: "Email", key: "email", width: 30 },
-                        { header: "Event", key: "event", width: 35 },
-                        { header: "Team", key: "team", width: 20 },
-                        { header: "Status", key: "status", width: 12 },
-                        { header: "Attended At", key: "attended_at", width: 20 },
-                      ];
-                      data.events.forEach((event: any) => {
-                        event.participants.forEach((p: any) => {
-                          participantsSheet.addRow({
-                            reg_id: p.registration_id,
-                            name: p.name,
-                            reg_num: p.register_number,
-                            email: p.email,
-                            event: event.title,
-                            team: p.team_name || "Individual",
-                            status: p.status,
-                            attended_at: p.attended_at ? new Date(p.attended_at).toLocaleString() : "",
-                          });
-                        });
+                      type EventReportRow = {
+                        event_id: string;
+                        title: string;
+                        date: string;
+                        venue: string;
+                        dept: string;
+                        category: string;
+                        fee: number;
+                        regs: number;
+                        participants: number;
+                        attended: number;
+                        absent: number;
+                      };
+
+                      const eventRows: EventReportRow[] = reportEvents.map((event: any) => ({
+                        event_id: String(event.event_id ?? "-"),
+                        title: String(event.title ?? "Untitled Event"),
+                        date: String(event.event_date ?? "N/A"),
+                        venue: String(event.venue ?? "TBD"),
+                        dept: String(event.organizing_dept ?? "N/A"),
+                        category: String(event.category ?? "N/A"),
+                        fee: Number(event.registration_fee ?? 0) || 0,
+                        regs: Number(event.total_registrations ?? 0) || 0,
+                        participants: Number(event.total_participants ?? 0) || 0,
+                        attended: Number(event.attended_count ?? 0) || 0,
+                        absent: Number(event.absent_count ?? 0) || 0,
+                      }));
+
+                      addStructuredTableSheet(workbook, {
+                        sheetName: "Event List",
+                        columns: [
+                          { header: "Event ID", key: "event_id", width: 22 },
+                          { header: "Title", key: "title", width: 35 },
+                          { header: "Date", key: "date", width: 14, horizontal: "center" },
+                          { header: "Venue", key: "venue", width: 22 },
+                          { header: "Department", key: "dept", width: 22 },
+                          { header: "Category", key: "category", width: 16 },
+                          { header: "Fee", key: "fee", width: 12, kind: "currency" },
+                          { header: "Registrations", key: "regs", width: 14, kind: "number" },
+                          { header: "Participants", key: "participants", width: 14, kind: "number" },
+                          { header: "Attended", key: "attended", width: 12, kind: "number" },
+                          { header: "Absent", key: "absent", width: 12, kind: "number" },
+                        ],
+                        rows: eventRows,
                       });
-                      participantsSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
-                      participantsSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
 
-                      const buffer = await workbook.xlsx.writeBuffer();
-                      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
+                      type ParticipantReportRow = {
+                        reg_id: string;
+                        name: string;
+                        reg_num: string;
+                        email: string;
+                        event: string;
+                        team: string;
+                        status: string;
+                        attended_at: string;
+                      };
+
+                      const participantRows: ParticipantReportRow[] = reportEvents.flatMap((event: any) => {
+                        const participants = Array.isArray(event.participants) ? event.participants : [];
+                        return participants.map((participant: any) => ({
+                          reg_id: String(participant.registration_id ?? "-"),
+                          name: String(participant.name ?? "-"),
+                          reg_num: String(participant.register_number ?? "-"),
+                          email: String(participant.email ?? ""),
+                          event: String(event.title ?? "Untitled Event"),
+                          team: String(participant.team_name ?? "Individual"),
+                          status: String(participant.status ?? "unmarked"),
+                          attended_at: participant.attended_at
+                            ? new Date(participant.attended_at).toLocaleString("en-GB")
+                            : "",
+                        }));
+                      });
+
+                      addStructuredTableSheet(workbook, {
+                        sheetName: "Participant Details",
+                        columns: [
+                          { header: "Registration ID", key: "reg_id", width: 22 },
+                          { header: "Participant Name", key: "name", width: 28 },
+                          { header: "Register Number", key: "reg_num", width: 16, horizontal: "center" },
+                          { header: "Email", key: "email", width: 32, kind: "email" },
+                          { header: "Event", key: "event", width: 34 },
+                          { header: "Team", key: "team", width: 20 },
+                          { header: "Status", key: "status", width: 12, kind: "status" },
+                          { header: "Attended At", key: "attended_at", width: 22 },
+                        ],
+                        rows: participantRows,
+                      });
+
+                      const deptChartData = Object.entries(
+                        eventRows.reduce<Record<string, number>>((acc, row) => {
+                          const dept = row.dept || "Unknown";
+                          acc[dept] = (acc[dept] || 0) + row.regs;
+                          return acc;
+                        }, {})
+                      )
+                        .map(([label, value]) => ({ label, value }))
+                        .sort((a, b) => b.value - a.value)
+                        .slice(0, 10);
+
+                      const attendanceChartData = [
+                        {
+                          label: "Attended",
+                          value: participantRows.filter((row) => row.status.toLowerCase() === "attended").length,
+                        },
+                        {
+                          label: "Absent",
+                          value: participantRows.filter((row) => row.status.toLowerCase() === "absent").length,
+                        },
+                        {
+                          label: "Pending",
+                          value: participantRows.filter((row) => row.status.toLowerCase() === "pending").length,
+                        },
+                        {
+                          label: "Unmarked",
+                          value: participantRows.filter((row) => row.status.toLowerCase() === "unmarked").length,
+                        },
+                      ];
+
+                      addThemedChartsSheet(workbook, {
+                        title: "Report Visual Overview",
+                        subtitle: "Embedded chart snapshots for fast review.",
+                        primaryChart: {
+                          title: "Registrations by Department",
+                          type: "bar",
+                          data: deptChartData,
+                        },
+                        secondaryChart: {
+                          title: "Participant Attendance Mix",
+                          type: "donut",
+                          data: attendanceChartData,
+                        },
+                      });
+
                       const filename = reportMode === "fest" && data.fest
                         ? `report_${data.fest.fest_id}_${new Date().toISOString().split("T")[0]}.xlsx`
                         : `report_events_${new Date().toISOString().split("T")[0]}.xlsx`;
-                      a.download = filename;
-                      a.click();
-                      URL.revokeObjectURL(url);
+                      await downloadWorkbook(workbook, filename);
                       toast.success("Report generated successfully!");
                     } catch (error) {
                       console.error("Error generating report:", error);
@@ -1928,7 +2010,9 @@ export default function MasterAdminPage() {
             </div>
           </div>
         )}
-      </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

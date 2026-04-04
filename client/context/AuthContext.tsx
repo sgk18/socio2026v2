@@ -5,8 +5,10 @@ import { createBrowserClient } from "@supabase/ssr";
 import { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import CampusDetectionModal, { isCampusDismissedRecently } from "../app/_components/CampusDetectionModal";
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 type UserData = {
   id: number;
@@ -77,11 +79,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
+    () => {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        return null;
+      }
+
+      return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    },
     []
   );
   const getOrganizationType = (email: string | undefined): 'christ_member' | 'outsider' => {
@@ -93,12 +97,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    if (!supabase) {
+      console.warn("Supabase configuration missing in AuthProvider; auth features are disabled.");
+      setIsLoading(false);
+      return;
+    }
+
     const checkUserSession = async () => {
       setIsLoading(true);
       try {
+        // Add timeout to prevent hanging on Supabase connection issues
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase connection timeout')), 5000)
+        );
+
+        const sessionPromise = supabase.auth.getSession();
         const {
           data: { session: currentSession },
-        } = await supabase.auth.getSession();
+        } = await Promise.race([sessionPromise, timeoutPromise]) as any;
 
         if (currentSession) {
           setSession(currentSession);
@@ -114,6 +130,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setShowCampusModal(true);
             }
           });
+        } else {
+          setSession(null);
+          setUserData(null);
+          persistSession(null);
         }
       } catch (error) {
         console.error("Error checking user session:", error);
@@ -127,6 +147,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, newSession: Session | null) => {
+      if (event === "INITIAL_SESSION") {
+        setSession(newSession);
+        persistSession(newSession);
+        if (newSession?.user?.email) {
+          void fetchUserData(newSession.user.email);
+        } else {
+          setUserData(null);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       if (event === "SIGNED_IN" && newSession) {
         // Resolve auth state immediately and load profile details in background.
         setSession(newSession);
@@ -175,6 +207,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(newSession);
         persistSession(newSession);
         void fetchUserData(newSession.user.email!);
+      } else if (event === "TOKEN_REFRESHED" && newSession) {
+        setSession(newSession);
+        persistSession(newSession);
+        setIsLoading(false);
       }
     });
 
@@ -263,7 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/users/${email}`);
+      const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`);
       if (!response.ok) {
         if (response.status === 404) {
           console.warn(
@@ -289,22 +325,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     setIsLoading(true);
     try {
+      if (!supabase) {
+        throw new Error("Supabase client is not configured");
+      }
+
       const redirectOrigin = typeof window !== "undefined" ? window.location.origin : APP_URL;
-      await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${redirectOrigin}/auth/callback`,
         },
       });
+
+      if (error) {
+        throw error;
+      }
     } catch (error) {
       console.error("Google authentication error:", error);
       setIsLoading(false);
+      throw error;
     }
   };
 
   const signOut = async () => {
     setIsLoading(true);
     try {
+      if (!supabase) {
+        return;
+      }
+
       await supabase.auth.signOut();
     } catch (error) {
       console.error("Sign out error:", error);
@@ -359,11 +408,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 <span className="text-base font-bold text-[#FFCC00] tracking-wider">{outsiderVisitorId}</span>
               </div>
 
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  Please confirm your display name before continuing. You can change it only once.
+                </p>
+              </div>
+
               {/* Name display with inline actions */}
               <div className="bg-gray-50 rounded-lg px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-0.5">Display Name</p>
+                    <p className="text-[11px] font-medium text-gray-500 mb-0.5">Display Name</p>
                     {!isEditingOutsiderName ? (
                       <p className="text-sm font-semibold text-[#063168]">{userData?.name || session?.user?.user_metadata?.full_name || "--"}</p>
                     ) : (
@@ -384,9 +439,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         setIsEditingOutsiderName(true);
                         setOutsiderNameError(null);
                       }}
-                      className="text-[#154CB3] text-xs font-medium hover:underline flex-shrink-0 ml-3"
+                      className="text-[#154CB3] text-xs font-semibold hover:underline flex-shrink-0 ml-3"
                     >
-                      Edit
+                      Change Name
                     </button>
                   )}
                 </div>
@@ -397,7 +452,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               )}
 
               {isEditingOutsiderName && (
-                <p className="text-[11px] text-amber-600 text-center">You can only set your name once. Make sure it&apos;s correct.</p>
+                <p className="text-[11px] text-amber-700 text-center">One-time edit: verify spelling before you save.</p>
+              )}
+
+              {!isEditingOutsiderName && (
+                <p className="text-[11px] text-gray-500 text-center">Need a correction? Tap Change Name first.</p>
               )}
 
               {/* Action buttons */}
@@ -431,7 +490,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   disabled={isSavingOutsiderName}
                   className="w-full bg-[#154CB3] hover:bg-[#0f3d8a] text-white font-medium py-2.5 rounded-lg transition-colors text-sm disabled:opacity-50"
                 >
-                  {isSavingOutsiderName ? "Saving..." : "Confirm & Continue"}
+                  {isSavingOutsiderName ? "Saving..." : "Name Is Correct, Continue"}
                 </button>
               ) : (
                 <div className="flex gap-2">

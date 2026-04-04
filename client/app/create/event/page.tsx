@@ -1,18 +1,25 @@
 "use client";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import EventForm from "@/app/_components/Admin/ManageEvent";
 import { EventFormData } from "@/app/lib/eventFormSchema";
 import { SubmitHandler } from "react-hook-form";
 import { createBrowserClient } from "@supabase/ssr";
+import { useRouter } from "next/navigation";
 
 export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const router = useRouter();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabase = useMemo(() => {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return null;
+    }
 
-  const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+    return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  }, [supabaseAnonKey, supabaseUrl]);
+
+  const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
 
   const handleCreateEvent: SubmitHandler<EventFormData> = async (
     dataFromHookForm
@@ -23,6 +30,13 @@ export default function CreateEventPage() {
     );
 
     setIsSubmitting(true);
+
+    if (!supabase) {
+      alert("Supabase configuration is missing. Please contact support.");
+      setIsSubmitting(false);
+      router.replace('/auth');
+      return;
+    }
 
     let token;
     let userEmail: string | undefined;
@@ -49,7 +63,7 @@ export default function CreateEventPage() {
         alert("Authentication error or no active session. Please log in again.");
         setIsSubmitting(false);
         // Redirect to auth page
-        window.location.href = '/auth';
+        router.replace('/auth');
         return;
       }
       
@@ -65,7 +79,7 @@ export default function CreateEventPage() {
         console.error("CreateEventPage: Token has expired");
         alert("Your session has expired. Please log in again.");
         setIsSubmitting(false);
-        window.location.href = '/auth';
+        router.replace('/auth');
         return;
       }
       
@@ -75,7 +89,7 @@ export default function CreateEventPage() {
         "An unexpected error occurred while verifying your session. Please log in again."
       );
       setIsSubmitting(false);
-      window.location.href = '/auth';
+      router.replace('/auth');
       return;
     }
 
@@ -114,7 +128,10 @@ export default function CreateEventPage() {
     appendJsonArrayOrObject("department_access", dataFromHookForm.department);
 
     appendIfExists("category", dataFromHookForm.category);
-    appendIfExists("fest", dataFromHookForm.festEvent);
+    // Only append fest_id if it's not "none"
+    if (dataFromHookForm.festEvent && dataFromHookForm.festEvent !== "none") {
+      appendIfExists("fest_id", dataFromHookForm.festEvent);
+    }
     appendIfExists(
       "registration_deadline",
       dataFromHookForm.registrationDeadline

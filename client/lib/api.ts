@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 
 // API Base URL
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+export const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 
 // ============ EVENTS ============
 
@@ -10,6 +10,19 @@ export async function getEvents() {
     .from('events')
     .select('*')
     .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getUpcomingEvents(limit = 50) {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .gte('event_date', todayIso)
+    .order('event_date', { ascending: true })
+    .limit(limit);
   
   if (error) throw error;
   return data || [];
@@ -65,57 +78,259 @@ export async function deleteEvent(eventId: string) {
 
 // ============ FESTS ============
 
+const FEST_TABLE_CANDIDATES = ['fests', 'fest'] as const;
+const FEST_ID_COLUMN_CANDIDATES = ['fest_id', 'id'] as const;
+
+function isMissingRelationOrColumn(error: any): boolean {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    (message.includes('relation') && message.includes('does not exist')) ||
+    (message.includes('column') && message.includes('does not exist'))
+  );
+}
+
+function parseComparableDate(value: unknown): Date | null {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (dateOnlyMatch) {
+      const [, year, month, day] = dateOnlyMatch;
+      const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+      parsed.setHours(0, 0, 0, 0);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value as any);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getTodayBoundary(): Date {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function isFestUpcomingOrActive(fest: any): boolean {
+  const openingDate = parseComparableDate(fest?.opening_date);
+  const closingDate = parseComparableDate(fest?.closing_date) || openingDate;
+  if (!openingDate && !closingDate) return false;
+
+  const referenceDate = closingDate || openingDate;
+  if (!referenceDate) return false;
+
+  return referenceDate.getTime() >= getTodayBoundary().getTime();
+}
+
 export async function getFests() {
-  const { data, error } = await supabase
-    .from('fest')
-    .select('*')
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  return data || [];
+  let lastError: any = null;
+
+  for (const tableName of FEST_TABLE_CANDIDATES) {
+    const attempts = [
+      { applyOrder: true },
+      { applyOrder: false },
+    ];
+
+    for (const attempt of attempts) {
+      let query = supabase.from(tableName).select('*');
+
+      if (attempt.applyOrder) {
+        query = query.order('created_at', { ascending: false });
+      }
+
+      const { data, error } = await query;
+
+      if (!error) {
+        return data || [];
+      }
+
+      lastError = error;
+
+      if (attempt.applyOrder && isMissingRelationOrColumn(error)) {
+        continue;
+      }
+
+      if (isMissingRelationOrColumn(error)) {
+        break;
+      }
+
+      throw error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return [];
+}
+
+export async function getUpcomingFests(limit = 50) {
+  let lastError: any = null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  for (const tableName of FEST_TABLE_CANDIDATES) {
+    const attempts = [
+      { useDateFilterInQuery: true },
+      { useDateFilterInQuery: false },
+    ];
+
+    for (const attempt of attempts) {
+      let query = supabase.from(tableName).select('*');
+
+      if (attempt.useDateFilterInQuery) {
+        query = query.gte('closing_date', todayIso);
+      }
+
+      query = query.order('opening_date', { ascending: true }).limit(limit);
+
+      const { data, error } = await query;
+
+      if (!error) {
+        const rows = data || [];
+        if (attempt.useDateFilterInQuery) {
+          return rows;
+        }
+
+        return rows
+          .filter((fest) => isFestUpcomingOrActive(fest))
+          .sort((a, b) => {
+            const aDate = parseComparableDate(a?.opening_date)?.getTime() || 0;
+            const bDate = parseComparableDate(b?.opening_date)?.getTime() || 0;
+            return aDate - bDate;
+          })
+          .slice(0, limit);
+      }
+
+      lastError = error;
+
+      if (attempt.useDateFilterInQuery && isMissingRelationOrColumn(error)) {
+        continue;
+      }
+
+      if (isMissingRelationOrColumn(error)) {
+        break;
+      }
+
+      throw error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return [];
 }
 
 export async function getFestById(festId: string) {
-  const { data, error } = await supabase
-    .from('fest')
-    .select('*')
-    .eq('fest_id', festId)
-    .single();
-  
-  if (error && error.code !== 'PGRST116') throw error;
-  return data;
+  let lastError: any = null;
+
+  for (const tableName of FEST_TABLE_CANDIDATES) {
+    for (const idColumn of FEST_ID_COLUMN_CANDIDATES) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .eq(idColumn, festId)
+        .single();
+
+      if (!error) return data;
+
+      if (error.code === 'PGRST116') {
+        lastError = error;
+        continue;
+      }
+
+      if (isMissingRelationOrColumn(error)) {
+        lastError = error;
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  if (lastError?.code !== 'PGRST116' && lastError) throw lastError;
+  return null;
 }
 
 export async function createFest(festData: any) {
-  const { data, error } = await supabase
-    .from('fest')
-    .insert(festData)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
+  let lastError: any = null;
+
+  for (const tableName of FEST_TABLE_CANDIDATES) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .insert(festData)
+      .select()
+      .single();
+
+    if (!error) return data;
+
+    if (isMissingRelationOrColumn(error)) {
+      lastError = error;
+      continue;
+    }
+
+    throw error;
+  }
+
+  if (lastError) throw lastError;
+  return null;
 }
 
 export async function updateFest(festId: string, festData: any) {
-  const { data, error } = await supabase
-    .from('fest')
-    .update(festData)
-    .eq('fest_id', festId)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
+  let lastError: any = null;
+
+  for (const tableName of FEST_TABLE_CANDIDATES) {
+    for (const idColumn of FEST_ID_COLUMN_CANDIDATES) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .update(festData)
+        .eq(idColumn, festId)
+        .select()
+        .single();
+
+      if (!error) return data;
+
+      if (error.code === 'PGRST116' || isMissingRelationOrColumn(error)) {
+        lastError = error;
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return null;
 }
 
 export async function deleteFest(festId: string) {
-  const { error } = await supabase
-    .from('fest')
-    .delete()
-    .eq('fest_id', festId);
-  
-  if (error) throw error;
+  let lastError: any = null;
+
+  for (const tableName of FEST_TABLE_CANDIDATES) {
+    for (const idColumn of FEST_ID_COLUMN_CANDIDATES) {
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq(idColumn, festId);
+
+      if (!error) return true;
+
+      if (isMissingRelationOrColumn(error)) {
+        lastError = error;
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  if (lastError) throw lastError;
   return true;
 }
 
@@ -125,7 +340,7 @@ export async function getUsers() {
   const { data, error } = await supabase
     .from('users')
     .select('*');
-  
+
   if (error) throw error;
   return data || [];
 }

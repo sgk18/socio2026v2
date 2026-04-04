@@ -10,11 +10,32 @@ import {
 import { generateQRCodeData, generateQRCodeImage } from "../utils/qrCodeUtils.js";
 import { resolveGatedEvent, createGatedVisitor, getGatedVerifyUrl, isGatedEnabled, pushEventToGated } from "../utils/gatedSync.js";
 import { sendRegistrationEmail } from "../utils/emailService.js";
+import { 
+  authenticateUser, 
+  getUserInfo, 
+  checkRoleExpiration, 
+  requireMasterAdmin 
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // Get registrations for an event (or all registrations if no event_id)
-router.get("/registrations", async (req, res) => {
+router.get(
+  "/registrations",
+  (req, res, next) => {
+    // If event_id is provided, it's likely a public check for a specific event's participants (less sensitive)
+    if (req.query.event_id) return next();
+
+    // If no event_id, we're fetching ALL registrations (Highly sensitive)
+    return authenticateUser(req, res, () => {
+      getUserInfo()(req, res, () => {
+        checkRoleExpiration(req, res, () => {
+          requireMasterAdmin(req, res, next);
+        });
+      });
+    });
+  },
+  async (req, res) => {
   try {
     const { event_id } = req.query;
     
@@ -115,8 +136,8 @@ router.get("/registrations", async (req, res) => {
 // Register for an event
 router.post("/register", async (req, res) => {
   try {
-    console.log('\n🎫 === NEW REGISTRATION REQUEST ===');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    // Removed: console.log that exposed PII (names, emails, register numbers)
+    // Privacy protection: Sensitive user data is not logged
     
     const {
       eventId,
@@ -157,6 +178,85 @@ router.post("/register", async (req, res) => {
       return res.status(404).json({ error: "Event not found" });
     }
     
+    // 🔒 CHECK IF EVENT IS ARCHIVED (BLOCK REGISTRATIONS FOR ARCHIVED EVENTS)
+    if (event.is_archived) {
+      return res.status(403).json({
+        error: "Event is archived",
+        details: "This event has been archived and is no longer accepting registrations.",
+        code: "EVENT_ARCHIVED"
+      });
+    }
+    
+    // ===== REGISTRATION TIME VALIDATIONS =====
+    const currentDate = new Date();
+    
+    // 1. CHECK REGISTRATION DEADLINE
+    if (event.registration_deadline) {
+      const deadlineDate = new Date(event.registration_deadline);
+      if (currentDate > deadlineDate) {
+        return res.status(403).json({
+          error: "Registration deadline has passed",
+          details: `This event's registration deadline was ${event.registration_deadline}. You cannot register now.`,
+          code: "DEADLINE_PASSED"
+        });
+      }
+    }
+    
+    // 2. CHECK IF EVENT HAS ALREADY STARTED
+    if (event.event_date) {
+      const eventStartDate = new Date(event.event_date);
+      if (currentDate > eventStartDate) {
+        return res.status(403).json({
+          error: "Event has already started",
+          details: `The event started on ${event.event_date}. Registration is closed.`,
+          code: "EVENT_STARTED"
+        });
+      }
+    }
+    
+    // 3. CHECK IF EVENT HAS ALREADY ENDED
+    if (event.end_date) {
+      const eventEndDate = new Date(event.end_date);
+      if (currentDate > eventEndDate) {
+        return res.status(403).json({
+          error: "Event has already ended",
+          details: `The event ended on ${event.end_date}. You cannot register for past events.`,
+          code: "EVENT_ENDED"
+        });
+      }
+    }
+    
+    // 4. CHECK MAX PARTICIPANTS LIMIT
+    if (event.max_participants) {
+      const allRegistrations = await queryAll("registrations", {
+        where: { event_id: normalizedEventId }
+      });
+      
+      let totalParticipants = 0;
+      allRegistrations.forEach(reg => {
+        if (reg.registration_type === 'team' && reg.teammates) {
+          const teammates = Array.isArray(reg.teammates) ? reg.teammates : JSON.parse(reg.teammates || '[]');
+          totalParticipants += teammates.length;
+        } else {
+          totalParticipants += 1;
+        }
+      });
+      
+      // Count the incoming participants
+      let incomingParticipants = normalizedRegistrationType === 'team' 
+        ? (teammates?.length || 1) 
+        : 1;
+      
+      if (totalParticipants + incomingParticipants > event.max_participants) {
+        return res.status(400).json({
+          error: "Event registration capacity exceeded",
+          details: `This event can accept maximum ${event.max_participants} participants. Currently ${totalParticipants} are registered.`,
+          code: "CAPACITY_FULL",
+          availableSpots: Math.max(0, event.max_participants - totalParticipants)
+        });
+      }
+    }
+    
     // Determine participant's organization type from register number
     let participantOrganization = 'christ_member'; // default
     let registerNumber = null;
@@ -173,7 +273,7 @@ router.post("/register", async (req, res) => {
     // Check if register number is a visitor ID - case-insensitive
     if (registerNumber && String(registerNumber).toUpperCase().startsWith('VIS')) {
       participantOrganization = 'outsider';
-      console.log('🌍 Outsider registration detected (by register number):', registerNumber);
+      console.log('🌍 Outsider registration detected (visitor ID)');
     }
 
     const registration_id = uuidv4().replace(/-/g, "");
@@ -300,13 +400,13 @@ router.post("/register", async (req, res) => {
         const regCandidate = processedData.individual_register_number || processedData.team_leader_register_number || (processedTeammates && processedTeammates[0]?.registerNumber) || null;
         if (regCandidate && String(regCandidate).toUpperCase().startsWith('VIS')) {
           participantOrganization = 'outsider';
-          console.log('🌍 Outsider detected from processed data register number:', regCandidate);
+          console.log('🌍 Outsider detected from processed data (visitor ID)');
         } else if (!regCandidate && participantEmail) {
           // Lookup user by email to see if they're an outsider
           const user = await queryOne('users', { where: { email: participantEmail } });
           if (user && user.visitor_id && String(user.visitor_id).toUpperCase().startsWith('VIS')) {
             participantOrganization = 'outsider';
-            console.log('🌍 Outsider detected from user.visitor_id lookup:', user.visitor_id, 'for', participantEmail);
+            console.log('🌍 Outsider detected from user record (visitor ID)');
           }
         }
       }
@@ -321,29 +421,32 @@ router.post("/register", async (req, res) => {
           });
         }
 
+        // ENHANCED: Check outsider quota with proper participant count
         if (event.outsider_max_participants) {
-          const outsiderRegistrations = await queryAll("registrations", {
-            where: {
-              event_id: normalizedEventId,
-              participant_organization: 'outsider'
-            }
-          });
-
-          // Count total outsider participants
+          // Use existing registrations we already fetched
           let outsiderCount = 0;
-          outsiderRegistrations.forEach(reg => {
-            if (reg.registration_type === 'team' && reg.teammates) {
-              const teammates = Array.isArray(reg.teammates) ? reg.teammates : JSON.parse(reg.teammates || '[]');
-              outsiderCount += teammates.length;
-            } else {
-              outsiderCount += 1;
+          existingRegistrations.forEach(reg => {
+            if (reg.participant_organization === 'outsider') {
+              if (reg.registration_type === 'team' && reg.teammates) {
+                const teammates = Array.isArray(reg.teammates) ? reg.teammates : JSON.parse(reg.teammates || '[]');
+                outsiderCount += teammates.length;
+              } else {
+                outsiderCount += 1;
+              }
             }
           });
 
-          if (outsiderCount >= event.outsider_max_participants) {
+          // Count incoming outsider participants
+          let incomingOutsiders = normalizedRegistrationType === 'team' 
+            ? (teammates?.length || 1) 
+            : 1;
+
+          if (outsiderCount + incomingOutsiders > event.outsider_max_participants) {
             return res.status(400).json({
               error: "Outsider registration quota reached",
-              details: `This event has reached its limit of ${event.outsider_max_participants} outsider participants`
+              details: `This event can accept maximum ${event.outsider_max_participants} outsider participants. Currently ${outsiderCount} are registered.`,
+              code: "OUTSIDER_QUOTA_FULL",
+              availableSpots: Math.max(0, event.outsider_max_participants - outsiderCount)
             });
           }
         }
@@ -457,7 +560,7 @@ router.post("/register", async (req, res) => {
                 gated_verify_url: getGatedVerifyUrl(gatedVisitor.id),
               };
               await update('registrations', { qr_code_data: updatedQrData }, { registration_id });
-              console.log(`🎫 Created Gated visitor pass for outsider ${participantEmail}: ${gatedVisitor.id}`);
+              console.log(`🎫 Created Gated visitor pass for outsider participant`);
             }
           } else {
             console.log(`ℹ️  No approved Gated event found for SOCIO event ${normalizedEventId} — outsider registered without gate pass`);
@@ -621,7 +724,14 @@ router.get("/registrations/:registrationId/gated-status", async (req, res) => {
 });
 
 // Delete registration
-router.delete("/registrations/:registrationId", async (req, res) => {
+// Delete registration - REQUIRES MASTER ADMIN ROLE
+router.delete("/registrations/:registrationId", (req, res, next) => {
+  return authenticateUser(req, res, () => {
+    getUserInfo()(req, res, () => {
+      requireMasterAdmin(req, res, next);
+    });
+  });
+}, async (req, res) => {
   try {
     const { registrationId } = req.params;
 

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import LoadingIndicator from "../_components/UI/LoadingIndicator";
 import CampusDetectionModal from "../_components/CampusDetectionModal";
@@ -57,6 +58,7 @@ interface UserData {
 
 const StudentProfile = () => {
   const { userData, signOut, session, isLoading } = useAuth();
+  const router = useRouter();
 
   const [student, setStudent] = useState<Student>({
     name: "",
@@ -105,7 +107,7 @@ const StudentProfile = () => {
       // Fetch registered events if possible
       const fetchRegisteredEvents = async () => {
         setIsLoadingRegisteredEvents(true);
-        const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+        const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
         try {
           // Check if we have a registration number
           if (!userData.register_number) {
@@ -177,7 +179,7 @@ const StudentProfile = () => {
 
   const handleLogout = async () => {
     await signOut();
-    window.location.href = "/";
+    router.replace("/");
   };
 
   // One-time name edit for outsiders
@@ -187,6 +189,10 @@ const StudentProfile = () => {
   const [nameEditError, setNameEditError] = useState<string | null>(null);
 
   const canEditName = (userData as any)?.organization_type === 'outsider' && !(userData as any)?.outsider_name_edit_used;
+  const isVisitorAccount =
+    (userData as any)?.organization_type === 'outsider' ||
+    (userData as any)?.is_christ_member === false ||
+    (userData as any)?.ischristmember === false;
 
   const submitNameEdit = async () => {
     setNameEditError(null);
@@ -196,7 +202,7 @@ const StudentProfile = () => {
     }
     setIsSubmittingName(true);
     try {
-      const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/api\/?$/, "");
+      const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
       const headers: any = { 'Content-Type': 'application/json' };
       const token = (session as any)?.access_token || (session as any)?.provider_token || (session as any)?.refresh_token;
       if (token) {
@@ -223,8 +229,8 @@ const StudentProfile = () => {
       // Update local display and reload to refresh auth context
       setStudent(prev => ({ ...prev, name: nameInput.trim() }));
       setIsEditingName(false);
-      // reload so AuthContext picks up updated name and outsider_name_edit_used flag
-      window.location.reload();
+      setIsSubmittingName(false);
+      router.refresh();
     } catch (error) {
       console.error('Error submitting name edit:', error);
       setNameEditError('Network error');
@@ -246,7 +252,7 @@ const StudentProfile = () => {
           <p className="text-gray-600 text-lg">Unable to load your profile.</p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => router.refresh()}
               className="px-5 py-2 bg-[#063168] text-white rounded-lg hover:bg-[#063168]/90 transition"
             >
               Try Again
@@ -299,15 +305,15 @@ const StudentProfile = () => {
             <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
               <div className="bg-[#063168] p-6 sm:p-8 flex flex-col items-center relative">
                 <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-white mb-4 border-2 border-gray-200">
-                  <div
-                    className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center overflow-hidden"
-                    style={{
-                      backgroundImage: `url(${student.profilePicture})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  >
-                    {!student.profilePicture && (
+                  <div className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                    {student.profilePicture ? (
+                      <img
+                        src={student.profilePicture}
+                        alt={`${student.name || "Student"} profile`}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
                       <span className="text-3xl text-gray-500">?</span>
                     )}
                   </div>
@@ -359,44 +365,48 @@ const StudentProfile = () => {
 
               <div className="p-4 sm:p-6">
                 <div className="space-y-3 sm:space-y-4">
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">
-                      Course
-                    </h3>
-                    <p className="text-sm sm:text-base text-gray-800 font-medium">
-                      {student.course}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">
-                      Department
-                    </h3>
-                    <p className="text-sm sm:text-base text-gray-800 font-medium">
-                      {student.department}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">
-                      Campus
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm sm:text-base text-gray-800 font-medium">
-                        {student.campus}
-                      </p>
-                      {userData?.organization_type === 'christ_member' && !userData?.campus && (
-                        <button
-                          onClick={() => setShowCampusDetect(true)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-[#154CB3] hover:bg-[#0f3d8a] text-white rounded-md transition-colors"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                          </svg>
-                          Detect Campus
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  {!isVisitorAccount && (
+                    <>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-500">
+                          Course
+                        </h3>
+                        <p className="text-sm sm:text-base text-gray-800 font-medium">
+                          {student.course}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-500">
+                          Department
+                        </h3>
+                        <p className="text-sm sm:text-base text-gray-800 font-medium">
+                          {student.department}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-500">
+                          Campus
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm sm:text-base text-gray-800 font-medium">
+                            {student.campus}
+                          </p>
+                          {userData?.organization_type === 'christ_member' && !userData?.campus && (
+                            <button
+                              onClick={() => setShowCampusDetect(true)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-[#154CB3] hover:bg-[#0f3d8a] text-white rounded-md transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                              </svg>
+                              Detect Campus
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <div>
                     <h3 className="text-xs sm:text-sm font-medium text-gray-500">
                       Email
@@ -697,8 +707,7 @@ const StudentProfile = () => {
           onComplete={(campus) => {
             setShowCampusDetect(false);
             setStudent((prev) => ({ ...prev, campus }));
-            // Force page reload to update userData in AuthContext
-            window.location.reload();
+            router.refresh();
           }}
           onDismiss={() => setShowCampusDetect(false)}
         />

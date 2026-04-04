@@ -17,18 +17,32 @@ import {
   parseJsonField,
 } from "../utils/parsers.js";
 import { v4 as uuidv4 } from "uuid";
+import { authenticateUser, getUserInfo, requireMasterAdmin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // GET all events
 router.get("/", async (req, res) => {
   try {
-    const events = await queryAll("events", {
+    const { status } = req.query;
+    const today = new Date().toISOString().split('T')[0];
+    
+    let queryOptions = {
       order: { column: "created_at", ascending: false },
-    });
+    };
+
+    if (status === "upcoming") {
+      queryOptions.filters = [
+        { column: "event_date", operator: "gte", value: today }
+      ];
+      queryOptions.order = { column: "event_date", ascending: true };
+    }
+
+    const events = await queryAll("events", queryOptions);
 
     const processedEvents = (events || []).map((event) => ({
       ...event,
+      fest: event.fest_id || null, // Map fest_id to fest for frontend compatibility
       department_access: Array.isArray(event.department_access)
         ? event.department_access
         : parseJsonField(event.department_access, []),
@@ -46,8 +60,7 @@ router.get("/", async (req, res) => {
         : parseJsonField(event.custom_fields, []),
     }));
 
-    // OPTIMIZATION: Cache for 5 minutes, allow stale content for 1 hour
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(200).json({ events: processedEvents });
   } catch (error) {
     console.error("Server error GET /api/events:", error);
@@ -75,6 +88,7 @@ router.get("/:eventId", async (req, res) => {
     // Parse JSON fields
     const processedEvent = {
       ...event,
+      fest: event.fest_id || null, // Map fest_id to fest for frontend compatibility
       department_access: Array.isArray(event.department_access)
         ? event.department_access
         : parseJsonField(event.department_access, []),
@@ -92,8 +106,7 @@ router.get("/:eventId", async (req, res) => {
         : parseJsonField(event.custom_fields, []),
     };
 
-    // OPTIMIZATION: Cache individual events for 5 minutes
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(200).json({ event: processedEvent });
   } catch (error) {
     console.error(`Server error GET /api/events/${req.params.eventId}:`, error);
@@ -101,8 +114,14 @@ router.get("/:eventId", async (req, res) => {
   }
 });
 
-// DELETE event
-router.delete("/:eventId", async (req, res) => {
+// DELETE event - REQUIRES MASTER ADMIN ROLE
+router.delete("/:eventId", (req, res, next) => {
+  return authenticateUser(req, res, () => {
+    getUserInfo()(req, res, () => {
+      requireMasterAdmin(req, res, next);
+    });
+  });
+}, async (req, res) => {
   const { eventId } = req.params;
 
   try {
@@ -239,7 +258,7 @@ router.post("/", multerUpload.fields([
         organizer_phone: eventData.organizerPhone || "",
         whatsapp_invite_link: eventData.whatsappInviteLink || "",
         organizing_dept: eventData.organizingDept,
-        fest: eventData.fest || null,
+        fest_id: eventData.fest_id || eventData.fest || null,
         registration_deadline: eventData.registrationDeadline || null,
         // Outsider registration fields
         allow_outsiders: eventData.allowOutsiders === "true" || eventData.allow_outsiders === true ? 1 : 0,
