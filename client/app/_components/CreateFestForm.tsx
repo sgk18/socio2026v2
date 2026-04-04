@@ -5,12 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext"; // Adjust path as needed
 import { departments as baseDepartments, christCampuses } from "../lib/eventFormSchema";
-import { createBrowserClient } from "@supabase/ssr";
 import toast from "react-hot-toast";
 import PublishingOverlay from "./UI/PublishingOverlay";
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const hasSupabaseConfig = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 
@@ -2399,7 +2397,7 @@ function CreateFestForm(props?: CreateFestProps) {
                   )}
                   <button
                     type="submit"
-                    disabled={isSubmitting || isNavigating || (imageFile && !supabase && !finalIsEditMode)}
+                    disabled={isSubmitting || isNavigating || (!!imageFile && !hasSupabaseConfig && !finalIsEditMode)}
                     className="w-full sm:w-auto px-6 py-2.5 bg-[#154CB3] text-white text-sm font-medium rounded-lg hover:bg-[#0f3a7a] focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                   >
                     {(isSubmitting || isUploadingImage) && (
