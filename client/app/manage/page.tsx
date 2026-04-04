@@ -266,7 +266,7 @@ const MappedEventCard = ({
         </p>
         {isArchived && archiveSource === "auto" && (
           <p className="text-xs font-semibold text-amber-700 mt-2">
-            Auto-archived after {AUTO_ARCHIVE_DAYS} days.
+            Auto-archived after event end date.
           </p>
         )}
       </div>
@@ -367,6 +367,26 @@ export default function ManageDashboard() {
     return normalizedOwners.includes(currentUserEmail);
   };
 
+  const festsCacheKey = currentUserEmail ? `manage:fests:${currentUserEmail}` : null;
+
+  useEffect(() => {
+    if (!festsCacheKey) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      const cachedRaw = window.sessionStorage.getItem(festsCacheKey);
+      if (!cachedRaw) return;
+
+      const cachedPayload = JSON.parse(cachedRaw);
+      if (Array.isArray(cachedPayload?.fests)) {
+        setFests(cachedPayload.fests);
+        setIsLoadingFests(false);
+      }
+    } catch (error) {
+      console.warn("Failed to hydrate fest cache:", error);
+    }
+  }, [festsCacheKey]);
+
   const refreshFests = useCallback(async () => {
     if (!userData?.email) {
       setFests([]);
@@ -374,14 +394,20 @@ export default function ManageDashboard() {
       return;
     }
 
-    setIsLoadingFests(true);
+    if (!authToken) {
+      return;
+    }
+
+    const hasWarmData = fests.length > 0;
+    if (!hasWarmData) {
+      setIsLoadingFests(true);
+    }
+
     try {
       const response = await fetch(`${API_URL}/api/fests?sortBy=created_at&sortOrder=desc`, {
-        headers: authToken
-          ? {
-              Authorization: `Bearer ${authToken}`,
-            }
-          : undefined,
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
         cache: "no-store",
       });
 
@@ -423,13 +449,25 @@ export default function ManageDashboard() {
       );
 
       setFests(userSpecificFests);
+
+      if (festsCacheKey && typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          festsCacheKey,
+          JSON.stringify({
+            fests: userSpecificFests,
+            cachedAt: Date.now(),
+          })
+        );
+      }
     } catch (error) {
       console.error("Error fetching fests:", error);
-      setFests([]);
+      if (!hasWarmData) {
+        setFests([]);
+      }
     } finally {
       setIsLoadingFests(false);
     }
-  }, [API_URL, authToken, userData?.email, currentUserEmail, isMasterAdmin]);
+  }, [API_URL, authToken, userData?.email, currentUserEmail, isMasterAdmin, fests.length, festsCacheKey]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -563,6 +601,13 @@ export default function ManageDashboard() {
     return !isArchived && !isPast;
   };
 
+  const matchesEventStatus = (isPast: boolean, isArchived: boolean) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "archived") return isArchived;
+    if (statusFilter === "past") return !isArchived && isPast;
+    return !isArchived && !isPast;
+  };
+
   const matchesFestStatus = (isPast: boolean, isArchived: boolean) => {
     if (statusFilter === "all") return true;
     if (statusFilter === "archived") return isArchived;
@@ -579,7 +624,7 @@ export default function ManageDashboard() {
     const matchesCampus = campusFilter === "all" || (e as any).campus_hosted_at === campusFilter;
     const eventIsPast = isPastDate(e.event_date);
     const archiveState = getEffectiveArchiveState(e);
-    return isOwnerOrMaster && matchesCampus && matchesStatus(eventIsPast, archiveState.isArchived);
+    return isOwnerOrMaster && matchesCampus && matchesEventStatus(eventIsPast, archiveState.isArchived);
   });
 
   // Filter Grids

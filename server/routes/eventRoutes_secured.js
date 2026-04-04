@@ -109,23 +109,24 @@ const normalizeFestReference = (value) => {
   return normalized;
 };
 
-const AUTO_ARCHIVE_DAYS = (() => {
-  const parsedDays = Number.parseInt(process.env.EVENT_AUTO_ARCHIVE_DAYS || "15", 10);
-  return Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 15;
-})();
-
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-
 const getValidDate = (value) => {
   if (!value) return null;
   const parsedDate = new Date(value);
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
-const isAutoArchivedByDate = (eventDate) => {
-  const parsedEventDate = getValidDate(eventDate);
-  if (!parsedEventDate) return false;
-  return Date.now() - parsedEventDate.getTime() >= AUTO_ARCHIVE_DAYS * DAY_IN_MS;
+const getTodayStart = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+};
+
+const shouldAutoArchiveEvent = (event) => {
+  const parsedEndDate = getValidDate(event?.end_date || event?.event_date);
+  if (!parsedEndDate) return false;
+
+  parsedEndDate.setHours(0, 0, 0, 0);
+  return parsedEndDate.getTime() <= getTodayStart().getTime();
 };
 
 const asBoolean = (value) => {
@@ -134,7 +135,7 @@ const asBoolean = (value) => {
 
 const deriveArchiveState = (event) => {
   const manualArchived = asBoolean(event?.is_archived);
-  const autoArchived = isAutoArchivedByDate(event?.event_date);
+  const autoArchived = shouldAutoArchiveEvent(event);
 
   return {
     is_archived: manualArchived,
@@ -152,6 +153,83 @@ const isMissingArchiveColumnsError = (error) => {
     (message.includes("column") &&
       (message.includes("is_archived") || message.includes("archived_at") || message.includes("archived_by")))
   );
+};
+
+const persistAutoArchivedEvents = async (events) => {
+  const eventList = Array.isArray(events) ? events : [];
+  const nowIso = new Date().toISOString();
+
+  const candidates = eventList.filter((event) => {
+    if (asBoolean(event?.is_archived)) return false;
+    return shouldAutoArchiveEvent(event);
+  });
+
+  if (candidates.length === 0) {
+    return eventList;
+  }
+
+  const archivedEventIds = new Set();
+
+  for (const event of candidates) {
+    const eventId = event?.event_id;
+    if (!eventId) continue;
+
+    try {
+      await update(
+        "events",
+        {
+          is_archived: true,
+          archived_at: nowIso,
+          archived_by: event?.archived_by || "system:auto_end_date",
+          updated_at: nowIso,
+        },
+        { event_id: eventId }
+      );
+      archivedEventIds.add(eventId);
+      continue;
+    } catch (error) {
+      const code = String(error?.code || "");
+      const message = String(error?.message || "").toLowerCase();
+      const missingArchivedByColumn = code === "42703" && message.includes("archived_by");
+
+      if (!missingArchivedByColumn) {
+        console.warn(`[AutoArchive] Failed to auto-archive ${eventId}:`, error?.message || error);
+        continue;
+      }
+    }
+
+    try {
+      await update(
+        "events",
+        {
+          is_archived: true,
+          archived_at: nowIso,
+          updated_at: nowIso,
+        },
+        { event_id: eventId }
+      );
+      archivedEventIds.add(eventId);
+    } catch (fallbackError) {
+      console.warn(`[AutoArchive] Fallback auto-archive failed for ${eventId}:`, fallbackError?.message || fallbackError);
+    }
+  }
+
+  if (archivedEventIds.size === 0) {
+    return eventList;
+  }
+
+  return eventList.map((event) => {
+    if (!archivedEventIds.has(event?.event_id)) {
+      return event;
+    }
+
+    return {
+      ...event,
+      is_archived: true,
+      archived_at: event?.archived_at || nowIso,
+      archived_by: event?.archived_by || "system:auto_end_date",
+    };
+  });
 };
 
 
@@ -173,6 +251,7 @@ router.get("/", async (req, res) => {
     }
 
     const events = await queryAll("events", queryOptions);
+    const eventsWithAutoArchive = await persistAutoArchivedEvents(events);
 
     // Build registration counts once so both sorting and UI display use the same value.
     const registrations = await queryAll("registrations", { select: "event_id" });
@@ -184,7 +263,7 @@ router.get("/", async (req, res) => {
     });
 
     // Parse JSON fields for each event
-    let processedEvents = events.map((event) => {
+    let processedEvents = eventsWithAutoArchive.map((event) => {
       const archiveState = deriveArchiveState(event);
       return {
         ...event,
