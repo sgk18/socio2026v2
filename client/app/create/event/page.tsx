@@ -139,7 +139,12 @@ export default function CreateEventPage() {
     appendIfExists("venue", dataFromHookForm.location);
 
     appendIfExists("registration_fee", dataFromHookForm.registrationFee);
-    appendIfExists("max_participants", dataFromHookForm.maxParticipants);
+    appendIfExists(
+      "max_participants",
+      dataFromHookForm.isTeamEvent
+        ? dataFromHookForm.maxParticipants
+        : "1"
+    );
 
     appendIfExists("organizer_email", dataFromHookForm.contactEmail);
     appendIfExists("organizer_phone", dataFromHookForm.contactPhone);

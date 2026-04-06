@@ -106,6 +106,7 @@ export const eventFormSchema = z
         "Invalid fee format. Enter a number (e.g., 0, 50, 100.50)"
       )
       .transform((val) => (val === "" ? undefined : val)),
+    isTeamEvent: z.boolean().default(false),
     maxParticipants: z
       .string()
       .optional()
@@ -184,6 +185,16 @@ export const eventFormSchema = z
     eventHeads: z.array(z.string().email("Invalid email format")).optional(),
     customFields: z.array(customFieldSchema).optional(),
   })
+  .refine(
+    (data) => {
+      if (!data.isTeamEvent) return true;
+      return !!data.maxParticipants && Number(data.maxParticipants) > 1;
+    },
+    {
+      message: "For team events, max participants per team must be at least 2",
+      path: ["maxParticipants"],
+    }
+  )
   .refine(
     (data) => {
       if (data.eventDate && data.endDate) {

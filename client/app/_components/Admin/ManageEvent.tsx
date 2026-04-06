@@ -783,6 +783,7 @@ export default function EventForm({
       registrationDeadline: "",
       location: "",
       registrationFee: "",
+      isTeamEvent: false,
       maxParticipants: "",
       contactEmail: "",
       contactPhone: "",
@@ -820,6 +821,10 @@ export default function EventForm({
     ) {
       const transformedDefaults = {
         ...defaultValues,
+        isTeamEvent:
+          typeof defaultValues.isTeamEvent === "boolean"
+            ? defaultValues.isTeamEvent
+            : Number(defaultValues.maxParticipants || 1) > 1,
         department: Array.isArray(defaultValues.department)
           ? defaultValues.department
           : [],
@@ -835,6 +840,15 @@ export default function EventForm({
 
   const watchedEventDate = useWatch({ control, name: "eventDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
+  const watchedIsTeamEvent = useWatch({ control, name: "isTeamEvent" });
+
+  useEffect(() => {
+    if (!watchedIsTeamEvent) {
+      setValue("maxParticipants", "1", { shouldValidate: false });
+    } else if (!watch("maxParticipants")) {
+      setValue("maxParticipants", "2", { shouldValidate: false });
+    }
+  }, [watchedIsTeamEvent, setValue, watch]);
 
   useEffect(() => {
     if (watchedEventDate && !isEditMode && watch("eventDate")) {
@@ -1651,16 +1665,44 @@ export default function EventForm({
                     error={errors.registrationFee}
                     placeholder="0 for free event"
                   />
-                  <InputField
-                    label="Max participants / team:"
-                    name="maxParticipants"
-                    type="text"
-                    inputMode="numeric"
-                    register={register}
-                    error={errors.maxParticipants}
-                    placeholder="e.g., 1 (individual), 5 (team)"
-                  />
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between h-[46px] sm:h-[48px]">
+                    <label
+                      htmlFor="isTeamEvent"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Team event
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <Controller
+                        name="isTeamEvent"
+                        control={control}
+                        render={({ field }) => (
+                          <input
+                            type="checkbox"
+                            id="isTeamEvent"
+                            checked={!!field.value}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                        )}
+                      />
+                      <div className={toggleTrackClass}></div>
+                    </label>
+                  </div>
                 </div>
+                {watchedIsTeamEvent && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+                    <InputField
+                      label="Max participants / team:"
+                      name="maxParticipants"
+                      type="text"
+                      inputMode="numeric"
+                      register={register}
+                      error={errors.maxParticipants}
+                      placeholder="e.g., 2, 3, 5"
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                   <InputField
                     label="Contact email:"
