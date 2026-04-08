@@ -997,12 +997,9 @@ export default function EventForm({
       setValue("maxParticipants", "1", { shouldValidate: false });
       setValue("minParticipants", "1", { shouldValidate: false });
     } else {
-      if (!watch("maxParticipants")) {
-        setValue("maxParticipants", "2", { shouldValidate: false });
-      }
-      if (!watch("minParticipants")) {
-        setValue("minParticipants", "2", { shouldValidate: false });
-      }
+      // Auto-fill to 2 when team event is enabled
+      setValue("maxParticipants", watch("maxParticipants") || "2", { shouldValidate: false });
+      setValue("minParticipants", watch("minParticipants") || "2", { shouldValidate: false });
     }
   }, [watchedIsTeamEvent, setValue, watch]);
 
@@ -1614,91 +1611,107 @@ export default function EventForm({
                       </label>
                     </div>
                     {watchedIsTeamEvent && (
-                      <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                        <div className="flex-1 sm:flex-none">
-                          <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                            Min
-                          </label>
-                          <Controller
-                            name="minParticipants"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                              <input
-                                {...field}
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="e.g., 2"
-                                className={`w-full px-3 py-2 text-sm rounded-lg border transition-all ${
-                                  fieldState.error
-                                    ? "border-red-500 focus:ring-red-500"
-                                    : "border-gray-300 focus:ring-[#154CB3]"
-                                } focus:outline-none focus:ring-1 focus:border-transparent`}
-                              />
+                      <div className="flex flex-col gap-3 w-full">
+                        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                          <div className="flex-1 sm:flex-none">
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                              Min
+                            </label>
+                            <Controller
+                              name="minParticipants"
+                              control={control}
+                              render={({ field, fieldState }) => (
+                                <input
+                                  {...field}
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="e.g., 2"
+                                  className={`w-full px-3 py-2 text-sm rounded-lg border transition-all ${
+                                    fieldState.error
+                                      ? "border-red-500 focus:ring-red-500"
+                                      : "border-gray-300 focus:ring-[#154CB3]"
+                                  } focus:outline-none focus:ring-1 focus:border-transparent`}
+                                />
+                              )}
+                              rules={{
+                                validate: (value) => {
+                                  if (!watchedIsTeamEvent) return true;
+                                  const minRaw = String(value || "").trim();
+                                  if (!minRaw) return "Min is required";
+                                  if (!/^\d+$/.test(minRaw)) return "Enter a number";
+                                  const minValue = Number(minRaw);
+                                  if (minValue < 2) return "Min 2 for teams";
+                                  const maxRaw = String(watchedMaxParticipants || "").trim();
+                                  if (maxRaw && /^\d+$/.test(maxRaw) && minValue > Number(maxRaw)) {
+                                    return "Min ≤ Max";
+                                  }
+                                  return true;
+                                },
+                              }}
+                            />
+                            {errors.minParticipants && (
+                              <p className="text-red-500 text-xs mt-1">
+                                {errors.minParticipants.message}
+                              </p>
                             )}
-                            rules={{
-                              validate: (value) => {
-                                if (!watchedIsTeamEvent) return true;
-                                const minRaw = String(value || "").trim();
-                                if (!minRaw) return "Min is required";
-                                if (!/^\d+$/.test(minRaw)) return "Enter a number";
-                                const minValue = Number(minRaw);
-                                if (minValue < 2) return "Min 2 for teams";
-                                const maxRaw = String(watchedMaxParticipants || "").trim();
-                                if (maxRaw && /^\d+$/.test(maxRaw) && minValue > Number(maxRaw)) {
-                                  return "Min ≤ Max";
-                                }
-                                return true;
-                              },
-                            }}
-                          />
-                          {errors.minParticipants && (
-                            <p className="text-red-500 text-xs mt-1">
-                              {errors.minParticipants.message}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex-1 sm:flex-none">
-                          <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                            Max
-                          </label>
-                          <Controller
-                            name="maxParticipants"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                              <input
-                                {...field}
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="e.g., 5"
-                                className={`w-full px-3 py-2 text-sm rounded-lg border transition-all ${
-                                  fieldState.error
-                                    ? "border-red-500 focus:ring-red-500"
-                                    : "border-gray-300 focus:ring-[#154CB3]"
-                                } focus:outline-none focus:ring-1 focus:border-transparent`}
-                              />
+                          </div>
+                          <div className="flex-1 sm:flex-none">
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                              Max
+                            </label>
+                            <Controller
+                              name="maxParticipants"
+                              control={control}
+                              render={({ field, fieldState }) => (
+                                <input
+                                  {...field}
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="e.g., 5"
+                                  className={`w-full px-3 py-2 text-sm rounded-lg border transition-all ${
+                                    fieldState.error
+                                      ? "border-red-500 focus:ring-red-500"
+                                      : "border-gray-300 focus:ring-[#154CB3]"
+                                  } focus:outline-none focus:ring-1 focus:border-transparent`}
+                                />
+                              )}
+                              rules={{
+                                validate: (value) => {
+                                  if (!watchedIsTeamEvent) return true;
+                                  const maxRaw = String(value || "").trim();
+                                  if (!maxRaw) return "Max is required";
+                                  if (!/^\d+$/.test(maxRaw)) return "Enter a number";
+                                  const maxValue = Number(maxRaw);
+                                  if (maxValue < 2) return "Max 2 for teams";
+                                  const minRaw = String(watchedMinParticipants || "").trim();
+                                  if (minRaw && /^\d+$/.test(minRaw) && maxValue < Number(minRaw)) {
+                                    return "Max ≥ Min";
+                                  }
+                                  return true;
+                                },
+                              }}
+                            />
+                            {errors.maxParticipants && (
+                              <p className="text-red-500 text-xs mt-1">
+                                {errors.maxParticipants.message}
+                              </p>
                             )}
-                            rules={{
-                              validate: (value) => {
-                                if (!watchedIsTeamEvent) return true;
-                                const maxRaw = String(value || "").trim();
-                                if (!maxRaw) return "Max is required";
-                                if (!/^\d+$/.test(maxRaw)) return "Enter a number";
-                                const maxValue = Number(maxRaw);
-                                if (maxValue < 2) return "Max 2 for teams";
-                                const minRaw = String(watchedMinParticipants || "").trim();
-                                if (minRaw && /^\d+$/.test(minRaw) && maxValue < Number(minRaw)) {
-                                  return "Max ≥ Min";
-                                }
-                                return true;
-                              },
-                            }}
-                          />
-                          {errors.maxParticipants && (
-                            <p className="text-red-500 text-xs mt-1">
-                              {errors.maxParticipants.message}
-                            </p>
-                          )}
+                          </div>
                         </div>
+                        
+                        {/* Preview Display */}
+                        {watchedMinParticipants && watchedMaxParticipants && (
+                          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-900 font-medium">
+                              Preview: <span className="text-[#154CB3]">
+                                {watchedMinParticipants === watchedMaxParticipants 
+                                  ? `${watchedMinParticipants} member${watchedMinParticipants !== '1' ? 's' : ''}`
+                                  : `${watchedMinParticipants}-${watchedMaxParticipants} members`
+                                }
+                              </span>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1893,6 +1906,24 @@ export default function EventForm({
                   </div>
                 </div>
 
+                <datalist id="organizing-dept-list-event">
+                  {departmentOptions
+                    .filter((d) => d.value !== "all_departments")
+                    .map((dept) => (
+                      <option key={dept.value} value={dept.label} />
+                    ))}
+                </datalist>
+
+                <InputField
+                  label="Organizing department / committee:"
+                  name="organizingDept"
+                  list="organizing-dept-list-event"
+                  register={register}
+                  error={errors.organizingDept}
+                  required
+                  placeholder="e.g., Department of Computer Science /  Student Welfare Organization"
+                />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                   <MultiSelectDropdown
                     name="department"
@@ -1913,24 +1944,6 @@ export default function EventForm({
                     required
                   />
                 </div>
-
-                <datalist id="organizing-dept-list-event">
-                  {departmentOptions
-                    .filter((d) => d.value !== "all_departments")
-                    .map((dept) => (
-                      <option key={dept.value} value={dept.label} />
-                    ))}
-                </datalist>
-
-                <InputField
-                  label="Organizing department / committee:"
-                  name="organizingDept"
-                  list="organizing-dept-list-event"
-                  register={register}
-                  error={errors.organizingDept}
-                  required
-                  placeholder="e.g., Department of Computer Science /  Student Welfare Organization"
-                />
 
                 <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 sm:py-3.5">
                   <div className="flex items-center justify-between gap-4">

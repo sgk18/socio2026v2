@@ -147,6 +147,26 @@ const parseYYYYMMDD = (dateString: string): Date | null => {
   return null;
 };
 
+const deriveFestStatusFromDates = (
+  openingDateValue: string,
+  closingDateValue: string
+): "upcoming" | "ongoing" | "past" => {
+  const openingDate = parseYYYYMMDD(openingDateValue);
+  const closingDate = parseYYYYMMDD(closingDateValue) || openingDate;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (openingDate && today < openingDate) {
+    return "upcoming";
+  }
+
+  if (closingDate && today > closingDate) {
+    return "past";
+  }
+
+  return "ongoing";
+};
+
 interface CustomDateInputProps {
   id: string;
   label: string;
