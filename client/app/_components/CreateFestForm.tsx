@@ -995,12 +995,23 @@ function CreateFestForm(props?: CreateFestProps) {
         "eventHead" in value
       ) {
         const { index, eventHead } = value;
-        if (eventHead.trim() === "") delete newErrors[`eventHead_${index}`];
-        else if (!emailRegex.test(eventHead))
+        const expiryValue = formData.eventHeads[index]?.expiresAt || null;
+
+        if (eventHead.trim() === "") {
+          delete newErrors[`eventHead_${index}`];
+          delete newErrors[`eventHeadExpiry_${index}`];
+        } else if (!emailRegex.test(eventHead))
           newErrors[`eventHead_${index}`] = "Invalid email format.";
         else if (eventHead.length > 100)
           newErrors[`eventHead_${index}`] = "Max 100 chars.";
         else delete newErrors[`eventHead_${index}`];
+
+        if (eventHead.trim() !== "" && !expiryValue) {
+          newErrors[`eventHeadExpiry_${index}`] =
+            "Expiry date and time is required.";
+        } else {
+          delete newErrors[`eventHeadExpiry_${index}`];
+        }
       } else {
         switch (name) {
           case "title":
@@ -1349,6 +1360,11 @@ function CreateFestForm(props?: CreateFestProps) {
       } else if (head.email.length > 100) {
         currentValidationErrors[`eventHead_${index}`] = "Max 100 chars.";
       }
+
+      if (head.email.trim() !== "" && !head.expiresAt) {
+        currentValidationErrors[`eventHeadExpiry_${index}`] =
+          "Expiry date and time is required.";
+      }
     });
 
     if (!imageFile && !isEditMode && !existingImageFileUrl) {
@@ -1657,6 +1673,17 @@ function CreateFestForm(props?: CreateFestProps) {
     const newEventHeads = [...formData.eventHeads];
     newEventHeads[index] = { ...newEventHeads[index], expiresAt: value };
     setFormData((prev) => ({ ...prev, eventHeads: newEventHeads }));
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      const hasEmail = newEventHeads[index].email.trim() !== "";
+      if (hasEmail && !value) {
+        next[`eventHeadExpiry_${index}`] = "Expiry date and time is required.";
+      } else {
+        delete next[`eventHeadExpiry_${index}`];
+      }
+      return next;
+    });
   };
   const handleEventHeadBlur = (index: number) =>
     validateField(`eventHead_${index}`, {
@@ -1678,6 +1705,7 @@ function CreateFestForm(props?: CreateFestProps) {
     setErrors((prev) => {
       const newE = { ...prev };
       delete newE[`eventHead_${index}`];
+      delete newE[`eventHeadExpiry_${index}`];
       return newE;
     });
   };
@@ -2292,7 +2320,7 @@ function CreateFestForm(props?: CreateFestProps) {
                           Event heads (optional, max 5)
                         </h3>
                         <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                          Assign organizer access with optional expiry.
+                          Assign organizer access with mandatory expiry.
                         </p>
                       </div>
                     </div>
@@ -2366,7 +2394,7 @@ function CreateFestForm(props?: CreateFestProps) {
                                 htmlFor={`event-head-expiration-${index}`}
                                 className="block text-xs font-semibold text-gray-600 mb-1.5"
                               >
-                                Organizer access expiry (optional)
+                                Organizer access expiry <span className="text-red-500">*</span>
                               </label>
                               <input
                                 id={`event-head-expiration-${index}`}
@@ -2378,9 +2406,15 @@ function CreateFestForm(props?: CreateFestProps) {
                                     e.target.value ? new Date(e.target.value).toISOString() : null
                                   )
                                 }
+                                onBlur={() => handleEventHeadBlur(index)}
                                 aria-label={`Event head ${index + 1} expiration date and time`}
                                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent bg-white"
                               />
+                              {errors[`eventHeadExpiry_${index}`] && (
+                                <p className="text-red-500 text-xs mt-1">
+                                  {errors[`eventHeadExpiry_${index}`]}
+                                </p>
+                              )}
                             </div>
                             <div className="flex flex-wrap gap-1.5 lg:justify-end">
                               {["1 week", "1 month", "3 months"].map((preset) => (
@@ -2416,8 +2450,8 @@ function CreateFestForm(props?: CreateFestProps) {
                               Access expires: {new Date(eventHead.expiresAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                             </p>
                           ) : (
-                            <p className="text-xs text-amber-600 mt-2">
-                              No expiration set. Access remains active until removed.
+                            <p className="text-xs text-red-600 mt-2">
+                              Expiry is required for each event head.
                             </p>
                           )}
                         </div>

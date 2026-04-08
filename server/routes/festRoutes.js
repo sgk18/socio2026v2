@@ -586,10 +586,28 @@ router.post(
       // Basic validation
       const title = festData.festTitle || festData.title;
       const dept = festData.organizingDept || festData.organizing_dept;
+      const eventHeadsInput = pickDefined(festData.eventHeads, festData.event_heads);
+      const eventHeads = Array.isArray(eventHeadsInput)
+        ? eventHeadsInput
+        : parseJsonLikeField(eventHeadsInput, []);
+      const normalizedEventHeads = Array.isArray(eventHeads) ? eventHeads : [];
 
       if (!title || !dept) {
         console.log("Validation failed. Received:", JSON.stringify(festData));
         return res.status(400).json({ error: "Fest title and organizing department are required" });
+      }
+
+      const missingHeadExpiry = normalizedEventHeads.some((head) => {
+        if (!head || typeof head !== "object" || Array.isArray(head)) return false;
+        const email = String(head.email || "").trim();
+        if (!email) return false;
+        return !head.expiresAt;
+      });
+
+      if (missingHeadExpiry) {
+        return res.status(400).json({
+          error: "Each event head must have an expiry date and time.",
+        });
       }
 
       // Generate slug-based ID from title
@@ -632,7 +650,7 @@ router.post(
         category: festData.category || "",
         contact_email: festData.contactEmail || festData.contact_email || "",
         contact_phone: festData.contactPhone || festData.contact_phone || "",
-        event_heads: festData.eventHeads || festData.event_heads || [],
+        event_heads: normalizedEventHeads,
         created_by: req.userInfo?.email,
         auth_uuid: req.userId,
         // New enhanced fest fields
@@ -657,8 +675,7 @@ router.post(
       const createdFest = inserted?.[0];
 
       // Grant organiser access to event heads with expiration dates
-      const eventHeads = festData.eventHeads || festData.event_heads || [];
-      for (const head of eventHeads) {
+      for (const head of normalizedEventHeads) {
         if (head && head.email) {
           try {
             // Find the user by email
@@ -755,6 +772,29 @@ router.put(
       const allowedCampusesInput = pickDefined(updateData.allowed_campuses, updateData.allowedCampuses);
       const departmentHostedAtInput = pickDefined(updateData.department_hosted_at, updateData.departmentHostedAt);
       const allowOutsidersInput = pickDefined(updateData.allow_outsiders, updateData.allowOutsiders);
+      const parsedEventHeadsInput =
+        eventHeadsInput !== undefined
+          ? parseJsonLikeField(eventHeadsInput, [])
+          : undefined;
+      const normalizedEventHeadsInput = Array.isArray(parsedEventHeadsInput)
+        ? parsedEventHeadsInput
+        : [];
+      const hasEventHeadsUpdate = eventHeadsInput !== undefined;
+
+      if (hasEventHeadsUpdate) {
+        const missingHeadExpiry = normalizedEventHeadsInput.some((head) => {
+          if (!head || typeof head !== "object" || Array.isArray(head)) return false;
+          const email = String(head.email || "").trim();
+          if (!email) return false;
+          return !head.expiresAt;
+        });
+
+        if (missingHeadExpiry) {
+          return res.status(400).json({
+            error: "Each event head must have an expiry date and time.",
+          });
+        }
+      }
       const incomingOpeningDate = pickDefined(updateData.opening_date, updateData.openingDate);
       const incomingClosingDate = pickDefined(updateData.closing_date, updateData.closingDate);
       const resolvedOpeningDate = incomingOpeningDate !== undefined ? incomingOpeningDate : existingFest.opening_date;
@@ -788,7 +828,7 @@ router.put(
         ["contact_email", updateData.contact_email ?? updateData.contactEmail],
         ["contact_phone", updateData.contact_phone ?? updateData.contactPhone],
         ["department_access", parseJsonLikeField(departmentAccessInput, [])],
-        ["event_heads", parseJsonLikeField(eventHeadsInput, [])],
+        ["event_heads", hasEventHeadsUpdate ? normalizedEventHeadsInput : undefined],
         ["custom_fields", parseJsonLikeField(customFieldsInput, [])],
         // New enhanced fest fields - parse JSON safely
         ["venue", updateData.venue],
@@ -889,7 +929,7 @@ router.put(
 
       // Grant organiser access to event heads with expiration dates
       try {
-        const eventHeads = updateData.eventHeads || updateData.event_heads || [];
+        const eventHeads = hasEventHeadsUpdate ? normalizedEventHeadsInput : [];
         console.log(`[EventHeads] Processing ${eventHeads.length} event heads`);
         
         for (const head of eventHeads) {
