@@ -97,6 +97,55 @@ const normalizeJsonField = (value) => {
   return [];
 };
 
+const normalizeStringListField = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => typeof item === "string" || typeof item === "number")
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item) => typeof item === "string" || typeof item === "number")
+          .map((item) => String(item).trim())
+          .filter(Boolean);
+      }
+
+      if (typeof parsed === "string" || typeof parsed === "number") {
+        const parsedValue = String(parsed).trim();
+        return parsedValue ? [parsedValue] : [];
+      }
+    } catch {
+      if (trimmed.includes(",")) {
+        return trimmed
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      return [trimmed];
+    }
+  }
+
+  if (typeof value === "number") {
+    return [String(value)];
+  }
+
+  return [];
+};
+
+const normalizeSingleStringField = (value) => {
+  const normalizedList = normalizeStringListField(value);
+  return normalizedList[0] || "";
+};
+
 const normalizeFestReference = (value) => {
   if (value === undefined || value === null) return null;
   const normalized = String(value).trim();
@@ -286,6 +335,8 @@ router.get("/", optionalAuth, checkRoleExpiration, async (req, res) => {
         schedule: normalizeJsonField(event.schedule),
         prizes: normalizeJsonField(event.prizes),
         custom_fields: normalizeJsonField(event.custom_fields),
+        campus_hosted_at: normalizeSingleStringField(event.campus_hosted_at),
+        allowed_campuses: normalizeStringListField(event.allowed_campuses),
         registration_count: eventRegistrationCounts[event.event_id] || 0,
         ...archiveState,
       };
@@ -425,6 +476,8 @@ router.get("/:eventId", async (req, res) => {
       schedule: normalizeJsonField(event.schedule),
       prizes: normalizeJsonField(event.prizes),
       custom_fields: normalizeJsonField(event.custom_fields),
+      campus_hosted_at: normalizeSingleStringField(event.campus_hosted_at),
+      allowed_campuses: normalizeStringListField(event.allowed_campuses),
       ...archiveState,
     };
 
@@ -587,11 +640,12 @@ router.post(
       const parsedSchedule = parseJsonField(schedule, []);
       const parsedPrizes = parseJsonField(prizes, []);
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
-      const campusHostedAt =
-        String(req.body.campus_hosted_at || req.body.campusHostedAt || "").trim();
-      const parsedAllowedCampuses = Array.isArray(req.body.allowed_campuses)
-        ? req.body.allowed_campuses
-        : parseJsonField(req.body.allowed_campuses, []);
+      const campusHostedAt = normalizeSingleStringField(
+        req.body.campus_hosted_at || req.body.campusHostedAt || ""
+      );
+      const parsedAllowedCampuses = normalizeStringListField(
+        req.body.allowed_campuses
+      );
 
       if (!campusHostedAt) {
         return res.status(400).json({
@@ -1037,11 +1091,12 @@ router.put(
       const parsedSchedule = parseJsonField(schedule, []);
       const parsedPrizes = parseJsonField(prizes, []);
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
-      const campusHostedAt =
-        String(req.body.campus_hosted_at || req.body.campusHostedAt || "").trim();
-      const parsedAllowedCampuses = Array.isArray(req.body.allowed_campuses)
-        ? req.body.allowed_campuses
-        : parseJsonField(req.body.allowed_campuses, []);
+      const campusHostedAt = normalizeSingleStringField(
+        req.body.campus_hosted_at || req.body.campusHostedAt || ""
+      );
+      const parsedAllowedCampuses = normalizeStringListField(
+        req.body.allowed_campuses
+      );
 
       if (!campusHostedAt) {
         return res.status(400).json({

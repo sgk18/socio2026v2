@@ -171,6 +171,56 @@ export default function EditEventPage() {
             return stringArray.map((item) => ({ value: item }));
           };
 
+          const normalizeStringList = (items: any): string[] => {
+            if (Array.isArray(items)) {
+              return items
+                .filter(
+                  (item): item is string | number =>
+                    typeof item === "string" || typeof item === "number"
+                )
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+            }
+
+            if (typeof items === "string") {
+              const trimmed = items.trim();
+              if (!trimmed) return [];
+
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) {
+                  return parsed
+                    .filter(
+                      (item): item is string | number =>
+                        typeof item === "string" || typeof item === "number"
+                    )
+                    .map((item) => String(item).trim())
+                    .filter(Boolean);
+                }
+
+                if (typeof parsed === "string" || typeof parsed === "number") {
+                  const parsedValue = String(parsed).trim();
+                  return parsedValue ? [parsedValue] : [];
+                }
+              } catch {
+                if (trimmed.includes(",")) {
+                  return trimmed
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+                }
+
+                return [trimmed];
+              }
+            }
+
+            if (typeof items === "number") {
+              return [String(items)];
+            }
+
+            return [];
+          };
+
           const transformScheduleForForm = (
             schedule: any
           ): ScheduleItemType[] => {
@@ -231,8 +281,8 @@ export default function EditEventPage() {
             allowOutsiders: data.allow_outsiders || false,
             outsiderRegistrationFee: data.outsider_registration_fee?.toString() ?? "",
             outsiderMaxParticipants: data.outsider_max_participants?.toString() ?? "",
-            campusHostedAt: data.campus_hosted_at || "",
-            allowedCampuses: data.allowed_campuses || [],
+            campusHostedAt: normalizeStringList(data.campus_hosted_at)[0] || "",
+            allowedCampuses: normalizeStringList(data.allowed_campuses),
             scheduleItems: transformScheduleForForm(data.schedule),
             rules: transformSimpleListForForm(data.rules),
             prizes: transformSimpleListForForm(data.prizes),
@@ -333,6 +383,41 @@ export default function EditEventPage() {
     formData: EventFormData,
     options?: { archiveAsDraft?: boolean }
   ) => {
+    const normalizeStringArrayPayload = (value: unknown): string[] => {
+      if (Array.isArray(value)) {
+        return value
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed
+              .filter((item): item is string => typeof item === "string")
+              .map((item) => item.trim())
+              .filter(Boolean);
+          }
+        } catch {
+          if (trimmed.includes(",")) {
+            return trimmed
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
+          }
+        }
+
+        return [trimmed];
+      }
+
+      return [];
+    };
+
     const archiveAsDraft = Boolean(options?.archiveAsDraft);
     const publishFromDraft = !archiveAsDraft && isDraft;
     const shouldSendPublishNotifications =
@@ -416,8 +501,12 @@ export default function EditEventPage() {
     payload.append("outsider_max_participants", formData.outsiderMaxParticipants || "");
 
     // Campus fields
-    payload.append("campus_hosted_at", formData.campusHostedAt || "");
-    payload.append("allowed_campuses", JSON.stringify(formData.allowedCampuses || []));
+    const normalizedCampusHostedAt = String(formData.campusHostedAt || "").trim();
+    const normalizedAllowedCampuses = normalizeStringArrayPayload(
+      formData.allowedCampuses
+    );
+    payload.append("campus_hosted_at", normalizedCampusHostedAt);
+    payload.append("allowed_campuses", JSON.stringify(normalizedAllowedCampuses));
 
     // Custom fields
     payload.append("custom_fields", JSON.stringify(formData.customFields || []));

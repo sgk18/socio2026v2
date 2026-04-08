@@ -8,6 +8,7 @@ import {
   ControllerRenderProps,
   useWatch,
   Control,
+  FieldErrors,
 } from "react-hook-form";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -873,6 +874,97 @@ const normalizeFestOptionLabel = (fest: any): string => {
   return normalized || "Untitled Fest";
 };
 
+const EVENT_ERROR_SCROLL_ORDER: string[] = [
+  "eventTitle",
+  "eventDate",
+  "endDate",
+  "registrationDeadline",
+  "eventTime",
+  "festEvent",
+  "isTeamEvent",
+  "minParticipants",
+  "maxParticipants",
+  "detailedDescription",
+  "allowOutsiders",
+  "outsiderRegistrationFee",
+  "outsiderMaxParticipants",
+  "campusHostedAt",
+  "allowedCampuses",
+  "organizingDept",
+  "department",
+  "category",
+  "provideClaims",
+  "imageFile",
+  "bannerFile",
+  "pdfFile",
+  "whatsappLink",
+  "location",
+  "registrationFee",
+  "contactEmail",
+  "contactPhone",
+  "rules",
+  "scheduleItems",
+  "prizes",
+];
+
+const EVENT_ERROR_SELECTOR_MAP: Record<string, string> = {
+  eventTitle: "#eventTitle",
+  eventDate: "#eventDate",
+  endDate: "#endDate",
+  registrationDeadline: "#registrationDeadline",
+  eventTime: "#eventTime",
+  festEvent: "#festEvent",
+  isTeamEvent: "#isTeamEvent",
+  minParticipants: "#minParticipants",
+  maxParticipants: "#maxParticipants",
+  detailedDescription: "#detailedDescription",
+  allowOutsiders: "#allowOutsiders",
+  outsiderRegistrationFee: "#outsiderRegistrationFee",
+  outsiderMaxParticipants: "#outsiderMaxParticipants",
+  campusHostedAt: "#campusHostedAt",
+  allowedCampuses: "#allowedCampuses-group",
+  organizingDept: "#organizingDept",
+  department: "#department",
+  category: "#category",
+  provideClaims: "#provideClaims",
+  imageFile: "#imageFile",
+  bannerFile: "#bannerFile",
+  pdfFile: "#pdfFile",
+  whatsappLink: "#whatsappLink",
+  location: "#location",
+  registrationFee: "#registrationFee",
+  contactEmail: "#contactEmail",
+  contactPhone: "#contactPhone",
+};
+
+const getFirstErrorPath = (errorNode: unknown, prefix = ""): string | null => {
+  if (!errorNode || typeof errorNode !== "object") return null;
+
+  if (Array.isArray(errorNode)) {
+    for (let index = 0; index < errorNode.length; index += 1) {
+      const nestedPath = getFirstErrorPath(
+        errorNode[index],
+        prefix ? `${prefix}.${index}` : String(index)
+      );
+      if (nestedPath) return nestedPath;
+    }
+    return null;
+  }
+
+  const nodeRecord = errorNode as Record<string, unknown>;
+  if (typeof nodeRecord.message === "string" || typeof nodeRecord.type === "string") {
+    return prefix || null;
+  }
+
+  for (const key of Object.keys(nodeRecord)) {
+    const value = nodeRecord[key];
+    const nestedPath = getFirstErrorPath(value, prefix ? `${prefix}.${key}` : key);
+    if (nestedPath) return nestedPath;
+  }
+
+  return null;
+};
+
 export default function EventForm({
   onSubmit,
   onSubmitDraft,
@@ -978,6 +1070,86 @@ export default function EventForm({
     },
   });
 
+  const scrollToFirstValidationError = React.useCallback(
+    (formErrors: FieldErrors<EventFormData>) => {
+      const errorsRecord = formErrors as Record<string, unknown>;
+      const prioritizedKey = EVENT_ERROR_SCROLL_ORDER.find(
+        (fieldKey) => Boolean(errorsRecord[fieldKey])
+      );
+      const firstErrorPath = getFirstErrorPath(formErrors);
+      const fallbackKey = firstErrorPath ? firstErrorPath.split(".")[0] : null;
+      const targetKey = prioritizedKey || fallbackKey;
+
+      const selectors: string[] = [];
+
+      if (targetKey && EVENT_ERROR_SELECTOR_MAP[targetKey]) {
+        selectors.push(EVENT_ERROR_SELECTOR_MAP[targetKey]);
+      }
+
+      if (firstErrorPath) {
+        selectors.push(`[id="${firstErrorPath}"]`);
+
+        if (firstErrorPath.startsWith("scheduleItems.")) {
+          const scheduleParts = firstErrorPath.split(".");
+          const scheduleIndex = scheduleParts[1] || "0";
+          const scheduleField = scheduleParts[2] || "activity";
+          selectors.push(`[id="scheduleItems.${scheduleIndex}.${scheduleField}"]`);
+          selectors.push(`[id="scheduleItems.${scheduleIndex}.activity"]`);
+          selectors.push(`[id="scheduleItems.${scheduleIndex}.time"]`);
+        }
+
+        if (firstErrorPath.startsWith("rules.") || firstErrorPath.startsWith("prizes.")) {
+          const listParts = firstErrorPath.split(".");
+          const listName = listParts[0];
+          const listIndex = listParts[1] || "0";
+          selectors.push(`[id="${listName}.${listIndex}.value"]`);
+        }
+      }
+
+      if (targetKey) {
+        selectors.push(`[id="${targetKey}"]`);
+        selectors.push(`[name="${targetKey}"]`);
+      }
+
+      let targetElement: HTMLElement | null = null;
+      for (const selector of selectors) {
+        const found = document.querySelector<HTMLElement>(selector);
+        if (found) {
+          targetElement = found;
+          break;
+        }
+      }
+
+      if (!targetElement) return;
+
+      targetElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      const focusableSelector =
+        "input,select,textarea,button,[tabindex]:not([tabindex='-1'])";
+      const focusTarget = targetElement.matches(focusableSelector)
+        ? targetElement
+        : targetElement.querySelector<HTMLElement>(focusableSelector);
+
+      if (focusTarget) {
+        window.setTimeout(() => {
+          focusTarget.focus({ preventScroll: true });
+        }, 120);
+      }
+    },
+    []
+  );
+
+  const handleInvalidSubmit = React.useCallback(
+    (formErrors: FieldErrors<EventFormData>) => {
+      console.warn("EventForm: Validation errors present:", formErrors);
+      scrollToFirstValidationError(formErrors);
+    },
+    [scrollToFirstValidationError]
+  );
+
   const { session } = useAuth();
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] =
@@ -1015,6 +1187,8 @@ export default function EventForm({
         scheduleItems: Array.isArray(defaultValues.scheduleItems)
           ? defaultValues.scheduleItems
           : [],
+        campusHostedAt: normalizeCampusHostedAt(defaultValues.campusHostedAt),
+        allowedCampuses: normalizeAllowedCampuses(defaultValues.allowedCampuses),
       };
       reset(transformedDefaults);
     }
@@ -1133,10 +1307,6 @@ export default function EventForm({
   const [modalVisible, setModalVisible] = React.useState(false);
 
   const processSubmit: SubmitHandler<EventFormData> = async (data) => {
-    if (Object.keys(errors).length > 0) {
-      console.error("EventForm: Zod validation errors:", errors);
-      return;
-    }
     try {
       setWasDraftOnSubmit(Boolean(isDraft));
       await onSubmit(data);
@@ -1154,11 +1324,6 @@ export default function EventForm({
 
   const processDraftSubmit: SubmitHandler<EventFormData> = async (data) => {
     if (!onSubmitDraft) return;
-
-    if (Object.keys(errors).length > 0) {
-      console.error("EventForm: Validation errors while saving draft:", errors);
-      return;
-    }
 
     try {
       await onSubmitDraft(data);
@@ -1182,6 +1347,7 @@ export default function EventForm({
     try {
       const isValid = await trigger();
       if (!isValid) {
+        scrollToFirstValidationError(errors);
         return;
       }
 
@@ -1592,7 +1758,7 @@ export default function EventForm({
                 Event details
               </h2>
               <form
-                onSubmit={handleSubmit(processSubmit)}
+                onSubmit={handleSubmit(processSubmit, handleInvalidSubmit)}
                 className="space-y-6 sm:space-y-8"
                 noValidate
               >
@@ -1759,6 +1925,7 @@ export default function EventForm({
                               control={control}
                               render={({ field, fieldState }) => (
                                 <input
+                                  id="minParticipants"
                                   {...field}
                                   type="text"
                                   inputMode="numeric"
@@ -1801,6 +1968,7 @@ export default function EventForm({
                               control={control}
                               render={({ field, fieldState }) => (
                                 <input
+                                  id="maxParticipants"
                                   {...field}
                                   type="text"
                                   inputMode="numeric"
@@ -1964,6 +2132,7 @@ export default function EventForm({
                             render={({ field }) => (
                               <>
                                 <select
+                                  id="campusHostedAt"
                                   {...field}
                                   className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-0 focus:border-transparent bg-white transition-all ${
                                     errors.campusHostedAt ? "border-red-500" : "border-gray-300"
@@ -2001,6 +2170,8 @@ export default function EventForm({
                             }}
                             render={({ field }) => (
                               <div
+                                id="allowedCampuses-group"
+                                tabIndex={-1}
                                 className={`space-y-1.5 h-[102px] overflow-y-auto pr-2 rounded-md ${
                                   errors.allowedCampuses ? "border border-red-500 p-2" : ""
                                 }`}
@@ -2325,7 +2496,7 @@ export default function EventForm({
                     {onSubmitDraft && (
                       <button
                         type="button"
-                        onClick={handleSubmit(processDraftSubmit)}
+                        onClick={handleSubmit(processDraftSubmit, handleInvalidSubmit)}
                         disabled={
                           isSubmittingProp ||
                           rhfIsSubmitting ||

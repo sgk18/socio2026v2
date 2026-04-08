@@ -863,6 +863,7 @@ function CreateFestForm(props?: CreateFestProps) {
   const router = useRouter();
   const isEditModeFromPath = pathname.startsWith("/edit/fest");
   const festIdFromPath = isEditModeFromPath ? pathname.split("/").pop() : null;
+  const finalIsEditMode = isEditMode || isEditModeFromPath;
 
   useEffect(() => {
     if (typeof props?.isDraft === "boolean") {
@@ -1426,6 +1427,73 @@ function CreateFestForm(props?: CreateFestProps) {
     [formData, imageFile, isEditMode, existingImageFileUrl]
   );
 
+  const scrollToFirstFestError = useCallback(
+    (validationErrors: Record<string, string | undefined>) => {
+      const keysWithErrors = Object.keys(validationErrors).filter(
+        (key) => Boolean(validationErrors[key])
+      );
+      if (!keysWithErrors.length) return;
+
+      const priorityOrder = [
+        "title",
+        "openingDate",
+        "closingDate",
+        "detailedDescription",
+        "campusHostedAt",
+        "allowedCampuses",
+        "organizingDept",
+        "department",
+        "category",
+        "imageFile",
+        "contactEmail",
+        "contactPhone",
+      ];
+
+      const firstKey =
+        priorityOrder.find((key) => keysWithErrors.includes(key)) ||
+        keysWithErrors[0];
+
+      let selector = `#${firstKey}`;
+      if (firstKey === "openingDate") selector = "#openingDate-trigger";
+      if (firstKey === "closingDate") selector = "#closingDate-trigger";
+      if (firstKey === "department") selector = "#department-trigger";
+      if (firstKey === "category") selector = "#category-trigger";
+      if (firstKey === "allowedCampuses") selector = "#allowedCampuses-group";
+      if (firstKey === "imageFile") selector = "#image-upload-input";
+
+      if (firstKey.startsWith("eventHead_")) {
+        const index = firstKey.replace("eventHead_", "");
+        selector = `#event-head-email-${index}`;
+      }
+
+      if (firstKey.startsWith("eventHeadExpiry_")) {
+        const index = firstKey.replace("eventHeadExpiry_", "");
+        selector = `#event-head-expiration-${index}`;
+      }
+
+      const targetElement = document.querySelector<HTMLElement>(selector);
+      if (!targetElement) return;
+
+      targetElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      const focusableSelector =
+        "input,select,textarea,button,[tabindex]:not([tabindex='-1'])";
+      const focusTarget = targetElement.matches(focusableSelector)
+        ? targetElement
+        : targetElement.querySelector<HTMLElement>(focusableSelector);
+
+      if (focusTarget) {
+        window.setTimeout(() => {
+          focusTarget.focus({ preventScroll: true });
+        }, 120);
+      }
+    },
+    []
+  );
+
   const submitFest = async (saveAsDraft: boolean) => {
     setErrors((prev) => ({ ...prev, submit: undefined }));
     setSubmitIntent(saveAsDraft ? "draft" : "publish");
@@ -1437,11 +1505,13 @@ function CreateFestForm(props?: CreateFestProps) {
         (key) => currentValidationErrors[key] !== undefined
       )
     ) {
-      setErrors(currentValidationErrors);
-      setErrors((prev) => ({
-        ...prev,
+      setErrors({
+        ...currentValidationErrors,
         submit: "Please correct the errors in the form.",
-      }));
+      });
+      requestAnimationFrame(() => {
+        scrollToFirstFestError(currentValidationErrors);
+      });
       return;
     }
 
@@ -1568,7 +1638,7 @@ function CreateFestForm(props?: CreateFestProps) {
       };
 
       let response;
-      if (isEditMode && festIdFromPath) {
+      if (finalIsEditMode && festIdFromPath) {
         response = await fetch(
           `${API_URL}/api/fests/${festIdFromPath}`,
           {
@@ -1611,7 +1681,7 @@ function CreateFestForm(props?: CreateFestProps) {
       }
       
       // If the fest_id changed (title was updated), show success message and redirect to new URL
-      if (isEditMode && responseData.id_changed && responseData.fest_id) {
+      if (finalIsEditMode && responseData.id_changed && responseData.fest_id) {
         const oldId = festIdFromPath;
         const newId = responseData.fest_id;
         console.log(`Fest ID changed from '${oldId}' to '${newId}', redirecting...`);
@@ -1628,7 +1698,7 @@ function CreateFestForm(props?: CreateFestProps) {
 
         router.replace(`/edit/fest/${newId}`);
         return;
-      } else if (isEditMode) {
+      } else if (finalIsEditMode) {
         // Show regular success message for edit
         toast.success(
           saveAsDraft
@@ -1674,6 +1744,9 @@ function CreateFestForm(props?: CreateFestProps) {
         setErrors({
           ...currentValidationErrors,
           submit: "Please correct the errors in the form.",
+        });
+        requestAnimationFrame(() => {
+          scrollToFirstFestError(currentValidationErrors);
         });
         return;
       }
@@ -1879,8 +1952,6 @@ function CreateFestForm(props?: CreateFestProps) {
   if (minClosingDate < currentDateRef.current && !isEditMode)
     minClosingDate.setDate(currentDateRef.current.getDate());
   minClosingDate.setHours(0, 0, 0, 0);
-
-  const finalIsEditMode = isEditMode || isEditModeFromPath;
 
   const showMainLoader = (isLoadingFestData && finalIsEditMode) || isNavigating;
   const mainLoaderText = isLoadingFestData
@@ -2241,6 +2312,8 @@ function CreateFestForm(props?: CreateFestProps) {
                             Who can register? <span className="text-red-500">*</span>
                           </label>
                           <div
+                            id="allowedCampuses-group"
+                            tabIndex={-1}
                             className={`space-y-1.5 h-[102px] overflow-y-auto pr-2 rounded-md ${
                               errors.allowedCampuses ? "border border-red-500 p-2" : ""
                             }`}
