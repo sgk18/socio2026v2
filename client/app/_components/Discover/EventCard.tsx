@@ -19,6 +19,7 @@ interface EventCardProps {
   idForLink?: string;
   authToken?: string;
   isArchived?: boolean;
+  archivedVisualMode?: "tag" | "muted";
   onArchiveToggle?: (eventId: string, shouldArchive: boolean) => Promise<void>;
   isArchiveLoading?: boolean;
 }
@@ -37,6 +38,7 @@ export const EventCard = ({
   idForLink,
   authToken,
   isArchived = false,
+  archivedVisualMode = "tag",
   onArchiveToggle,
   isArchiveLoading = false,
 }: EventCardProps) => {
@@ -55,8 +57,14 @@ export const EventCard = ({
   const displayDate = formatDate(date, "Date TBD");
   const displayTime = formatTime(time, "Time TBD");
 
+  const showArchivedTag =
+    isArchived && isAdminOrOrganizer && archivedVisualMode === "tag";
+  const shouldMuteArchivedCard = isArchived && archivedVisualMode === "muted";
+
   return (
-    <div className="bg-[#f9f9f9] rounded-lg overflow-hidden border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0">
+    <div className={`bg-[#f9f9f9] rounded-lg overflow-hidden border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0 ${
+      shouldMuteArchivedCard ? "opacity-60 grayscale" : ""
+    }`}>
       <Link href={eventPageUrl} className="w-full block">
         <div className="relative h-40 overflow-hidden bg-white">
           {showOutsiderBadge && (
@@ -68,7 +76,7 @@ export const EventCard = ({
           )}
           {tags.length > 0 && (
             <div className="absolute top-2 right-2 flex gap-1.5 z-10 items-center flex-wrap justify-end max-w-[75%]">
-              {isArchived && isAdminOrOrganizer && (
+              {showArchivedTag && (
                 <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800 shadow-sm">
                   ARCHIVED
                 </span>

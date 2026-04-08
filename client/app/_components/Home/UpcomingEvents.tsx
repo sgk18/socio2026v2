@@ -212,6 +212,7 @@ const UpcomingEvents = () => {
             image: event.image,
             idForLink: String(event.event_id),
             isArchived: Boolean(event.is_archived),
+            archivedVisualMode: "muted" as const,
             onArchiveToggle: handleToggleArchive,
             isArchiveLoading: archiveUpdatingIds.has(String(event.event_id)),
           };
