@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import supabase from "@/lib/supabaseClient";
+import TextType from "@/components/TextType";
 
 /* ─── Types ─────────────────────────────────────────── */
 interface Message { role: "user" | "assistant"; content: string }
@@ -704,6 +705,19 @@ export default function ChatBot() {
     return Array.from(new Set(merged)).slice(0, 4);
   }, [activeFlow, suggestionPool]);
 
+  const typingPromptTexts = useMemo(() => {
+    if (activeFlow) {
+      const flowTexts = [FLOW_CONTINUE_LABEL, FLOW_RECAP_LABEL, FLOW_SKIP_LABEL];
+      const contextualFollowUps = activeFlow.followUps.length > 0
+        ? activeFlow.followUps
+        : suggestionPool.filter((prompt) => prompt !== activeFlow.question).slice(0, 2);
+
+      return Array.from(new Set([...flowTexts, ...contextualFollowUps])).map((entry) => `Try: ${entry}`);
+    }
+
+    return suggestionPool.slice(0, 5).map((entry) => `Try: ${entry}`);
+  }, [activeFlow, suggestionPool]);
+
   const resetChat = useCallback(() => {
     if (streamAbortRef.current) {
       streamAbortRef.current.abort();
@@ -1290,7 +1304,24 @@ export default function ChatBot() {
                       ? "bg-gradient-to-br from-[#2d7bf8] via-[#1f63de] to-[#154CB3] border border-blue-200/35 text-white rounded-br-md shadow-[0_10px_24px_-12px_rgba(31,99,222,0.95)]"
                       : "bg-white/10 border border-white/15 text-blue-50 rounded-bl-md space-y-2"
                   }`}>
-                    {msg.role === "assistant" ? renderAssistantContent(msg.content) : msg.content}
+                    {msg.role === "assistant"
+                      ? (i === 0 && msg.content === WELCOME_MESSAGE
+                        ? (
+                          <TextType
+                            as="div"
+                            text={msg.content}
+                            typingSpeed={26}
+                            deletingSpeed={18}
+                            pauseDuration={1200}
+                            loop={false}
+                            showCursor
+                            cursorCharacter="_"
+                            cursorClassName="text-cyan-200"
+                            className="text-blue-50/95"
+                          />
+                        )
+                        : renderAssistantContent(msg.content))
+                      : msg.content}
                     {isTyping && msg.role === "assistant" && i === messages.length - 1 && (
                       <span className="ml-1 inline-block h-4 w-[2px] animate-pulse rounded bg-cyan-200 align-middle" />
                     )}
@@ -1302,9 +1333,9 @@ export default function ChatBot() {
               {isThinking && (
                 <div className="flex justify-start">
                   <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-white/10 border border-white/10 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-1.5 h-1.5 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-1.5 h-1.5 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    <span className="w-1.5 h-1.5 bg-blue-200 rounded-full animate-bounce" />
+                    <span className="w-1.5 h-1.5 bg-blue-200 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1.5 h-1.5 bg-blue-200 rounded-full animate-bounce [animation-delay:300ms]" />
                   </div>
                 </div>
               )}
@@ -1314,6 +1345,19 @@ export default function ChatBot() {
                   <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-100/85">
                     {activeFlow ? "Continue this answer" : "Try a quick prompt"}
                   </p>
+                  <div className="mb-3 text-center text-[12px] text-cyan-100/90">
+                    <TextType
+                      as="span"
+                      text={typingPromptTexts}
+                      typingSpeed={34}
+                      deletingSpeed={20}
+                      pauseDuration={1100}
+                      showCursor
+                      cursorCharacter="_"
+                      cursorClassName="text-cyan-200/85"
+                      className="inline"
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {visibleSuggestions.map((q) => {
                       const isPrimaryFlowAction = activeFlow && q === FLOW_CONTINUE_LABEL;
@@ -1402,7 +1446,7 @@ export default function ChatBot() {
         {!isOpen && (
           <div className="relative">
             {showFabPulse && (
-              <span className="absolute inset-0 rounded-full bg-[#154CB3]/40 animate-ping" style={{ animationIterationCount: 2 }} />
+              <span className="absolute inset-0 rounded-full bg-[#154CB3]/40 animate-ping [animation-iteration-count:2]" />
             )}
             <button
               onClick={handleToggleChat}
