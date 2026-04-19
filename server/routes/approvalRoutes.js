@@ -651,6 +651,83 @@ router.patch(
 );
 
 // ---------------------------------------------------------------------------
+// PATCH /api/approvals/:itemId/operational – Attach operational request stages
+// Called after the event wizard; merges non-blocking stages with request_data
+// ---------------------------------------------------------------------------
+router.patch(
+  "/approvals/:itemId/operational",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const { operationalStages } = req.body; // [{ role, label, request_data }]
+      const user = req.userInfo;
+
+      if (!Array.isArray(operationalStages)) {
+        return res.status(400).json({ error: "operationalStages array required" });
+      }
+
+      // Find or create the approval record
+      let record = await queryOne("approvals", { where: { event_or_fest_id: itemId } });
+
+      const orgDept   = record?.organizing_department_snapshot || null;
+      const orgSchool = record?.organizing_school_snapshot     || null;
+      const orgCampus = record?.organizing_campus_snapshot     || null;
+
+      // Build new non-blocking stage objects from wizard data
+      const existingStages = record?.stages || [];
+      const blockingStages = existingStages.filter(s => s.blocking);
+      const startIdx = blockingStages.length;
+
+      const assigneeCache = {};
+      const newOperational = await Promise.all(operationalStages.map(async (s, i) => {
+        if (!assigneeCache[s.role]) {
+          assigneeCache[s.role] = await autoAssignUser(s.role, orgDept, orgSchool, orgCampus);
+        }
+        const base = makeStageObject(startIdx + i, s.role, s.label, false, false, assigneeCache[s.role] || null);
+        return { ...base, request_data: s.request_data || {} };
+      }));
+
+      const mergedStages = [...blockingStages, ...newOperational];
+
+      if (record) {
+        const { data: updated } = await supabase
+          .from("approvals")
+          .update({ stages: mergedStages, updated_at: new Date().toISOString() })
+          .eq("id", record.id)
+          .select()
+          .single();
+        return res.json({ approval: updated });
+      }
+
+      // No record yet (under-fest event) — create one with all stages skipped/operational
+      const allBlockingSkipped = true;
+      const nowIso = new Date().toISOString();
+      const item = await fetchItemMeta(itemId, "event");
+      const [created] = await insert("approvals", {
+        event_or_fest_id:               itemId,
+        type:                           "event",
+        parent_fest_id:                 item?.fest_id || null,
+        organizing_department_snapshot: orgDept || item?.organizing_dept || null,
+        organizing_school_snapshot:     orgSchool || item?.organizing_school || null,
+        organizing_campus_snapshot:     orgCampus || item?.campus_hosted_at || null,
+        submitted_by:                   user.email,
+        stages:                         newOperational,
+        budget_items:                   [],
+        went_live_at:                   nowIso,
+        action_log:                     [],
+      });
+      return res.status(201).json({ approval: created });
+    } catch (error) {
+      console.error("[Approvals] PATCH /operational error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // PATCH /api/approvals/:itemId/action – Approve / Reject a stage
 // ---------------------------------------------------------------------------
 router.patch(

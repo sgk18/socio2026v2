@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useRef, useState } from "react";
 import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES } from "@/app/_components/Admin/ManageEvent";
+import OperationalRequestsWizard, { OperationalRequests } from "@/app/_components/OperationalRequestsWizard";
 import { EventFormData } from "@/app/lib/eventFormSchema";
 import { SubmitHandler } from "react-hook-form";
 import { createBrowserClient } from "@supabase/ssr";
@@ -8,6 +9,7 @@ import { useRouter } from "next/navigation";
 
 export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [wizardState, setWizardState] = useState<{ show: boolean; eventId: string; eventTitle: string; isSubmitting: boolean } | null>(null);
   const router = useRouter();
   const approvalConfigRef = useRef<{ enabled: boolean; stages: WorkflowStage[] }>({
     enabled: true,
@@ -324,20 +326,41 @@ export default function CreateEventPage() {
         result
       );
 
-      // Submit for approval if enabled and this is a standalone event (no fest_id)
       const isFestEvent = dataFromHookForm.festEvent && dataFromHookForm.festEvent !== "none";
       const { enabled: approvalEnabled, stages: approvalStages } = approvalConfigRef.current;
+
+      if (createdEventId && isFestEvent) {
+        // Under-fest: show operational requests wizard (no blocking approval needed)
+        setWizardState({
+          show: true,
+          eventId: createdEventId,
+          eventTitle: dataFromHookForm.eventTitle || createdEventId,
+          isSubmitting: false,
+        });
+        return;
+      }
+
       if (createdEventId && approvalEnabled && !isFestEvent) {
+        // Standalone: submit blocking stages approval, then show operational wizard
         try {
           await fetch(`${API_URL}/api/approvals`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ itemId: createdEventId, type: "event", customStages: approvalStages }),
+            body: JSON.stringify({
+              itemId: createdEventId,
+              type: "event",
+              customStages: approvalStages.filter(s => s.blocking),
+            }),
           });
         } catch {
-          // Non-critical — event is saved, approval can be submitted later
+          // Non-critical
         }
-        router.push(`/approvals/${createdEventId}?type=event`);
+        setWizardState({
+          show: true,
+          eventId: createdEventId,
+          eventTitle: dataFromHookForm.eventTitle || createdEventId,
+          isSubmitting: false,
+        });
         return;
       }
     } catch (error: any) {
@@ -364,6 +387,44 @@ export default function CreateEventPage() {
   const handleSaveDraft: SubmitHandler<EventFormData> = async (dataFromHookForm) =>
     submitEvent(dataFromHookForm, true);
 
+  async function handleWizardSubmit(requests: OperationalRequests) {
+    if (!wizardState) return;
+    setWizardState(w => w ? { ...w, isSubmitting: true } : null);
+    const token = (await supabase?.auth.getSession())?.data.session?.access_token;
+    try {
+      const operationalStages = buildOperationalStages(requests);
+      await fetch(`${API_URL}/api/approvals/${wizardState.eventId}/operational`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ operationalStages }),
+      });
+    } catch {
+      // Non-critical
+    } finally {
+      router.push(`/approvals/${wizardState.eventId}?type=event`);
+    }
+  }
+
+  function handleWizardSkip() {
+    if (!wizardState) return;
+    router.push(`/approvals/${wizardState.eventId}?type=event`);
+  }
+
+  if (wizardState?.show) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="max-w-xl mx-auto">
+          <OperationalRequestsWizard
+            eventTitle={wizardState.eventTitle}
+            onSubmit={handleWizardSubmit}
+            onSkip={handleWizardSkip}
+            isSubmitting={wizardState.isSubmitting}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <EventForm
       onSubmit={handleCreateEvent}
@@ -378,5 +439,15 @@ export default function CreateEventPage() {
       }}
     />
   );
+}
+
+function buildOperationalStages(requests: OperationalRequests) {
+  const map: { role: string; label: string; request_data: Record<string, unknown> }[] = [
+    { role: "it",       label: "IT Support",      request_data: requests.it },
+    { role: "venue",    label: "Venue",            request_data: requests.venue },
+    { role: "catering", label: "Catering",         request_data: requests.catering },
+    { role: "stalls",   label: "Stalls",           request_data: requests.stalls },
+  ];
+  return map.filter(s => (s.request_data as any).enabled);
 }
 
