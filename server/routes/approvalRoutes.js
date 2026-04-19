@@ -137,7 +137,7 @@ function makeStageObject(idx, role, label, isBlocking, isUnderFest, assigneeUser
     role,
     label,
     status:           skip ? "skipped" : "pending",
-    assignee_user_id: skip ? null : (assigneeUser?.id ?? null),
+    assignee_user_id: skip ? null : (assigneeUser?.auth_uuid ?? null),
     routing_state:    skip ? "assigned" : (assigneeUser ? "assigned" : "waiting_for_assignment"),
     blocking:         isBlocking,
   };
@@ -283,7 +283,7 @@ router.post(
       const itemTitle = item.title || item.fest_title || itemId;
 
       if (hodStage?.assignee_user_id) {
-        const hodUser = await queryOne("users", { where: { id: hodStage.assignee_user_id } });
+        const hodUser = await queryOne("users", { where: { auth_uuid: hodStage.assignee_user_id } });
         if (hodUser?.email) {
           await sendApprovalNotification(
             hodUser.email,
@@ -293,7 +293,7 @@ router.post(
         }
       }
       if (deanStage?.assignee_user_id) {
-        const deanUser = await queryOne("users", { where: { id: deanStage.assignee_user_id } });
+        const deanUser = await queryOne("users", { where: { auth_uuid: deanStage.assignee_user_id } });
         if (deanUser?.email) {
           await sendApprovalNotification(
             deanUser.email,
@@ -371,7 +371,7 @@ router.get(
         const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
-          .filter("stages", "cs", JSON.stringify([{ role: "hod", status: "pending", assignee_user_id: String(user.id) }]))
+          .filter("stages", "cs", JSON.stringify([{ role: "hod", status: "pending", assignee_user_id: String(user.auth_uuid) }]))
           .order("created_at", { ascending: true });
 
         // Unassigned — school must match; campus must match OR be null (no campus set on the fest)
@@ -400,7 +400,7 @@ router.get(
         const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
-          .filter("stages", "cs", JSON.stringify([{ role: "dean", status: "pending", assignee_user_id: String(user.id) }]))
+          .filter("stages", "cs", JSON.stringify([{ role: "dean", status: "pending", assignee_user_id: String(user.auth_uuid) }]))
           .order("created_at", { ascending: true });
 
         // Unassigned — school must match; campus must match OR be null
@@ -433,7 +433,7 @@ router.get(
         const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
-          .filter("stages", "cs", JSON.stringify([{ role: "cfo", status: "pending", assignee_user_id: String(user.id) }]))
+          .filter("stages", "cs", JSON.stringify([{ role: "cfo", status: "pending", assignee_user_id: String(user.auth_uuid) }]))
           .order("created_at", { ascending: true });
 
         let unassigned = [];
@@ -457,7 +457,7 @@ router.get(
         const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
-          .filter("stages", "cs", JSON.stringify([{ role: "accounts", status: "pending", assignee_user_id: String(user.id) }]))
+          .filter("stages", "cs", JSON.stringify([{ role: "accounts", status: "pending", assignee_user_id: String(user.auth_uuid) }]))
           .order("created_at", { ascending: true });
 
         let unassigned = [];
@@ -529,7 +529,7 @@ router.get(
       }
 
       const isCreator    = record.submitted_by === user.email;
-      const isApprover   = record.stages?.some(s => s.assignee_user_id === String(user.id));
+      const isApprover   = record.stages?.some(s => s.assignee_user_id === String(user.auth_uuid));
       const isSchoolUser = record.organizing_school_snapshot === user.school &&
                            (user.is_hod || user.is_dean);
       const canView      = isCreator || isApprover || isSchoolUser || user.is_masteradmin;
@@ -706,7 +706,7 @@ router.patch(
       // HOD/Dean: school + campus; CFO/Accounts: campus only; others: school
       const requiredFlag  = ROLE_TO_USER_FLAG[targetStage.role];
       const hasRole       = requiredFlag ? !!user[requiredFlag] : false;
-      const isAssigned    = targetStage.assignee_user_id && targetStage.assignee_user_id === String(user.id);
+      const isAssigned    = targetStage.assignee_user_id && targetStage.assignee_user_id === String(user.auth_uuid);
       const campusMatch   = user.campus && user.campus === record.organizing_campus_snapshot;
       const schoolMatch   = user.school && user.school === record.organizing_school_snapshot;
       const contextMatch  = hasRole && (() => {
@@ -728,7 +728,7 @@ router.patch(
 
       // Auto-assign if unassigned and this user qualifies
       const preAssign = (!targetStage.assignee_user_id && (isAssigned || contextMatch))
-        ? { assignee_user_id: String(user.id), routing_state: "assigned" }
+        ? { assignee_user_id: String(user.auth_uuid), routing_state: "assigned" }
         : {};
 
       const newStatus = action === "approve" ? "approved" : "rejected";

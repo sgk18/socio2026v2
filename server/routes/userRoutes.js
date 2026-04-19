@@ -603,7 +603,7 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
       setImmediate(async () => {
         try {
           const { data: count, error } = await supabase.rpc("route_approvals_to_user", {
-            p_user_id: updatedUser.id,
+            p_user_id: updatedUser.auth_uuid,
             p_role:    "hod",
             p_school:  schoolForRouting,
           });
@@ -619,7 +619,7 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
       setImmediate(async () => {
         try {
           const { data: count, error } = await supabase.rpc("route_approvals_to_user", {
-            p_user_id: updatedUser.id,
+            p_user_id: updatedUser.auth_uuid,
             p_role:    "dean",
             p_school:  schoolForRouting,
           });
