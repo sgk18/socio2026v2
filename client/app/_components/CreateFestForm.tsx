@@ -879,6 +879,7 @@ interface ApprovalsSetupViewProps {
   festId: string | null;
   approvalExists: boolean | null;
   isSubmitting: boolean;
+  initialBudgetItems?: BudgetItem[];
   onSubmitForApproval: (customStages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
   onUpdateWorkflow: (customStages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
   onBackToDetails: () => void;
@@ -891,6 +892,7 @@ function ApprovalsSetupView({
   festId,
   approvalExists,
   isSubmitting,
+  initialBudgetItems,
   onSubmitForApproval,
   onUpdateWorkflow,
   onBackToDetails,
@@ -899,7 +901,13 @@ function ApprovalsSetupView({
   const [dragIndex, setDragIndex] = React.useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
   const [dragSection, setDragSection] = React.useState<'pre' | 'post' | null>(null);
-  const [budgetItems, setBudgetItems] = React.useState<BudgetItem[]>([]);
+  const [budgetItems, setBudgetItems] = React.useState<BudgetItem[]>(initialBudgetItems ?? []);
+
+  React.useEffect(() => {
+    if (initialBudgetItems && initialBudgetItems.length > 0) {
+      setBudgetItems(initialBudgetItems.map(b => ({ ...b, id: b.id || crypto.randomUUID() })));
+    }
+  }, [initialBudgetItems]);
 
   const cfoEnabled   = stages.find(s => s.role === 'cfo')?.enabled !== false;
   const needsBudget  = stages.some(s => (s.role === 'cfo' || s.role === 'accounts') && s.enabled !== false);
@@ -1363,6 +1371,7 @@ function CreateFestForm(props?: CreateFestProps) {
   const [activeView, setActiveView] = useState<'details' | 'approvals'>('details');
   const [savedFestId, setSavedFestId] = useState<string | null>(null);
   const [approvalExists, setApprovalExists] = useState<boolean | null>(null);
+  const [existingBudgetItems, setExistingBudgetItems] = useState<BudgetItem[]>([]);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   const { session } = useAuth();
@@ -1528,7 +1537,17 @@ function CreateFestForm(props?: CreateFestProps) {
     setSavedFestId(festIdFromPath);
     fetch(`${API_URL}/api/approvals/${festIdFromPath}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
-    }).then((r) => setApprovalExists(r.ok)).catch(() => setApprovalExists(false));
+    })
+      .then(async (r) => {
+        setApprovalExists(r.ok);
+        if (r.ok) {
+          const data = await r.json().catch(() => ({}));
+          if (Array.isArray(data?.approval?.budget_items)) {
+            setExistingBudgetItems(data.approval.budget_items);
+          }
+        }
+      })
+      .catch(() => setApprovalExists(false));
   }, [finalIsEditMode, festIdFromPath, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -2932,6 +2951,7 @@ function CreateFestForm(props?: CreateFestProps) {
                   festId={savedFestId || festIdFromPath || null}
                   approvalExists={approvalExists}
                   isSubmitting={isSubmittingApproval}
+                  initialBudgetItems={existingBudgetItems}
                   onSubmitForApproval={handleSubmitForApproval}
                   onUpdateWorkflow={handleUpdateWorkflow}
                   onBackToDetails={() => setActiveView('details')}

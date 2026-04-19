@@ -354,6 +354,13 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
+// Returns true only if all blocking stages before this stage's step are done
+function isPriorBlockingDone(stages, targetStep) {
+  return stages
+    .filter(s => s.blocking && s.step < targetStep)
+    .every(s => s.status === "approved" || s.status === "skipped");
+}
+
 // GET /api/approvals/queue – Approver's own queue
 // ---------------------------------------------------------------------------
 router.get(
@@ -391,19 +398,21 @@ router.get(
 
         const seenIds = new Set();
         for (const r of [...(assigned || []), ...unassigned]) {
-          if (!seenIds.has(r.id)) { seenIds.add(r.id); results.push({ ...r, _queue_role: "hod" }); }
+          if (seenIds.has(r.id)) continue;
+          const hodStage = r.stages?.find(s => s.role === "hod");
+          if (hodStage && isPriorBlockingDone(r.stages, hodStage.step)) {
+            seenIds.add(r.id); results.push({ ...r, _queue_role: "hod" });
+          }
         }
       }
 
       if (user.is_dean) {
-        // Assigned directly to this Dean
         const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
           .filter("stages", "cs", JSON.stringify([{ role: "dean", status: "pending", assignee_user_id: String(user.auth_uuid) }]))
           .order("created_at", { ascending: true });
 
-        // Unassigned — school must match; campus must match OR be null
         let unassigned = [];
         if (user.school) {
           const { data: unassignedRows } = await supabase
@@ -418,18 +427,17 @@ router.get(
           );
         }
 
-        // Sequential: HOD must be done before Dean can act
         const seenIds = new Set();
         for (const r of [...(assigned || []), ...unassigned]) {
           if (seenIds.has(r.id)) continue;
-          const hodStage = r.stages?.find(s => s.role === "hod");
-          const hodDone = !hodStage || hodStage.status === "approved" || hodStage.status === "skipped";
-          if (hodDone) { seenIds.add(r.id); results.push({ ...r, _queue_role: "dean" }); }
+          const deanStage = r.stages?.find(s => s.role === "dean");
+          if (deanStage && isPriorBlockingDone(r.stages, deanStage.step)) {
+            seenIds.add(r.id); results.push({ ...r, _queue_role: "dean" });
+          }
         }
       }
 
       if (user.is_cfo) {
-        // CFO sees unassigned + assigned by campus
         const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
@@ -449,7 +457,11 @@ router.get(
 
         const seenIds = new Set();
         for (const r of [...(assigned || []), ...unassigned]) {
-          if (!seenIds.has(r.id)) { seenIds.add(r.id); results.push({ ...r, _queue_role: "cfo" }); }
+          if (seenIds.has(r.id)) continue;
+          const cfoStage = r.stages?.find(s => s.role === "cfo");
+          if (cfoStage && isPriorBlockingDone(r.stages, cfoStage.step)) {
+            seenIds.add(r.id); results.push({ ...r, _queue_role: "cfo" });
+          }
         }
       }
 
@@ -473,7 +485,11 @@ router.get(
 
         const seenIds = new Set();
         for (const r of [...(assigned || []), ...unassigned]) {
-          if (!seenIds.has(r.id)) { seenIds.add(r.id); results.push({ ...r, _queue_role: "accounts" }); }
+          if (seenIds.has(r.id)) continue;
+          const accStage = r.stages?.find(s => s.role === "accounts");
+          if (accStage && isPriorBlockingDone(r.stages, accStage.step)) {
+            seenIds.add(r.id); results.push({ ...r, _queue_role: "accounts" });
+          }
         }
       }
 
