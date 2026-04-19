@@ -1286,23 +1286,8 @@ export default function EventForm({
     const selectedSchool = String(watchedOrganizingSchool || "").trim();
     if (!selectedSchool) return;
 
-    const allowedDepartments = new Set(
-      getDepartmentOptionsForSchool(selectedSchool).map((option) => option.value)
-    );
-    const currentDepartments = Array.isArray(getValues("department"))
-      ? (getValues("department") as string[])
-      : [];
-
-    const filteredDepartments = currentDepartments.filter((departmentValue) =>
-      allowedDepartments.has(departmentValue)
-    );
-
-    if (filteredDepartments.length !== currentDepartments.length) {
-      setValue("department", filteredDepartments, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    }
+    // Department access is open to all schools — do not filter it when organizing school changes.
+    // Only reset organizingDept if it no longer belongs to the newly selected school.
 
     if (selectedSchool === CLUBS_AND_CENTRES_SCHOOL) {
       return;
@@ -2384,12 +2369,8 @@ export default function EventForm({
                   <MultiSelectDropdown
                     name="department"
                     control={control}
-                    options={departmentOptionsForSelectedSchool}
-                    placeholder={
-                      watchedOrganizingSchool
-                        ? "Select departments"
-                        : "Select organizing school first"
-                    }
+                    options={departmentOptions}
+                    placeholder="Select departments"
                     label="Department access:"
                     error={errors.department as FieldError | undefined}
                     required
