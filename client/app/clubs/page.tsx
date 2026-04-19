@@ -212,9 +212,9 @@ const CentresPageContent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7faff_0%,#ffffff_36%)]">
+    <div className="min-h-screen bg-white">
       <main className="container mx-auto px-4 pt-8 pb-8 sm:pt-10 sm:pb-10 max-w-7xl">
-        <div className="mb-6 sm:mb-8 rounded-2xl border border-[#dce6f7] bg-white/95 p-4 shadow-sm sm:p-6">
+        <div className="mb-6 sm:mb-8">
           <div className="flex flex-row items-start justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
             <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black text-[#154CB3] leading-tight">
@@ -249,12 +249,12 @@ const CentresPageContent = () => {
           <div className="mb-5 sm:mb-6 space-y-3 sm:space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
               <div className="order-2 lg:order-1">
-                <div className="inline-flex flex-wrap items-center gap-1.5 rounded-2xl border border-[#d5e1f6] bg-[#eef3fb] p-1.5">
+                <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-[#d5e1f6] bg-[#eef3fb] p-2 sm:gap-2.5 sm:p-2.5">
                   {TYPE_FILTERS.map((filter) => (
                     <button
                       key={filter.value}
                       onClick={() => handleTypeFilterClick(filter.value)}
-                      className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer touch-manipulation sm:px-4.5 sm:py-2.5 sm:text-base ${
+                      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer touch-manipulation sm:px-5 sm:py-2.5 sm:text-base ${
                         selectedTypeFilter === filter.value
                           ? "bg-[#154CB3] text-white shadow-[0_6px_18px_rgba(21,76,179,0.3)]"
                           : "bg-transparent text-[#063168] hover:bg-white"
@@ -281,7 +281,7 @@ const CentresPageContent = () => {
                       placeholder="Search by name, category, subtitle, or description"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-full border border-[#cad8f2] bg-[#fdfefe] px-4 py-2.5 pr-20 text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-[#154CB3] focus:border-[#154CB3]"
+                      className="w-full rounded-full border border-gray-300 px-4 py-2.5 pr-20 text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-[#154CB3] focus:border-[#154CB3]"
                     />
                     {searchQuery.trim() ? (
                       <button
@@ -320,12 +320,12 @@ const CentresPageContent = () => {
               </form>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5 sm:gap-3">
               {categoryOptions.map((category) => (
                 <button
                   key={category}
                   onClick={() => handleCategoryFilterClick(category)}
-                  className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer touch-manipulation ${
+                  className={`px-3.5 py-2 sm:px-4.5 sm:py-2 rounded-full text-sm font-medium transition-all cursor-pointer touch-manipulation ${
                     normalizeCategory(selectedCategoryFilter) === normalizeCategory(category)
                       ? "bg-[#154CB3] text-white"
                       : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-100"
@@ -335,18 +335,6 @@ const CentresPageContent = () => {
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-            <span className="rounded-full bg-[#e9f1ff] px-3 py-1 font-semibold text-[#124193]">
-              {filteredCentres.length} organizations
-            </span>
-            <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[#4f5d78]">
-              Type: {selectedTypeLabel}
-            </span>
-            <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[#4f5d78]">
-              Category: {selectedCategoryFilter}
-            </span>
           </div>
 
           <h2 className="text-xl sm:text-2xl font-bold text-[#063168] mb-3 sm:mb-4">
