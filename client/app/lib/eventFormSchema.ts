@@ -487,22 +487,9 @@ export const eventFormSchema = z
     }
   )
   .refine(
-    (data) => {
-      const departmentOptionsForSchool = getDepartmentOptionsForSchool(
-        data.organizingSchool
-      );
-      const allowedDepartmentValues = new Set(
-        departmentOptionsForSchool.map((option) => option.value)
-      );
-
-      if (allowedDepartmentValues.size === 0) return false;
-
-      return data.department.every((departmentValue) =>
-        allowedDepartmentValues.has(departmentValue)
-      );
-    },
+    (data) => data.department.length > 0,
     {
-      message: "Department access must match the selected organizing school",
+      message: "Select at least one department for access",
       path: ["department"],
     }
   );
