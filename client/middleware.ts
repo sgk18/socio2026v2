@@ -79,9 +79,9 @@ export async function middleware(req: NextRequest) {
   const isHodRoute = pathname.startsWith("/hod");
   const isDeanRoute = pathname.startsWith("/dean");
   const isCfoRoute     = pathname.startsWith("/cfo");
-  const isFinanceRoute = pathname.startsWith("/finance");
+  const isAccountsRoute = pathname.startsWith("/accounts");
 
-  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isFinanceRoute)) {
+  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute)) {
     if (!user.email) {
       return redirect("/error");
     }
@@ -153,7 +153,7 @@ export async function middleware(req: NextRequest) {
       return redirect("/error");
     }
 
-    if (isFinanceRoute && !userData?.is_accounts_office && !userData?.is_masteradmin) {
+    if (isAccountsRoute && !userData?.is_accounts_office && !userData?.is_masteradmin) {
       return redirect("/error");
     }
   }
