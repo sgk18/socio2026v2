@@ -10,6 +10,7 @@ import {
   getDepartmentOptionsForSchool,
   inferSchoolFromDepartment,
   CLUBS_AND_CENTRES_SCHOOL,
+  departments as allDepartments,
 } from "../lib/eventFormSchema";
 import {
   buildFestPreviewData,
@@ -958,40 +959,22 @@ function CreateFestForm(props?: CreateFestProps) {
     const selectedSchool = String(formData.organizingSchool || "").trim();
     if (!selectedSchool) return;
 
-    const allowedDepartmentValues = new Set(
-      departmentOptionsForSelectedSchool.map((option) => option.value)
-    );
+    // Department access is open to all schools — only reset organizingDept if it
+    // no longer belongs to the newly selected school.
     const allowedDepartmentLabels = new Set(
       departmentOptionsForSelectedSchool.map((option) => option.label)
     );
 
     setFormData((prev) => {
-      const filteredDepartments = prev.department.filter((departmentValue) =>
-        allowedDepartmentValues.has(departmentValue)
-      );
-      const filteredAllowedDepartments = prev.allowedDepartments.filter((departmentValue) =>
-        allowedDepartmentValues.has(departmentValue)
-      );
       const nextOrganizingDept =
         selectedSchool === CLUBS_AND_CENTRES_SCHOOL ||
         allowedDepartmentLabels.has(prev.organizingDept)
           ? prev.organizingDept
           : "";
 
-      const hasDepartmentChanges =
-        filteredDepartments.length !== prev.department.length ||
-        filteredAllowedDepartments.length !== prev.allowedDepartments.length;
+      if (nextOrganizingDept === prev.organizingDept) return prev;
 
-      if (!hasDepartmentChanges && nextOrganizingDept === prev.organizingDept) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        department: filteredDepartments,
-        allowedDepartments: filteredAllowedDepartments,
-        organizingDept: nextOrganizingDept,
-      };
+      return { ...prev, organizingDept: nextOrganizingDept };
     });
   }, [formData.organizingSchool, departmentOptionsForSelectedSchool]);
 
@@ -2764,7 +2747,7 @@ function CreateFestForm(props?: CreateFestProps) {
 
                 <DepartmentAndCategoryInputs
                   formData={formData}
-                  availableDepartments={departmentOptionsForSelectedSchool}
+                  availableDepartments={allDepartments}
                   errors={errors}
                   setFormData={setFormData}
                   validateField={validateField}
