@@ -136,7 +136,7 @@ export default function CreateClubForm({
   const [description, setDescription] = useState(initialClub?.club_description ?? "");
   const [webLink, setWebLink] = useState(initialClub?.club_web_link ?? "");
   const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [existingBannerUrl, setExistingBannerUrl] = useState(
+  const [bannerUrlInput, setBannerUrlInput] = useState(
     initialClub?.club_banner_url ?? ""
   );
   const [registrationsOpen, setRegistrationsOpen] = useState(
@@ -183,7 +183,7 @@ export default function CreateClubForm({
     setCategory(initialClub.category ?? "");
     setDescription(initialClub.club_description ?? "");
     setWebLink(initialClub.club_web_link ?? "");
-    setExistingBannerUrl(initialClub.club_banner_url ?? "");
+    setBannerUrlInput(initialClub.club_banner_url ?? "");
     setBannerFile(null);
     setRegistrationsOpen(Boolean(initialClub.club_registrations));
     setSelectedCampuses(toStringArray(initialClub.club_campus));
@@ -291,7 +291,12 @@ export default function CreateClubForm({
     else if (!/^https:\/\/.+/i.test(normalizedWebLink))
       nextErrors.webLink = "Website must start with https://";
 
-    if (!bannerFile && !existingBannerUrl) nextErrors.banner = `${entityLabel} image is required.`;
+    const normalizedBannerUrl = normalize(bannerUrlInput);
+    if (!bannerFile && !normalizedBannerUrl) {
+      nextErrors.banner = `${entityLabel} image is required.`;
+    } else if (normalizedBannerUrl && !/^https:\/\/.+/i.test(normalizedBannerUrl)) {
+      nextErrors.banner = "Image URL must start with https://";
+    }
     if (selectedCampuses.length === 0) nextErrors.campus = "Select at least one campus.";
 
     if (showOtherRoleInput && !normalize(otherRoleInput)) {
@@ -335,7 +340,6 @@ export default function CreateClubForm({
     }
 
     setBannerFile(file);
-    setExistingBannerUrl("");
     setErrors((prev) => {
       const nextErrors = { ...prev };
       delete nextErrors.banner;
@@ -367,7 +371,7 @@ export default function CreateClubForm({
       return;
     }
 
-    let bannerUrl = existingBannerUrl || null;
+    let bannerUrl = normalize(bannerUrlInput) || null;
     if (bannerFile) {
       const uploadFormData = new FormData();
       uploadFormData.append("file", bannerFile);
@@ -558,9 +562,9 @@ export default function CreateClubForm({
             </label>
             <div className="rounded-md border border-dashed border-[#8da1bb] bg-white px-4 py-5 text-center">
               <p className="mb-2 text-[11px] text-[#5a6d84]">JPEG, PNG (max 3MB) - 2048x1080 required</p>
-              {!bannerFile && existingBannerUrl ? (
+              {!bannerFile && bannerUrlInput ? (
                 <a
-                  href={existingBannerUrl}
+                  href={bannerUrlInput}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mb-2 block text-xs font-medium text-[#1f57c3] underline"
@@ -577,14 +581,30 @@ export default function CreateClubForm({
                 accept="image/jpeg,image/png"
                 onChange={handleImageChange}
                 className="hidden"
-                required={!existingBannerUrl}
+                required={!bannerUrlInput}
               />
               <label
                 htmlFor="club-image-upload-input"
                 className="inline-flex cursor-pointer rounded-full bg-[#1f57c3] px-4 py-1 text-[11px] font-semibold text-white"
               >
-                {bannerFile || existingBannerUrl ? "Change Image" : "Choose File"}
+                {bannerFile || bannerUrlInput ? "Change Image" : "Choose File"}
               </label>
+              <div className="mt-3 text-left">
+                <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
+                  Or paste image URL
+                </label>
+                <input
+                  value={bannerUrlInput}
+                  onChange={(e) => {
+                    setBannerUrlInput(e.target.value);
+                    if (normalize(e.target.value)) {
+                      setBannerFile(null);
+                    }
+                  }}
+                  placeholder="https://example.com/banner-image.jpg"
+                  className="h-9 w-full rounded-md border border-[#bcc8d6] bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3]"
+                />
+              </div>
               {errors.banner && <p className="text-red-500 text-xs mt-2">{errors.banner}</p>}
             </div>
           </div>

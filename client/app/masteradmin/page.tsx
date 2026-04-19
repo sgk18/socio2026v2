@@ -221,6 +221,7 @@ export default function MasterAdminPage() {
   const [clubSortKey, setClubSortKey] = useState<"name" | "category" | "registrations">("name");
   const [clubSortDir, setClubSortDir] = useState<"asc" | "desc">("asc");
   const [clubStatusFilter, setClubStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [clubStatusUpdatingId, setClubStatusUpdatingId] = useState<string | null>(null);
 
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   
@@ -630,6 +631,35 @@ export default function MasterAdminPage() {
     }
   };
 
+  const handleToggleClubRegistrations = async (club: ClubRecord) => {
+    const nextValue = !club.club_registrations;
+    try {
+      setClubStatusUpdatingId(club.club_id);
+      const { error } = await supabase
+        .from("clubs")
+        .update({ club_registrations: nextValue })
+        .eq("club_id", club.club_id);
+
+      if (error) throw new Error(error.message);
+
+      setClubs((prev) =>
+        prev.map((item) =>
+          item.club_id === club.club_id
+            ? { ...item, club_registrations: nextValue }
+            : item
+        )
+      );
+      toast.success(
+        `${club.club_name} registrations ${nextValue ? "opened" : "closed"}`
+      );
+    } catch (error: any) {
+      console.error("Error toggling club registrations:", error);
+      toast.error(error?.message || "Failed to update registration status");
+    } finally {
+      setClubStatusUpdatingId(null);
+    }
+  };
+
   const fetchReportData = async () => {
     try {
       const token = await getFreshToken();
@@ -860,10 +890,30 @@ export default function MasterAdminPage() {
   const sidebarNav = [
     { id: "dashboard" as const, label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: "dataExplorer" as const, label: "Data Explorer", icon: <LineChart className="w-4 h-4" /> },
-    { id: "users" as const, label: "Users", icon: <Users className="w-4 h-4" />, count: users.length },
-    { id: "events" as const, label: "Events", icon: <CalendarDays className="w-4 h-4" />, count: events.length },
-    { id: "fests" as const, label: "Fests", icon: <Trophy className="w-4 h-4" />, count: fests.length },
-    { id: "clubs" as const, label: "Clubs", icon: <Building2 className="w-4 h-4" />, count: clubs.length },
+    {
+      id: "users" as const,
+      label: "Users",
+      icon: <Users className="w-4 h-4" />,
+      count: userPagination.totalItems || users.length,
+    },
+    {
+      id: "events" as const,
+      label: "Events",
+      icon: <CalendarDays className="w-4 h-4" />,
+      count: eventPagination.totalItems || events.length,
+    },
+    {
+      id: "fests" as const,
+      label: "Fests",
+      icon: <Trophy className="w-4 h-4" />,
+      count: festPagination.totalItems || fests.length,
+    },
+    {
+      id: "clubs" as const,
+      label: "Clubs",
+      icon: <Building2 className="w-4 h-4" />,
+      count: clubPagination.totalItems || clubs.length,
+    },
     { id: "notifications" as const, label: "Notifications", icon: <Bell className="w-4 h-4" /> },
     { id: "report" as const, label: "Reports", icon: <BarChart2 className="w-4 h-4" /> },
   ];
@@ -1659,17 +1709,27 @@ export default function MasterAdminPage() {
                               {club.category || "Uncategorized"}
                             </td>
                             <td className="px-6 py-5 align-top">
-                              {club.club_registrations ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-green-600"></span>
-                                  OPEN
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold bg-red-100 text-red-800">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
-                                  CLOSED
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                disabled={clubStatusUpdatingId === club.club_id}
+                                onClick={() => handleToggleClubRegistrations(club)}
+                                className={`inline-flex min-w-[104px] items-center justify-center gap-1.5 rounded-md px-3 py-1 text-xs font-bold transition-colors disabled:opacity-60 ${
+                                  club.club_registrations
+                                    ? "bg-green-100 text-green-800 hover:bg-green-200"
+                                    : "bg-red-100 text-red-800 hover:bg-red-200"
+                                }`}
+                              >
+                                <span
+                                  className={`h-1.5 w-1.5 rounded-full ${
+                                    club.club_registrations ? "bg-green-600" : "bg-red-600"
+                                  }`}
+                                ></span>
+                                {clubStatusUpdatingId === club.club_id
+                                  ? "UPDATING..."
+                                  : club.club_registrations
+                                    ? "OPEN"
+                                    : "CLOSED"}
+                              </button>
                             </td>
                             <td className="px-6 py-5 text-right align-top">
                               <div className="flex flex-wrap items-center justify-end gap-2">

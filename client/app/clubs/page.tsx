@@ -212,9 +212,9 @@ const CentresPageContent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f7faff_0%,#ffffff_36%)]">
       <main className="container mx-auto px-4 pt-8 pb-8 sm:pt-10 sm:pb-10 max-w-7xl">
-        <div className="mb-6 sm:mb-8">
+        <div className="mb-6 sm:mb-8 rounded-2xl border border-[#dce6f7] bg-white/95 p-4 shadow-sm sm:p-6">
           <div className="flex flex-row items-start justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
             <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black text-[#154CB3] leading-tight">
@@ -281,7 +281,7 @@ const CentresPageContent = () => {
                       placeholder="Search by name, category, subtitle, or description"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-full border border-gray-300 px-4 py-2.5 pr-20 text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-[#154CB3] focus:border-[#154CB3]"
+                      className="w-full rounded-full border border-[#cad8f2] bg-[#fdfefe] px-4 py-2.5 pr-20 text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-[#154CB3] focus:border-[#154CB3]"
                     />
                     {searchQuery.trim() ? (
                       <button
@@ -335,6 +335,18 @@ const CentresPageContent = () => {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+            <span className="rounded-full bg-[#e9f1ff] px-3 py-1 font-semibold text-[#124193]">
+              {filteredCentres.length} organizations
+            </span>
+            <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[#4f5d78]">
+              Type: {selectedTypeLabel}
+            </span>
+            <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[#4f5d78]">
+              Category: {selectedCategoryFilter}
+            </span>
           </div>
 
           <h2 className="text-xl sm:text-2xl font-bold text-[#063168] mb-3 sm:mb-4">
