@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 
@@ -29,6 +29,8 @@ const CATEGORY_FILTERS = [
   "Sports",
   "Student support",
 ];
+const INITIAL_VISIBLE_CARDS = 12;
+const LOAD_MORE_STEP = 12;
 
 const normalizeTypeFilter = (typeParam: string | null): OrganizationTypeFilter => {
   if (typeParam === "club" || typeParam === "centre" || typeParam === "cell") {
@@ -72,6 +74,7 @@ const CentresPageContent = () => {
   const [allCentres, setAllCentres] = useState<ClubRecord[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_CARDS);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,7 +86,9 @@ const CentresPageContent = () => {
       try {
         const { data, error } = await supabase
           .from("clubs")
-          .select("*")
+          .select(
+            "club_id,club_name,subtitle,club_description,club_web_link,slug,club_banner_url,type,category,club_editors"
+          )
           .order("club_name", { ascending: true });
 
         if (!isMounted) return;
@@ -135,51 +140,80 @@ const CentresPageContent = () => {
     return () => window.clearTimeout(timeoutId);
   }, [router, searchParam, searchQuery, selectedCategoryFilter, selectedTypeFilter]);
 
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_CARDS);
+  }, [selectedTypeFilter, selectedCategoryFilter, searchQuery]);
+
   const selectedTypeLabel =
     TYPE_FILTERS.find((filter) => filter.value === selectedTypeFilter)?.label ?? "All";
-  const categoriesForSelectedType = Array.from(
-    new Set(
-      allCentres
-        .filter((centre) => selectedTypeFilter === "all" || centre.type === selectedTypeFilter)
-        .map((centre) => centre.category?.trim())
-        .filter((category): category is string => Boolean(category))
-    )
+  const categoriesForSelectedType = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allCentres
+            .filter(
+              (centre) => selectedTypeFilter === "all" || centre.type === selectedTypeFilter
+            )
+            .map((centre) => centre.category?.trim())
+            .filter((category): category is string => Boolean(category))
+        )
+      ),
+    [allCentres, selectedTypeFilter]
   );
-  const extraCategories = categoriesForSelectedType.filter(
-    (category) =>
-      !CATEGORY_FILTERS.some(
-        (predefinedCategory) =>
-          normalizeCategory(predefinedCategory) === normalizeCategory(category)
-      )
+
+  const extraCategories = useMemo(
+    () =>
+      categoriesForSelectedType.filter(
+        (category) =>
+          !CATEGORY_FILTERS.some(
+            (predefinedCategory) =>
+              normalizeCategory(predefinedCategory) === normalizeCategory(category)
+          )
+      ),
+    [categoriesForSelectedType]
   );
-  const categoryOptions = ["All", ...CATEGORY_FILTERS, ...extraCategories];
 
-  const filteredCentres = allCentres.filter((centre: ClubRecord) => {
-    if (selectedTypeFilter !== "all" && centre.type !== selectedTypeFilter) {
-      return false;
-    }
+  const categoryOptions = useMemo(
+    () => ["All", ...CATEGORY_FILTERS, ...extraCategories],
+    [extraCategories]
+  );
 
-    if (
-      normalizeCategory(selectedCategoryFilter) !== "all" &&
-      normalizeCategory(centre.category ?? "") !== normalizeCategory(selectedCategoryFilter)
-    ) {
-      return false;
-    }
+  const filteredCentres = useMemo(
+    () =>
+      allCentres.filter((centre: ClubRecord) => {
+        if (selectedTypeFilter !== "all" && centre.type !== selectedTypeFilter) {
+          return false;
+        }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      const titleMatch = centre.club_name?.toLowerCase().includes(q);
-      const subtitleMatch = centre.subtitle?.toLowerCase().includes(q);
-      const descriptionMatch = centre.club_description?.toLowerCase().includes(q);
-      const categoryMatch = centre.category?.toLowerCase().includes(q);
+        if (
+          normalizeCategory(selectedCategoryFilter) !== "all" &&
+          normalizeCategory(centre.category ?? "") !== normalizeCategory(selectedCategoryFilter)
+        ) {
+          return false;
+        }
 
-      if (!titleMatch && !subtitleMatch && !descriptionMatch && !categoryMatch) {
-        return false;
-      }
-    }
+        if (searchQuery.trim()) {
+          const q = searchQuery.trim().toLowerCase();
+          const titleMatch = centre.club_name?.toLowerCase().includes(q);
+          const subtitleMatch = centre.subtitle?.toLowerCase().includes(q);
+          const descriptionMatch = centre.club_description?.toLowerCase().includes(q);
+          const categoryMatch = centre.category?.toLowerCase().includes(q);
 
-    return true;
-  });
+          if (!titleMatch && !subtitleMatch && !descriptionMatch && !categoryMatch) {
+            return false;
+          }
+        }
+
+        return true;
+      }),
+    [allCentres, searchQuery, selectedCategoryFilter, selectedTypeFilter]
+  );
+
+  const visibleCentres = useMemo(
+    () => filteredCentres.slice(0, visibleCount),
+    [filteredCentres, visibleCount]
+  );
+  const hasMoreCentres = visibleCount < filteredCentres.length;
 
   const currentEmail = String(
     userData?.email || session?.user?.email || ""
@@ -196,12 +230,16 @@ const CentresPageContent = () => {
     );
   };
 
-  const handleTypeFilterClick = (typeFilter: OrganizationTypeFilter) => {
-    router.push(buildCentresUrl(typeFilter, "All", searchQuery));
+  const handleTypeFilterChange = (typeFilter: OrganizationTypeFilter) => {
+    router.replace(buildCentresUrl(typeFilter, "All", searchQuery), {
+      scroll: false,
+    });
   };
 
   const handleCategoryFilterClick = (category: string) => {
-    router.push(buildCentresUrl(selectedTypeFilter, category, searchQuery));
+    router.replace(buildCentresUrl(selectedTypeFilter, category, searchQuery), {
+      scroll: false,
+    });
   };
 
   const handlePageSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -247,29 +285,8 @@ const CentresPageContent = () => {
           </div>
 
           <div className="mb-5 sm:mb-6 space-y-3 sm:space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-              <div className="order-2 lg:order-1">
-                <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-[#d5e1f6] bg-[#eef3fb] p-2 sm:gap-2.5 sm:p-2.5">
-                  {TYPE_FILTERS.map((filter) => (
-                    <button
-                      key={filter.value}
-                      onClick={() => handleTypeFilterClick(filter.value)}
-                      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer touch-manipulation sm:px-5 sm:py-2.5 sm:text-base ${
-                        selectedTypeFilter === filter.value
-                          ? "bg-[#154CB3] text-white shadow-[0_6px_18px_rgba(21,76,179,0.3)]"
-                          : "bg-transparent text-[#063168] hover:bg-white"
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <form
-                onSubmit={handlePageSearchSubmit}
-                className="order-1 lg:order-2 w-full lg:w-[420px] xl:w-[460px] lg:ml-6"
-              >
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 sm:gap-4">
+              <form onSubmit={handlePageSearchSubmit} className="order-1 w-full lg:flex-1 lg:max-w-[560px]">
                 <label htmlFor="clubs-page-search" className="sr-only">
                   Search centres, cells, and clubs
                 </label>
@@ -318,6 +335,29 @@ const CentresPageContent = () => {
                   </button>
                 </div>
               </form>
+
+              <div className="order-2 w-full lg:w-[220px] lg:shrink-0">
+                <label
+                  htmlFor="clubs-type-filter"
+                  className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#4f6482]"
+                >
+                  Type filter
+                </label>
+                <select
+                  id="clubs-type-filter"
+                  value={selectedTypeFilter}
+                  onChange={(e) =>
+                    handleTypeFilterChange(e.target.value as OrganizationTypeFilter)
+                  }
+                  className="h-11 w-full rounded-xl border border-[#c6d5ee] bg-white px-3 text-sm font-medium text-[#123a7a] focus:outline-none focus:ring-2 focus:ring-[#154CB3]"
+                >
+                  {TYPE_FILTERS.map((filter) => (
+                    <option key={filter.value} value={filter.value}>
+                      {filter.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2.5 sm:gap-3">
@@ -354,29 +394,42 @@ const CentresPageContent = () => {
                 <p className="text-red-600 text-sm sm:text-base">{loadError}</p>
               </div>
             ) : filteredCentres.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-                {filteredCentres.map((centre) => (
-                  <div key={centre.club_id} className="min-w-0 h-full">
-                    <CentreClubCard
-                      title={centre.club_name}
-                      subtitle={centre.subtitle ?? undefined}
-                      description={centre.club_description ?? "No description provided."}
-                      link={centre.club_web_link ?? undefined}
-                      slug={centre.slug ?? undefined}
-                      image={centre.club_banner_url ?? undefined}
-                      type={
-                        centre.type === "club"
-                          ? "club"
-                          : centre.type === "cell"
-                            ? "cell"
-                            : "center"
-                      }
-                      showEditButton={canEditOrganization(centre)}
-                      editHref={`/edit/clubs/${centre.club_id}`}
-                    />
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+                  {visibleCentres.map((centre) => (
+                    <div key={centre.club_id} className="min-w-0 h-full">
+                      <CentreClubCard
+                        title={centre.club_name}
+                        subtitle={centre.subtitle ?? undefined}
+                        description={centre.club_description ?? "No description provided."}
+                        link={centre.club_web_link ?? undefined}
+                        slug={centre.slug ?? undefined}
+                        image={centre.club_banner_url ?? undefined}
+                        type={
+                          centre.type === "club"
+                            ? "club"
+                            : centre.type === "cell"
+                              ? "cell"
+                              : "center"
+                        }
+                        showEditButton={canEditOrganization(centre)}
+                        editHref={`/edit/clubs/${centre.club_id}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {hasMoreCentres && (
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount((prev) => prev + LOAD_MORE_STEP)}
+                      className="rounded-full border border-[#154CB3] px-5 py-2 text-sm font-semibold text-[#154CB3] transition-colors hover:bg-[#154CB3] hover:text-white"
+                    >
+                      Load more
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-8 sm:py-12">
                 <svg
