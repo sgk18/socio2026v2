@@ -165,7 +165,7 @@ export default function MasterAdminPage() {
   const { userData, isMasterAdmin, isLoading: authLoading, session } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "insights" | "dataExplorer" | "users" | "events" | "fests" | "notifications" | "report" | "settings"
+    "dashboard" | "insights" | "dataExplorer" | "users" | "events" | "fests" | "clubs" | "approvals" | "notifications" | "report" | "settings"
   >("dashboard");
   const authToken = session?.access_token || null;
 
@@ -863,6 +863,7 @@ export default function MasterAdminPage() {
     { id: "users" as const, label: "Users", icon: <Users className="w-4 h-4" />, count: users.length },
     { id: "events" as const, label: "Events", icon: <CalendarDays className="w-4 h-4" />, count: events.length },
     { id: "fests" as const, label: "Fests", icon: <Trophy className="w-4 h-4" />, count: fests.length },
+    { id: "clubs" as const, label: "Clubs", icon: <Building2 className="w-4 h-4" />, count: clubs.length },
     { id: "notifications" as const, label: "Notifications", icon: <Bell className="w-4 h-4" /> },
     { id: "report" as const, label: "Reports", icon: <BarChart2 className="w-4 h-4" /> },
   ];
