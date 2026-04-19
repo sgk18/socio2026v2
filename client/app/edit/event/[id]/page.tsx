@@ -45,6 +45,8 @@ export default function EditEventPage() {
   const [isArchived, setIsArchived] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
   const [isArchiveUpdating, setIsArchiveUpdating] = useState(false);
+  const [approvalExists, setApprovalExists] = useState<boolean | null>(null);
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   useEffect(() => {
     if (authIsLoading) return;
@@ -714,6 +716,55 @@ export default function EditEventPage() {
   const handleSaveDraft: SubmitHandler<EventFormData> = async (formData) =>
     submitEventUpdate(formData, { archiveAsDraft: true });
 
+  const checkApprovalExists = async () => {
+    if (!session || !eventIdSlug) return;
+    try {
+      const res = await fetch(`${API_URL}/api/approvals/${eventIdSlug}?type=event`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      setApprovalExists(res.ok);
+    } catch {
+      setApprovalExists(false);
+    }
+  };
+
+  const submitForApproval = async () => {
+    if (!session || !eventIdSlug) return;
+    setIsSubmittingApproval(true);
+    try {
+      const res = await fetch(`${API_URL}/api/approvals`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ itemId: eventIdSlug, type: "event" }),
+      });
+      if (res.status === 409) {
+        toast.success("Already submitted for approval.");
+        setApprovalExists(true);
+        router.push(`/approvals/${eventIdSlug}?type=event`);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error || "Failed to submit for approval.");
+        return;
+      }
+      toast.success("Submitted for approval successfully!");
+      setApprovalExists(true);
+      router.push(`/approvals/${eventIdSlug}?type=event`);
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
+  useEffect(() => {
+    if (eventIdSlug && session) checkApprovalExists();
+  }, [eventIdSlug, session]);
+
   if (authIsLoading || (isLoading && !initialData && !errorMessage)) {
     return (
       <div className="p-8 text-center text-lg font-semibold">
@@ -794,6 +845,38 @@ export default function EditEventPage() {
         isArchiveUpdating={isArchiveUpdating}
         onToggleArchive={handleToggleArchive}
       />
+      {/* Approval workflow actions */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-12 pb-8">
+        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800">Approval Workflow</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {approvalExists
+                ? "This event has been submitted for approval."
+                : "Submit this event to start the HOD → Dean approval process."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {approvalExists && (
+              <a
+                href={`/approvals/${eventIdSlug}?type=event`}
+                className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50"
+              >
+                View Approvals
+              </a>
+            )}
+            {!approvalExists && (
+              <button
+                onClick={submitForApproval}
+                disabled={isSubmittingApproval}
+                className="px-4 py-1.5 text-sm rounded-lg bg-[#154CB3] text-white hover:bg-[#154cb3df] disabled:opacity-50"
+              >
+                {isSubmittingApproval ? "Submitting…" : "Submit for Approval"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </>
   ) : (
     <div className="p-8 text-center">

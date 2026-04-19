@@ -512,13 +512,23 @@ router.post("/", async (req, res) => {
 router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration, requireMasterAdmin, async (req, res) => {
   try {
     const { email } = req.params;
-    const { 
-      is_organiser, 
+    const {
+      is_organiser,
       organiser_expires_at,
-      is_support, 
+      is_support,
       support_expires_at,
-      is_masteradmin, 
-      masteradmin_expires_at 
+      is_masteradmin,
+      masteradmin_expires_at,
+      // Approval workflow roles (Module 11)
+      is_hod,
+      is_dean,
+      is_cfo,
+      is_campus_director,
+      is_accounts_office,
+      is_it_support,
+      is_vendor_manager,
+      is_stalls,
+      school,
     } = req.body;
 
     // Check if user exists
@@ -531,31 +541,42 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
     if (existingUser.is_masteradmin && is_masteradmin === false) {
       const allMasterAdmins = await queryAll("users");
       const masterAdminCount = allMasterAdmins.filter(u => u.is_masteradmin).length;
-      
+
       if (masterAdminCount <= 1) {
-        return res.status(400).json({ 
-          error: "Cannot remove the last master admin. Promote another user first." 
+        return res.status(400).json({
+          error: "Cannot remove the last master admin. Promote another user first."
         });
       }
     }
 
     // Build update object
     const updates = {};
-    
+
     if (typeof is_organiser === 'boolean') {
       updates.is_organiser = is_organiser;
       updates.organiser_expires_at = organiser_expires_at || null;
     }
-    
+
     if (typeof is_support === 'boolean') {
       updates.is_support = is_support;
       updates.support_expires_at = support_expires_at || null;
     }
-    
+
     if (typeof is_masteradmin === 'boolean') {
       updates.is_masteradmin = is_masteradmin;
       updates.masteradmin_expires_at = masteradmin_expires_at || null;
     }
+
+    // Approval workflow roles
+    if (typeof is_hod === 'boolean') updates.is_hod = is_hod;
+    if (typeof is_dean === 'boolean') updates.is_dean = is_dean;
+    if (typeof is_cfo === 'boolean') updates.is_cfo = is_cfo;
+    if (typeof is_campus_director === 'boolean') updates.is_campus_director = is_campus_director;
+    if (typeof is_accounts_office === 'boolean') updates.is_accounts_office = is_accounts_office;
+    if (typeof is_it_support === 'boolean') updates.is_it_support = is_it_support;
+    if (typeof is_vendor_manager === 'boolean') updates.is_vendor_manager = is_vendor_manager;
+    if (typeof is_stalls === 'boolean') updates.is_stalls = is_stalls;
+    if (typeof school === 'string') updates.school = school || null;
 
     // Update user
     const { data: updatedUser, error: updateError } = await supabase
@@ -568,10 +589,67 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
     if (updateError) throw updateError;
 
     console.log(`[MasterAdmin] User roles updated: ${email} by ${req.userInfo.email}`);
-    
-    return res.status(200).json({ 
+
+    // Auto-routing: if HOD was just assigned with a school, bind pending approval requests
+    const schoolForRouting = updates.school || existingUser.school;
+    if (updates.is_hod === true && schoolForRouting) {
+      setImmediate(async () => {
+        try {
+          const { data: pendingHod } = await supabase
+            .from("approvals")
+            .select("id")
+            .eq("stage1_hod_routing_state", "waiting_for_assignment")
+            .eq("organizing_school_snapshot", schoolForRouting);
+
+          if (pendingHod && pendingHod.length > 0) {
+            const ids = pendingHod.map((r) => r.id);
+            await supabase
+              .from("approvals")
+              .update({
+                stage1_hod_assignee_user_id: updatedUser.id,
+                stage1_hod_routing_state: "assigned",
+                updated_at: new Date().toISOString(),
+              })
+              .in("id", ids);
+            console.log(`[AutoRoute] Bound ${ids.length} pending HOD approval(s) to ${email} (school: ${schoolForRouting})`);
+          }
+        } catch (err) {
+          console.warn("[AutoRoute] HOD auto-routing failed (non-critical):", err?.message);
+        }
+      });
+    }
+
+    // Auto-routing: if Dean was just assigned with a school, bind pending approval requests
+    if (updates.is_dean === true && schoolForRouting) {
+      setImmediate(async () => {
+        try {
+          const { data: pendingDean } = await supabase
+            .from("approvals")
+            .select("id")
+            .eq("stage2_dean_routing_state", "waiting_for_assignment")
+            .eq("organizing_school_snapshot", schoolForRouting);
+
+          if (pendingDean && pendingDean.length > 0) {
+            const ids = pendingDean.map((r) => r.id);
+            await supabase
+              .from("approvals")
+              .update({
+                stage2_dean_assignee_user_id: updatedUser.id,
+                stage2_dean_routing_state: "assigned",
+                updated_at: new Date().toISOString(),
+              })
+              .in("id", ids);
+            console.log(`[AutoRoute] Bound ${ids.length} pending Dean approval(s) to ${email} (school: ${schoolForRouting})`);
+          }
+        } catch (err) {
+          console.warn("[AutoRoute] Dean auto-routing failed (non-critical):", err?.message);
+        }
+      });
+    }
+
+    return res.status(200).json({
       user: updatedUser,
-      message: "User roles updated successfully" 
+      message: "User roles updated successfully"
     });
   } catch (error) {
     console.error("Error updating user roles:", error);

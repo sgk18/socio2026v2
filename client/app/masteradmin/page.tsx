@@ -27,8 +27,10 @@ import {
   Settings,
   Eye,
   ChevronRight,
+  CheckCircle2,
 } from "lucide-react";
 import AdminDashboardView from "../_components/Admin/AdminDashboardView";
+import ApprovalsManager from "../_components/Admin/ApprovalsManager";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 const ITEMS_PER_PAGE = 20;
@@ -161,7 +163,7 @@ export default function MasterAdminPage() {
   const { userData, isMasterAdmin, isLoading: authLoading, session } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "insights" | "dataExplorer" | "users" | "events" | "fests" | "notifications" | "report" | "settings"
+    "dashboard" | "insights" | "dataExplorer" | "users" | "events" | "fests" | "notifications" | "report" | "settings" | "approvals"
   >("dashboard");
   const authToken = session?.access_token || null;
 
@@ -756,6 +758,7 @@ export default function MasterAdminPage() {
     { id: "users" as const, label: "Users", icon: <Users className="w-4 h-4" />, count: users.length },
     { id: "events" as const, label: "Events", icon: <CalendarDays className="w-4 h-4" />, count: events.length },
     { id: "fests" as const, label: "Fests", icon: <Trophy className="w-4 h-4" />, count: fests.length },
+    { id: "approvals" as const, label: "Approvals", icon: <CheckCircle2 className="w-4 h-4" /> },
     { id: "notifications" as const, label: "Notifications", icon: <Bell className="w-4 h-4" /> },
     { id: "report" as const, label: "Reports", icon: <BarChart2 className="w-4 h-4" /> },
   ];
@@ -879,6 +882,9 @@ export default function MasterAdminPage() {
             <p className="text-sm mt-1">Platform configuration coming soon.</p>
           </div>
         )}
+
+        {/* Approvals Tab */}
+        {activeTab === "approvals" && <ApprovalsManager />}
 
 
 
