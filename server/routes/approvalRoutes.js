@@ -182,7 +182,7 @@ router.post(
   checkRoleExpiration,
   async (req, res) => {
     try {
-      const { itemId, type } = req.body;
+      const { itemId, type, customStages } = req.body;
 
       if (!itemId || !type || !["event", "fest"].includes(type)) {
         return res.status(400).json({ error: "itemId and type ('event' or 'fest') are required" });
@@ -215,7 +215,32 @@ router.post(
       const parentFestId = item.fest_id         || null;
       const isUnderFest  = type === "event" && !!parentFestId;
 
-      const stages = await buildStagesFromWorkflowConfig(orgSchool, type, parentFestId);
+      let stages;
+      if (customStages && Array.isArray(customStages) && customStages.length > 0) {
+        // Use organiser-customized stage order
+        const hodUser  = isUnderFest ? null : await findHodForSchool(orgSchool);
+        const deanUser = isUnderFest ? null : await findDeanForSchool(orgSchool);
+        stages = customStages.map((s, idx) => {
+          const skipThisStage = isUnderFest && s.blocking;
+          let assigneeUserId = null;
+          let routingState   = "waiting_for_assignment";
+          if (!skipThisStage) {
+            if (s.role === "hod"  && hodUser)  { assigneeUserId = hodUser.id;  routingState = "assigned"; }
+            if (s.role === "dean" && deanUser)  { assigneeUserId = deanUser.id; routingState = "assigned"; }
+          }
+          return {
+            step:             idx,
+            role:             s.role,
+            label:            s.label,
+            status:           skipThisStage ? "skipped" : "pending",
+            assignee_user_id: skipThisStage ? null : assigneeUserId,
+            routing_state:    skipThisStage ? "assigned" : routingState,
+            blocking:         s.blocking,
+          };
+        });
+      } else {
+        stages = await buildStagesFromWorkflowConfig(orgSchool, type, parentFestId);
+      }
       const allBlockingSkipped = stages.filter(s => s.blocking).every(s => s.status === "skipped");
 
       const nowIso = new Date().toISOString();

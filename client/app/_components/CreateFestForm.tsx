@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext"; // Adjust path as needed
@@ -850,13 +850,31 @@ const FullPageSpinner: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
+interface WorkflowStage {
+  role: string;
+  label: string;
+  desc: string;
+  blocking: boolean;
+}
+
+const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
+  { role: 'hod',           label: 'HOD',             desc: 'Head of Department',         blocking: true  },
+  { role: 'dean',          label: 'Dean',             desc: 'Dean of the School',         blocking: true  },
+  { role: 'cfo',           label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', blocking: true  },
+  { role: 'accounts',      label: 'Accounts Office',  desc: 'Financial clearance',        blocking: true  },
+  { role: 'it',            label: 'IT Support',       desc: 'Technical setup',             blocking: false },
+  { role: 'venue',         label: 'Venue',            desc: 'Venue arrangements',          blocking: false },
+  { role: 'catering',      label: 'Catering',         desc: 'Food & catering vendors',     blocking: false },
+  { role: 'stalls',        label: 'Stalls / Misc',    desc: 'Stall allocations',           blocking: false },
+];
+
 interface ApprovalsSetupViewProps {
   organizingSchool: string;
   organizingDept: string;
   festId: string | null;
   approvalExists: boolean | null;
   isSubmitting: boolean;
-  onSubmitForApproval: () => void;
+  onSubmitForApproval: (customStages: WorkflowStage[]) => void;
   onBackToDetails: () => void;
   session: any;
 }
@@ -870,57 +888,192 @@ function ApprovalsSetupView({
   onSubmitForApproval,
   onBackToDetails,
 }: ApprovalsSetupViewProps) {
-  const steps = [
-    { key: 'hod', label: 'HOD', desc: 'Head of Department', color: 'blue' },
-    { key: 'dean', label: 'Dean', desc: 'Dean of the School', color: 'indigo' },
-    { key: 'cfo', label: 'CFO / Campus Director', desc: 'Finance & campus oversight', color: 'purple' },
-    { key: 'accounts', label: 'Accounts Office', desc: 'Financial clearance', color: 'violet' },
-  ];
+  const [stages, setStages] = React.useState<WorkflowStage[]>(DEFAULT_WORKFLOW_STAGES);
+  const [dragIndex, setDragIndex] = React.useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
+  const [dragSection, setDragSection] = React.useState<'pre' | 'post' | null>(null);
+
+  const preLiveStages  = stages.filter(s => s.blocking);
+  const postLiveStages = stages.filter(s => !s.blocking);
+
+  function handleDragStart(idx: number, section: 'pre' | 'post') {
+    setDragIndex(idx);
+    setDragSection(section);
+  }
+
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    setDragOverIndex(idx);
+  }
+
+  function handleDrop(e: React.DragEvent, dropIdx: number, targetSection: 'pre' | 'post') {
+    e.preventDefault();
+    if (dragIndex === null || dragSection === null) return;
+
+    const sourceBlocking = dragSection === 'pre';
+    const targetBlocking = targetSection === 'pre';
+
+    // Find the actual index in the full stages array
+    const sectionStages = sourceBlocking ? preLiveStages : postLiveStages;
+    const draggedStage = sectionStages[dragIndex];
+    if (!draggedStage) return;
+
+    const newStages = stages.filter(s => s !== draggedStage);
+    const targetSectionStages = targetBlocking
+      ? newStages.filter(s => s.blocking)
+      : newStages.filter(s => !s.blocking);
+
+    // Insert at position within target section
+    const insertAfter = targetSectionStages.slice(0, dropIdx);
+    const insertBefore = targetSectionStages.slice(dropIdx);
+    const updatedSection = [...insertAfter, { ...draggedStage, blocking: targetBlocking }, ...insertBefore];
+
+    // Rebuild full stages: pre-live first, then post-live
+    const otherSection = targetBlocking
+      ? newStages.filter(s => !s.blocking)
+      : newStages.filter(s => s.blocking);
+
+    const rebuilt = targetBlocking
+      ? [...updatedSection, ...otherSection]
+      : [...otherSection, ...updatedSection];
+
+    setStages(rebuilt);
+    setDragIndex(null);
+    setDragOverIndex(null);
+    setDragSection(null);
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
+    setDragSection(null);
+  }
+
+  function moveToPostLive(role: string) {
+    setStages(prev => prev.map(s => s.role === role ? { ...s, blocking: false } : s));
+  }
+
+  function moveToPreLive(role: string) {
+    setStages(prev => {
+      const updated = prev.map(s => s.role === role ? { ...s, blocking: true } : s);
+      // Keep pre-live stages first
+      return [...updated.filter(s => s.blocking), ...updated.filter(s => !s.blocking)];
+    });
+  }
+
+  function SectionList({
+    sectionStages,
+    section,
+    emptyText,
+  }: {
+    sectionStages: WorkflowStage[];
+    section: 'pre' | 'post';
+    emptyText: string;
+  }) {
+    return (
+      <div
+        className="min-h-[60px] space-y-2"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => sectionStages.length === 0 && handleDrop(e, 0, section)}
+      >
+        {sectionStages.length === 0 ? (
+          <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center text-xs text-gray-400">
+            {emptyText}
+          </div>
+        ) : (
+          sectionStages.map((s, i) => {
+            const globalIdx = stages.indexOf(s);
+            const isDragging = dragSection === section && dragIndex === i;
+            const isDragOver = dragSection === section && dragOverIndex === i;
+            return (
+              <div
+                key={s.role}
+                draggable
+                onDragStart={() => handleDragStart(i, section)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDrop={(e) => handleDrop(e, i, section)}
+                onDragEnd={handleDragEnd}
+                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 bg-white transition-all cursor-grab active:cursor-grabbing select-none ${
+                  isDragging ? 'opacity-40 scale-95' : 'opacity-100'
+                } ${isDragOver ? 'border-[#154CB3] ring-1 ring-[#154CB3]' : 'border-gray-200 hover:border-gray-300'}`}
+              >
+                {/* Drag handle */}
+                <svg className="w-4 h-4 text-gray-300 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+                </svg>
+
+                {/* Step number */}
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                  section === 'pre' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {i + 1}
+                </span>
+
+                {/* Label + desc */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-gray-800">{s.label}</p>
+                  <p className="text-xs text-gray-400">{s.desc}</p>
+                </div>
+
+                {/* Move to other section */}
+                <button
+                  type="button"
+                  title={section === 'pre' ? 'Move to Post-Live' : 'Move to Pre-Live'}
+                  onClick={() => section === 'pre' ? moveToPostLive(s.role) : moveToPreLive(s.role)}
+                  className="text-xs text-gray-400 hover:text-gray-600 shrink-0 px-1 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                >
+                  {section === 'pre' ? '↓ Post' : '↑ Pre'}
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 sm:p-8 md:p-10">
-      <h2 className="text-xl sm:text-2xl font-bold text-[#063168] mb-2">Approvals Setup</h2>
-      <p className="text-sm text-gray-500 mb-8">
-        Your fest will go through the following approval chain before going live. Approvers will be auto-assigned based on your organizing school.
+      <h2 className="text-xl sm:text-2xl font-bold text-[#063168] mb-1">Approvals Setup</h2>
+      <p className="text-sm text-gray-500 mb-6">
+        Drag to reorder stages. Move stages between Pre-Live and Post-Live. Approvers are auto-assigned by school.
       </p>
 
       {organizingSchool && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <span className="font-semibold">Organizing school:</span> {organizingSchool}
-          </p>
-          {organizingDept && (
-            <p className="text-sm text-blue-700 mt-1">
-              <span className="font-semibold">Department:</span> {organizingDept}
-            </p>
-          )}
+        <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+          <span className="text-sm text-blue-800">
+            <span className="font-semibold">School:</span> {organizingSchool}
+            {organizingDept && <span className="text-blue-600"> · {organizingDept}</span>}
+          </span>
         </div>
       )}
 
-      <div className="space-y-3 mb-8">
-        {steps.map((step, i) => (
-          <div key={step.key} className="flex items-start gap-4">
-            <div className="flex flex-col items-center">
-              <div className="w-9 h-9 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-700 font-bold text-sm">
-                {i + 1}
-              </div>
-              {i < steps.length - 1 && <div className="w-0.5 h-6 bg-blue-200 mt-1" />}
-            </div>
-            <div className="pb-2">
-              <p className="font-semibold text-gray-800 text-sm">{step.label}</p>
-              <p className="text-xs text-gray-500">{step.desc}</p>
-              {!organizingSchool && (
-                <p className="text-xs text-amber-600 mt-0.5">Auto-assigned when school is set</p>
-              )}
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        {/* Pre-Live Section */}
+        <div className="rounded-xl border-2 border-blue-200 bg-blue-50/30 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            <h3 className="text-sm font-bold text-blue-800">Stage 1 — Pre-Live</h3>
+            <span className="text-xs text-blue-500 ml-auto">Blocks publishing</span>
           </div>
-        ))}
+          <p className="text-xs text-blue-600 mb-3">These approvals must complete before your fest goes live.</p>
+          <SectionList sectionStages={preLiveStages} section="pre" emptyText="Drag stages here to require approval before going live" />
+        </div>
+
+        {/* Post-Live Section */}
+        <div className="rounded-xl border-2 border-purple-200 bg-purple-50/30 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+            <h3 className="text-sm font-bold text-purple-800">Stage 2 — Post-Live</h3>
+            <span className="text-xs text-purple-500 ml-auto">Operational</span>
+          </div>
+          <p className="text-xs text-purple-600 mb-3">These run in parallel after the fest is live.</p>
+          <SectionList sectionStages={postLiveStages} section="post" emptyText="Drag stages here for post-live operational tasks" />
+        </div>
       </div>
 
-      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-8">
-        <p className="text-sm text-amber-800">
-          <span className="font-semibold">Note:</span> Your fest is saved as a draft. It will automatically go live once all Stage 1 approvals are cleared.
-        </p>
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-6 text-xs text-amber-800">
+        <span className="font-semibold">Tip:</span> Drag the handle (⠿) to reorder within a section. Use ↓ Post / ↑ Pre to move between sections.
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
@@ -942,7 +1095,7 @@ function ApprovalsSetupView({
         ) : (
           <button
             type="button"
-            onClick={onSubmitForApproval}
+            onClick={() => onSubmitForApproval(stages)}
             disabled={isSubmitting || !festId}
             className="w-full sm:w-auto px-6 py-2.5 bg-[#154CB3] text-white text-sm font-semibold rounded-md hover:bg-[#0f3a7a] focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
@@ -2093,7 +2246,7 @@ function CreateFestForm(props?: CreateFestProps) {
     setActiveView('approvals');
   };
 
-  const handleSubmitForApproval = async () => {
+  const handleSubmitForApproval = async (customStages: WorkflowStage[]) => {
     const festId = savedFestId || festIdFromPath;
     if (!festId || !session?.access_token) return;
     setIsSubmittingApproval(true);
@@ -2104,7 +2257,7 @@ function CreateFestForm(props?: CreateFestProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ itemId: festId, type: 'fest' }),
+        body: JSON.stringify({ itemId: festId, type: 'fest', customStages }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to submit for approval');
