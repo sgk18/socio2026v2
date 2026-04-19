@@ -5,7 +5,7 @@ A full-featured platform for managing university events, fests, and registration
 **Live at** [socio.christuniversity.in](https://socio.christuniversity.in)
 
 ---
-
+Developed By Sachin and Team
 ## Tech Stack
 
 | Layer | Technology |
