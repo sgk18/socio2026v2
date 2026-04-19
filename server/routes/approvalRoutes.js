@@ -232,25 +232,69 @@ router.get(
       const results = [];
 
       if (user.is_hod) {
-        const { data } = await supabase
+        // Records explicitly assigned to this HOD
+        const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
           .eq("stage1_hod_assignee_user_id", user.id)
           .eq("stage1_hod", "pending")
           .eq("current_stage", 1)
           .order("created_at", { ascending: true });
-        if (data) results.push(...data.map((r) => ({ ...r, _queue_role: "hod" })));
+
+        // Unassigned records in this HOD's school (fallback when auto-assign missed them)
+        let unassignedForHod = [];
+        if (user.school) {
+          const { data: unassigned } = await supabase
+            .from("approvals")
+            .select("*")
+            .eq("stage1_hod_routing_state", "waiting_for_assignment")
+            .eq("organizing_school_snapshot", user.school)
+            .eq("stage1_hod", "pending")
+            .eq("current_stage", 1)
+            .order("created_at", { ascending: true });
+          unassignedForHod = unassigned || [];
+        }
+
+        const seenIds = new Set();
+        for (const r of [...(assigned || []), ...unassignedForHod]) {
+          if (!seenIds.has(r.id)) {
+            seenIds.add(r.id);
+            results.push({ ...r, _queue_role: "hod" });
+          }
+        }
       }
 
       if (user.is_dean) {
-        const { data } = await supabase
+        // Records explicitly assigned to this Dean
+        const { data: assigned } = await supabase
           .from("approvals")
           .select("*")
           .eq("stage2_dean_assignee_user_id", user.id)
           .eq("stage2_dean", "pending")
-          .eq("stage1_hod", "approved")
+          .in("stage1_hod", ["approved", "skipped"])
           .order("created_at", { ascending: true });
-        if (data) results.push(...data.map((r) => ({ ...r, _queue_role: "dean" })));
+
+        // Unassigned records in this Dean's school
+        let unassignedForDean = [];
+        if (user.school) {
+          const { data: unassigned } = await supabase
+            .from("approvals")
+            .select("*")
+            .eq("stage2_dean_routing_state", "waiting_for_assignment")
+            .eq("organizing_school_snapshot", user.school)
+            .eq("stage2_dean", "pending")
+            .in("stage1_hod", ["approved", "skipped"])
+            .order("created_at", { ascending: true });
+          unassignedForDean = unassigned || [];
+        }
+
+        const seenIds = new Set();
+        for (const r of [...(assigned || []), ...unassignedForDean]) {
+          if (!seenIds.has(r.id)) {
+            seenIds.add(r.id);
+            results.push({ ...r, _queue_role: "dean" });
+          }
+        }
       }
 
       // Enrich with item title
@@ -384,23 +428,45 @@ router.patch(
         return res.status(404).json({ error: "Approval record not found" });
       }
 
+      // Collects auto-assign updates to merge before writing
+      let updates_pre_action = {};
+
       // Authorization per step
+      const hodSchoolMatch =
+        user.is_hod &&
+        user.school &&
+        record.organizing_school_snapshot &&
+        user.school === record.organizing_school_snapshot;
+
+      const deanSchoolMatch =
+        user.is_dean &&
+        user.school &&
+        record.organizing_school_snapshot &&
+        user.school === record.organizing_school_snapshot;
+
       if (step === "hod") {
-        const isAssignedHod =
-          user.is_hod && record.stage1_hod_assignee_user_id === user.id;
-        if (!isAssignedHod && !isMasterAdmin) {
-          return res.status(403).json({ error: "Only the assigned HOD or Master Admin can act on this step" });
+        const isAssignedHod = user.is_hod && record.stage1_hod_assignee_user_id === user.id;
+        const canActAsHod = isAssignedHod || hodSchoolMatch;
+        if (!canActAsHod && !isMasterAdmin) {
+          return res.status(403).json({ error: "Only the assigned HOD (or HOD of the same school) or Master Admin can act on this step" });
         }
         if (record.stage1_hod !== "pending") {
           return res.status(409).json({ error: `HOD step is already ${record.stage1_hod}` });
         }
+        // Auto-assign this HOD if record was unassigned
+        if (!record.stage1_hod_assignee_user_id && canActAsHod) {
+          updates_pre_action = {
+            stage1_hod_assignee_user_id: user.id,
+            stage1_hod_routing_state: "assigned",
+          };
+        }
       }
 
       if (step === "dean") {
-        const isAssignedDean =
-          user.is_dean && record.stage2_dean_assignee_user_id === user.id;
-        if (!isAssignedDean && !isMasterAdmin) {
-          return res.status(403).json({ error: "Only the assigned Dean or Master Admin can act on this step" });
+        const isAssignedDean = user.is_dean && record.stage2_dean_assignee_user_id === user.id;
+        const canActAsDean = isAssignedDean || deanSchoolMatch;
+        if (!canActAsDean && !isMasterAdmin) {
+          return res.status(403).json({ error: "Only the assigned Dean (or Dean of the same school) or Master Admin can act on this step" });
         }
         if (record.stage2_dean !== "pending") {
           return res.status(409).json({ error: `Dean step is already ${record.stage2_dean}` });
@@ -408,6 +474,14 @@ router.patch(
         // Enforce sequential order: HOD must be approved first
         if (record.stage1_hod !== "approved" && record.stage1_hod !== "skipped") {
           return res.status(400).json({ error: "HOD must approve before Dean can act" });
+        }
+        // Auto-assign this Dean if record was unassigned
+        if (!record.stage2_dean_assignee_user_id && canActAsDean) {
+          updates_pre_action = {
+            ...updates_pre_action,
+            stage2_dean_assignee_user_id: user.id,
+            stage2_dean_routing_state: "assigned",
+          };
         }
       }
 
@@ -428,6 +502,7 @@ router.patch(
 
       const fieldMap = { hod: "stage1_hod", dean: "stage2_dean" };
       const updates = {
+        ...updates_pre_action,
         [fieldMap[step]]: newStatus,
         action_log: updatedLog,
         last_action_by: user.email,
