@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useRef, useState } from "react";
-import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES, OperationalConfig } from "@/app/_components/Admin/ManageEvent";
+import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES, OperationalConfig, BudgetItem } from "@/app/_components/Admin/ManageEvent";
 import { EventFormData } from "@/app/lib/eventFormSchema";
 import { SubmitHandler } from "react-hook-form";
 import { createBrowserClient } from "@supabase/ssr";
@@ -9,15 +9,16 @@ import { useRouter } from "next/navigation";
 export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
-  const approvalConfigRef = useRef<{ enabled: boolean; stages: WorkflowStage[] }>({
+  const approvalConfigRef = useRef<{ enabled: boolean; stages: WorkflowStage[]; budgetItems: BudgetItem[] }>({
     enabled: true,
     stages: STANDALONE_EVENT_STAGES,
+    budgetItems: [],
   });
   const operationalConfigRef = useRef<OperationalConfig>({
     it:       { enabled: false, description: '' },
     venue:    { enabled: false, venue_name: '', date: '', start_time: '', end_time: '' },
     catering: { enabled: false, approximate_count: '', description: '' },
-    stalls:   { enabled: false, canopy: false, hardboard: false },
+    stalls:   { enabled: false, total_stalls: '', canopy_count: '', hardboard_count: '', description: '' },
   });
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
   const MAX_EMAIL_LENGTH = 100;
@@ -210,6 +211,7 @@ export default function CreateEventPage() {
               itemId: createdEventId,
               type: "event",
               customStages: approvalStages.filter(s => s.blocking),
+              budgetItems: approvalConfigRef.current.budgetItems,
             }),
           });
         } catch {
@@ -257,8 +259,8 @@ export default function CreateEventPage() {
       existingImageFileUrl={null}
       existingBannerFileUrl={null}
       existingPdfFileUrl={null}
-      onApprovalConfigChange={(enabled, stages) => {
-        approvalConfigRef.current = { enabled, stages };
+      onApprovalConfigChange={(enabled, stages, budgetItems) => {
+        approvalConfigRef.current = { enabled, stages, budgetItems };
       }}
       onOperationalConfigChange={(config) => {
         operationalConfigRef.current = config;

@@ -737,18 +737,25 @@ export const STANDALONE_EVENT_STAGES: WorkflowStage[] = [
   { role: 'stalls',   label: 'Stalls / Misc',    desc: 'Stall allocations',          blocking: false },
 ];
 
+export interface BudgetItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export interface OperationalConfig {
   it:       { enabled: boolean; description: string };
   venue:    { enabled: boolean; venue_name: string; date: string; start_time: string; end_time: string };
   catering: { enabled: boolean; approximate_count: string; description: string };
-  stalls:   { enabled: boolean; canopy: boolean; hardboard: boolean };
+  stalls:   { enabled: boolean; total_stalls: string; canopy_count: string; hardboard_count: string; description: string };
 }
 
 const DEFAULT_OPERATIONAL_CONFIG: OperationalConfig = {
   it:       { enabled: false, description: '' },
   venue:    { enabled: false, venue_name: '', date: '', start_time: '', end_time: '' },
   catering: { enabled: false, approximate_count: '', description: '' },
-  stalls:   { enabled: false, canopy: false, hardboard: false },
+  stalls:   { enabled: false, total_stalls: '', canopy_count: '', hardboard_count: '', description: '' },
 };
 
 interface BlockingStageConfig {
@@ -778,7 +785,7 @@ interface EventFormProps {
   isDraft?: boolean;
   isArchiveUpdating?: boolean;
   onToggleArchive?: () => void;
-  onApprovalConfigChange?: (enabled: boolean, stages: WorkflowStage[]) => void;
+  onApprovalConfigChange?: (enabled: boolean, stages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
   onOperationalConfigChange?: (config: OperationalConfig) => void;
 }
 
@@ -935,7 +942,7 @@ function EventApprovalsOperationalSection({
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
             <div>
               <p className="text-sm font-medium text-gray-800">Stalls</p>
-              <p className="text-xs text-gray-400">Canopy, hardboard, or exhibition stalls</p>
+              <p className="text-xs text-gray-400">Exhibition stalls, canopy, hardboard</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" className="sr-only peer" checked={config.stalls.enabled}
@@ -944,27 +951,148 @@ function EventApprovalsOperationalSection({
             </label>
           </div>
           {config.stalls.enabled && (
-            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Total number of stalls</label>
                 <input
-                  type="checkbox"
-                  checked={config.stalls.canopy}
-                  onChange={(e) => updateField('stalls', 'canopy', e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
+                  type="number"
+                  min="1"
+                  value={config.stalls.total_stalls}
+                  onChange={(e) => updateField('stalls', 'total_stalls', e.target.value)}
+                  placeholder="e.g., 10"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
                 />
-                <span className="text-sm text-gray-700">Canopy required</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={config.stalls.hardboard}
-                  onChange={(e) => updateField('stalls', 'hardboard', e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Canopy stalls needed</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={config.stalls.canopy_count}
+                    onChange={(e) => updateField('stalls', 'canopy_count', e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Hardboard stalls needed</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={config.stalls.hardboard_count}
+                    onChange={(e) => updateField('stalls', 'hardboard_count', e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Additional requirements</label>
+                <textarea
+                  rows={2}
+                  value={config.stalls.description}
+                  onChange={(e) => updateField('stalls', 'description', e.target.value)}
+                  placeholder="Any specific setup needs, location preference..."
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
                 />
-                <span className="text-sm text-gray-700">Hardboard / display boards required</span>
-              </label>
+              </div>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BudgetEstimator({
+  items,
+  onChange,
+}: {
+  items: BudgetItem[];
+  onChange: (items: BudgetItem[]) => void;
+}) {
+  const total = items.reduce((s, b) => s + b.quantity * b.unitPrice, 0);
+
+  const addRow = () =>
+    onChange([...items, { id: crypto.randomUUID(), name: '', quantity: 1, unitPrice: 0 }]);
+
+  const removeRow = (id: string) => onChange(items.filter(b => b.id !== id));
+
+  const updateRow = (id: string, field: keyof Omit<BudgetItem, 'id'>, value: string) =>
+    onChange(items.map(b => {
+      if (b.id !== id) return b;
+      if (field === 'name') return { ...b, name: value };
+      return { ...b, [field]: parseFloat(value) || 0 };
+    }));
+
+  return (
+    <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-sm font-semibold text-gray-800">Budget Estimate</p>
+        <span className="text-xs text-gray-400">Required for CFO / Finance review</span>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">List your expected expenses. This is submitted with the approval request.</p>
+
+      <div className="grid grid-cols-[1fr_64px_88px_80px_28px] gap-2 mb-1 px-1">
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Item</span>
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide text-center">Qty</span>
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide text-right">Unit (₹)</span>
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide text-right">Total (₹)</span>
+        <span />
+      </div>
+
+      <div className="space-y-2">
+        {items.map(b => (
+          <div key={b.id} className="grid grid-cols-[1fr_64px_88px_80px_28px] gap-2 items-center">
+            <input
+              type="text"
+              placeholder="e.g. Sound system"
+              value={b.name}
+              onChange={e => updateRow(b.id, 'name', e.target.value)}
+              className="w-full rounded border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <input
+              type="number"
+              min="1"
+              value={b.quantity}
+              onChange={e => updateRow(b.id, 'quantity', e.target.value)}
+              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={b.unitPrice}
+              onChange={e => updateRow(b.id, 'unitPrice', e.target.value)}
+              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <span className="text-sm text-gray-700 text-right tabular-nums">
+              {(b.quantity * b.unitPrice).toLocaleString('en-IN')}
+            </span>
+            <button
+              type="button"
+              onClick={() => removeRow(b.id)}
+              className="flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 text-base leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <div className="text-center py-4 text-sm text-gray-400 border border-dashed border-gray-200 rounded">
+            No items yet.
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+        <button type="button" onClick={addRow} className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+          + Add item
+        </button>
+        <div className="text-right">
+          <p className="text-xs text-gray-400 mb-0.5">Total estimate</p>
+          <p className="text-base font-semibold text-gray-900 tabular-nums">₹{total.toLocaleString('en-IN')}</p>
         </div>
       </div>
     </div>
@@ -1236,6 +1364,7 @@ export default function EventForm({
 }: EventFormProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'approvals'>('details');
   const [blockingStages, setBlockingStages] = useState<BlockingStageConfig[]>(DEFAULT_BLOCKING_STAGES);
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [festApprovalStages, setFestApprovalStages] = useState<any[]>([]);
   const [operationalConfig, setOperationalConfig] = useState<OperationalConfig>(DEFAULT_OPERATIONAL_CONFIG);
   const [fetchedFests, setFetchedFests] = useState<FestOption[]>([]);
@@ -1651,8 +1780,8 @@ export default function EventForm({
     const enabled = blockingStages
       .filter(s => s.enabled)
       .map(s => ({ role: s.role, label: s.label, desc: s.desc, blocking: true as const }));
-    onApprovalConfigChange(isStandaloneEvent && enabled.length > 0, enabled);
-  }, [blockingStages, isStandaloneEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+    onApprovalConfigChange(isStandaloneEvent && enabled.length > 0, enabled, budgetItems);
+  }, [blockingStages, budgetItems, isStandaloneEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (onOperationalConfigChange) onOperationalConfigChange(operationalConfig);
@@ -2948,7 +3077,7 @@ export default function EventForm({
                       <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
                     </div>
                   ) : (
-                    /* Standalone: per-stage toggles for blocking + operational */
+                    /* Standalone: per-stage toggles for blocking + optional budget + operational */
                     <div className="space-y-6">
                       <div>
                         <p className="text-sm font-semibold text-gray-800 mb-1">Approval Stages</p>
@@ -2978,6 +3107,10 @@ export default function EventForm({
                             </div>
                           ))}
                         </div>
+                        {/* Budget estimator appears when CFO or Accounts is enabled */}
+                        {blockingStages.some(s => (s.role === 'cfo' || s.role === 'accounts') && s.enabled) && (
+                          <BudgetEstimator items={budgetItems} onChange={setBudgetItems} />
+                        )}
                       </div>
                       <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
                     </div>
