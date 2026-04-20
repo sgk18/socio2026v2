@@ -1,7 +1,6 @@
 "use client";
 import React, { useMemo, useRef, useState } from "react";
-import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES } from "@/app/_components/Admin/ManageEvent";
-import OperationalRequestsWizard, { OperationalRequests } from "@/app/_components/OperationalRequestsWizard";
+import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES, OperationalConfig } from "@/app/_components/Admin/ManageEvent";
 import { EventFormData } from "@/app/lib/eventFormSchema";
 import { SubmitHandler } from "react-hook-form";
 import { createBrowserClient } from "@supabase/ssr";
@@ -9,11 +8,16 @@ import { useRouter } from "next/navigation";
 
 export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [wizardState, setWizardState] = useState<{ show: boolean; eventId: string; eventTitle: string; isSubmitting: boolean } | null>(null);
   const router = useRouter();
   const approvalConfigRef = useRef<{ enabled: boolean; stages: WorkflowStage[] }>({
     enabled: true,
     stages: STANDALONE_EVENT_STAGES,
+  });
+  const operationalConfigRef = useRef<OperationalConfig>({
+    it:       { enabled: false, description: '' },
+    venue:    { enabled: false, venue_name: '', date: '', start_time: '', end_time: '' },
+    catering: { enabled: false, approximate_count: '', description: '' },
+    stalls:   { enabled: false, canopy: false, hardboard: false },
   });
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
   const MAX_EMAIL_LENGTH = 100;
@@ -27,25 +31,13 @@ export default function CreateEventPage() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const supabase = useMemo(() => {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return null;
-    }
-
+    if (!supabaseUrl || !supabaseAnonKey) return null;
     return createBrowserClient(supabaseUrl, supabaseAnonKey);
   }, [supabaseAnonKey, supabaseUrl]);
 
   const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
 
-  const submitEvent = async (
-    dataFromHookForm: EventFormData,
-    saveAsDraft: boolean
-  ) => {
-
-    console.log(
-      `CreateEventPage: submitEvent CALLED. Mode: ${saveAsDraft ? "draft" : "publish"}. Data:`,
-      JSON.stringify(dataFromHookForm, null, 2)
-    );
-
+  const submitEvent = async (dataFromHookForm: EventFormData, saveAsDraft: boolean) => {
     setIsSubmitting(true);
 
     if (!supabase) {
@@ -55,56 +47,32 @@ export default function CreateEventPage() {
       return;
     }
 
-    let token;
+    let token: string;
     let userEmail: string | undefined;
     try {
-      console.log("CreateEventPage: Attempting to get session...");
-      
-      // First, try to refresh the session to ensure we have a valid token
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      
-      if (refreshError) {
-        console.warn("CreateEventPage: Session refresh failed, trying to get existing session:", refreshError);
-      }
-      
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) console.warn("Session refresh failed:", refreshError);
 
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
-        console.error(
-          "CreateEventPage: Session error or no session.",
-          sessionError
-        );
         alert("Authentication error or no active session. Please log in again.");
         setIsSubmitting(false);
-        // Redirect to auth page
         router.replace('/auth');
         return;
       }
-      
+
       token = session.access_token;
       userEmail = session.user.email;
-      console.log("CreateEventPage: Session obtained, token acquired.");
-      
-      // Verify token is not expired
+
       const tokenPayload = JSON.parse(atob(token.split('.')[1]));
-      const currentTime = Math.floor(Date.now() / 1000);
-      
-      if (tokenPayload.exp <= currentTime) {
-        console.error("CreateEventPage: Token has expired");
+      if (tokenPayload.exp <= Math.floor(Date.now() / 1000)) {
         alert("Your session has expired. Please log in again.");
         setIsSubmitting(false);
         router.replace('/auth');
         return;
       }
-      
     } catch (e: any) {
-      console.error("CreateEventPage: Unexpected error getting session:", e);
-      alert(
-        "An unexpected error occurred while verifying your session. Please log in again."
-      );
+      alert("An unexpected error occurred while verifying your session. Please log in again.");
       setIsSubmitting(false);
       router.replace('/auth');
       return;
@@ -116,13 +84,11 @@ export default function CreateEventPage() {
       setIsSubmitting(false);
       return;
     }
-
     if (normalizedContactEmail.length > MAX_EMAIL_LENGTH) {
       alert("Contact email must be 100 characters or fewer.");
       setIsSubmitting(false);
       return;
     }
-
     if (!validateEmail(normalizedContactEmail)) {
       alert("Please enter a valid contact email, like name@gmail.com.");
       setIsSubmitting(false);
@@ -134,7 +100,6 @@ export default function CreateEventPage() {
           (head) => normalizeEmail(head).length > 0 && !validateEmail(head)
         )
       : false;
-
     if (hasInvalidEventHeadEmail) {
       alert("Each event head email must be valid.");
       setIsSubmitting(false);
@@ -142,25 +107,15 @@ export default function CreateEventPage() {
     }
 
     const formData = new FormData();
-
     const appendIfExists = (key: string, value: any) => {
-      if (
-        value !== null &&
-        value !== undefined &&
-        String(value).trim() !== ""
-      ) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") {
         formData.append(key, String(value));
       }
     };
-
     const appendJsonArrayOrObject = (key: string, value: any) => {
       if (Array.isArray(value)) {
         formData.append(key, JSON.stringify(value));
-      } else if (
-        typeof value === "object" &&
-        value !== null &&
-        Object.keys(value).length > 0
-      ) {
+      } else if (typeof value === "object" && value !== null && Object.keys(value).length > 0) {
         formData.append(key, JSON.stringify(value));
       }
     };
@@ -170,61 +125,33 @@ export default function CreateEventPage() {
     appendIfExists("end_date", dataFromHookForm.endDate);
     appendIfExists("event_time", dataFromHookForm.eventTime);
     appendIfExists("description", dataFromHookForm.detailedDescription);
-
     appendIfExists("organizing_school", dataFromHookForm.organizingSchool);
     appendIfExists("organizing_dept", dataFromHookForm.organizingDept);
-
     appendJsonArrayOrObject("department_access", dataFromHookForm.department);
-
     appendIfExists("category", dataFromHookForm.category);
-    // Only append fest_id if it's not "none"
     if (dataFromHookForm.festEvent && dataFromHookForm.festEvent !== "none") {
       appendIfExists("fest_id", dataFromHookForm.festEvent);
     }
-    appendIfExists(
-      "registration_deadline",
-      dataFromHookForm.registrationDeadline
-    );
+    appendIfExists("registration_deadline", dataFromHookForm.registrationDeadline);
     appendIfExists("venue", dataFromHookForm.location);
-
     appendIfExists("registration_fee", dataFromHookForm.registrationFee);
-    appendIfExists(
-      "max_participants",
-      dataFromHookForm.isTeamEvent
-        ? dataFromHookForm.maxParticipants
-        : "1"
-    );
-    appendIfExists(
-      "min_participants",
-      dataFromHookForm.isTeamEvent
-        ? dataFromHookForm.minParticipants
-        : "1"
-    );
-
+    appendIfExists("max_participants", dataFromHookForm.isTeamEvent ? dataFromHookForm.maxParticipants : "1");
+    appendIfExists("min_participants", dataFromHookForm.isTeamEvent ? dataFromHookForm.minParticipants : "1");
     appendIfExists("organizer_email", normalizedContactEmail);
     appendIfExists("organizer_phone", dataFromHookForm.contactPhone);
     appendIfExists("whatsapp_invite_link", dataFromHookForm.whatsappLink);
 
-    const shouldSendNotifications =
-      !saveAsDraft && dataFromHookForm.sendNotifications !== false;
-
+    const shouldSendNotifications = !saveAsDraft && dataFromHookForm.sendNotifications !== false;
     formData.append("claims_applicable", String(dataFromHookForm.provideClaims));
     formData.append("send_notifications", String(shouldSendNotifications));
     formData.append("is_draft", String(saveAsDraft));
-    if (saveAsDraft) {
-      formData.append("is_archived", "false");
-    }
+    if (saveAsDraft) formData.append("is_archived", "false");
     formData.append("on_spot", String(dataFromHookForm.onSpot));
-    
-    // Outsider registration fields
     formData.append("allow_outsiders", String(dataFromHookForm.allowOutsiders));
     appendIfExists("outsider_registration_fee", dataFromHookForm.outsiderRegistrationFee);
     appendIfExists("outsider_max_participants", dataFromHookForm.outsiderMaxParticipants);
-
-    // Campus fields
     appendIfExists("campus_hosted_at", dataFromHookForm.campusHostedAt);
     appendJsonArrayOrObject("allowed_campuses", dataFromHookForm.allowedCampuses);
-
     appendJsonArrayOrObject("schedule", dataFromHookForm.scheduleItems);
     appendJsonArrayOrObject("rules", dataFromHookForm.rules);
     appendJsonArrayOrObject("prizes", dataFromHookForm.prizes);
@@ -233,119 +160,52 @@ export default function CreateEventPage() {
     appendIfExists("created_by", userEmail);
 
     const appendFile = (key: string, file: any) => {
-      if (!file) {
-        console.log(`Skipping ${key}: No file provided.`);
-        return;
-      }
-      
-      // Handle FileList (the native browser object)
+      if (!file) return;
       if (file instanceof FileList) {
-        if (file.length > 0) {
-          formData.append(key, file[0]);
-          console.log(`✅ ${key}: ${file[0].name} (${file[0].size} bytes, ${file[0].type})`);
-        } else {
-          console.warn(`⚠️ ${key}: FileList is empty`);
-        }
+        if (file.length > 0) formData.append(key, file[0]);
         return;
       }
-      
-      // Handle direct File object
-      if (file instanceof File) {
-        formData.append(key, file);
-        console.log(`✅ ${key}: ${file.name} (${file.size} bytes, ${file.type})`);
-        return;
-      }
-      
-      // If we get here, something unexpected happened
-      console.error(`❌ ${key}: Unexpected type`, typeof file, file);
+      if (file instanceof File) { formData.append(key, file); return; }
     };
-
     appendFile("eventImage", dataFromHookForm.imageFile);
     appendFile("bannerImage", dataFromHookForm.bannerFile);
     appendFile("pdfFile", dataFromHookForm.pdfFile);
 
-    console.log("CreateEventPage: FormData prepared. Content snapshot:");
-    console.log("=== RAW FORM DATA BEFORE SENDING ===");
-    for (let [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        console.log(
-          `  ${key}: [FILE] ${value.name}, ${value.type}, ${value.size} bytes`
-        );
-      } else {
-        console.log(`  ${key}: ${value}`);
-      }
-    }
-    console.log("=== END FORM DATA ===");
-    console.log(`CreateEventPage: API_URL is: ${API_URL}`);
-
     try {
-      console.log(`CreateEventPage: Initiating fetch to ${API_URL}/api/events`);
       const response = await fetch(`${API_URL}/api/events`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token!}` },
         body: formData,
       });
-      console.log(
-        "CreateEventPage: Fetch responded. Status:",
-        response.status,
-        "Ok:",
-        response.ok
-      );
 
       if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
+        let errorData: any;
+        try { errorData = await response.json(); } catch {
           const responseText = await response.text();
-          console.error(
-            "CreateEventPage: Failed to parse error response JSON. Raw text:",
-            responseText
-          );
-          errorData = {
-            error: "Failed to parse error response from server.",
-            details: `Status: ${response.status}, StatusText: ${response.statusText}. Response body: ${responseText}`,
-          };
+          errorData = { error: `Status: ${response.status}. ${responseText}` };
         }
-        console.error("CreateEventPage: API Error Data:", errorData);
-        const message =
-          errorData.error ||
-          errorData.message ||
-          (typeof errorData.details === "string" ? errorData.details : null) ||
-          errorData.detail ||
-          `Server error: ${response.status} ${response.statusText}`;
+        const message = errorData.error || errorData.message || `Server error: ${response.status}`;
         throw new Error(message);
       }
 
       const result = await response.json();
       const createdEventId: string | undefined = result?.event_id;
-      console.log(
-        `CreateEventPage: Event ${saveAsDraft ? "draft saved" : "created"} successfully via API:`,
-        result
-      );
 
-      const isFestEvent = dataFromHookForm.festEvent && dataFromHookForm.festEvent !== "none";
-      const { enabled: approvalEnabled, stages: approvalStages } = approvalConfigRef.current;
-
-      if (createdEventId && isFestEvent) {
-        // Under-fest: show operational requests wizard (no blocking approval needed)
-        setWizardState({
-          show: true,
-          eventId: createdEventId,
-          eventTitle: dataFromHookForm.eventTitle || createdEventId,
-          isSubmitting: false,
-        });
+      if (!createdEventId) {
+        router.push('/manage');
         return;
       }
 
-      if (createdEventId && approvalEnabled && !isFestEvent) {
-        // Standalone: submit blocking stages approval, then show operational wizard
+      const isFestEvent = dataFromHookForm.festEvent && dataFromHookForm.festEvent !== "none";
+      const { enabled: approvalEnabled, stages: approvalStages } = approvalConfigRef.current;
+      const opConfig = operationalConfigRef.current;
+
+      // For standalone events: submit blocking approval record first
+      if (!isFestEvent && approvalEnabled) {
         try {
           await fetch(`${API_URL}/api/approvals`, {
             method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            headers: { Authorization: `Bearer ${token!}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               itemId: createdEventId,
               type: "event",
@@ -355,75 +215,38 @@ export default function CreateEventPage() {
         } catch {
           // Non-critical
         }
-        setWizardState({
-          show: true,
-          eventId: createdEventId,
-          eventTitle: dataFromHookForm.eventTitle || createdEventId,
-          isSubmitting: false,
-        });
-        return;
+      }
+
+      // Attach operational stages (both fest and standalone)
+      const operationalStages = buildOperationalStages(opConfig);
+      if (operationalStages.length > 0) {
+        try {
+          await fetch(`${API_URL}/api/approvals/${createdEventId}/operational`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token!}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ operationalStages }),
+          });
+        } catch {
+          // Non-critical
+        }
+      }
+
+      // Redirect to approval status page (or manage if no approval)
+      if (isFestEvent || approvalEnabled) {
+        router.push(`/approvals/${createdEventId}?type=event`);
+      } else {
+        router.push('/manage');
       }
     } catch (error: any) {
-      console.error(
-        `CreateEventPage: Error during event ${saveAsDraft ? "draft save" : "creation"} fetch/processing:`,
-        error.message,
-        error
-      );
-      alert(
-        `Failed to ${saveAsDraft ? "save draft" : "create event"}. ${
-          error?.message || "An unknown error occurred."
-        }`
-      );
+      alert(`Failed to ${saveAsDraft ? "save draft" : "create event"}. ${error?.message || "An unknown error occurred."}`);
       throw error;
     } finally {
-      console.log("CreateEventPage: submitEvent FINALLY block.");
       setIsSubmitting(false);
     }
   };
 
-  const handleCreateEvent: SubmitHandler<EventFormData> = async (dataFromHookForm) =>
-    submitEvent(dataFromHookForm, false);
-
-  const handleSaveDraft: SubmitHandler<EventFormData> = async (dataFromHookForm) =>
-    submitEvent(dataFromHookForm, true);
-
-  async function handleWizardSubmit(requests: OperationalRequests) {
-    if (!wizardState) return;
-    setWizardState(w => w ? { ...w, isSubmitting: true } : null);
-    const token = (await supabase?.auth.getSession())?.data.session?.access_token;
-    try {
-      const operationalStages = buildOperationalStages(requests);
-      await fetch(`${API_URL}/api/approvals/${wizardState.eventId}/operational`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ operationalStages }),
-      });
-    } catch {
-      // Non-critical
-    } finally {
-      router.push(`/approvals/${wizardState.eventId}?type=event`);
-    }
-  }
-
-  function handleWizardSkip() {
-    if (!wizardState) return;
-    router.push(`/approvals/${wizardState.eventId}?type=event`);
-  }
-
-  if (wizardState?.show) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-xl mx-auto">
-          <OperationalRequestsWizard
-            eventTitle={wizardState.eventTitle}
-            onSubmit={handleWizardSubmit}
-            onSkip={handleWizardSkip}
-            isSubmitting={wizardState.isSubmitting}
-          />
-        </div>
-      </div>
-    );
-  }
+  const handleCreateEvent: SubmitHandler<EventFormData> = async (data) => submitEvent(data, false);
+  const handleSaveDraft: SubmitHandler<EventFormData> = async (data) => submitEvent(data, true);
 
   return (
     <EventForm
@@ -437,17 +260,19 @@ export default function CreateEventPage() {
       onApprovalConfigChange={(enabled, stages) => {
         approvalConfigRef.current = { enabled, stages };
       }}
+      onOperationalConfigChange={(config) => {
+        operationalConfigRef.current = config;
+      }}
     />
   );
 }
 
-function buildOperationalStages(requests: OperationalRequests) {
+function buildOperationalStages(config: OperationalConfig) {
   const map: { role: string; label: string; request_data: Record<string, unknown> }[] = [
-    { role: "it",       label: "IT Support",      request_data: requests.it },
-    { role: "venue",    label: "Venue",            request_data: requests.venue },
-    { role: "catering", label: "Catering",         request_data: requests.catering },
-    { role: "stalls",   label: "Stalls",           request_data: requests.stalls },
+    { role: "it",       label: "IT Support",      request_data: config.it as unknown as Record<string, unknown> },
+    { role: "venue",    label: "Venue",            request_data: config.venue as unknown as Record<string, unknown> },
+    { role: "catering", label: "Catering",         request_data: config.catering as unknown as Record<string, unknown> },
+    { role: "stalls",   label: "Stalls",           request_data: config.stalls as unknown as Record<string, unknown> },
   ];
   return map.filter(s => (s.request_data as any).enabled);
 }
-

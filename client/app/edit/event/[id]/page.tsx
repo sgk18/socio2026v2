@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { dayjs } from "@/lib/dateUtils";
-import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES } from "@/app/_components/Admin/ManageEvent";
+import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES, OperationalConfig } from "@/app/_components/Admin/ManageEvent";
 import {
   EventFormData,
   departments as departmentOptions,
@@ -48,6 +48,7 @@ export default function EditEventPage() {
   const [approvalExists, setApprovalExists] = useState<boolean | null>(null);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const approvalConfigRef = { current: { enabled: true, stages: STANDALONE_EVENT_STAGES as WorkflowStage[] } };
+  const operationalConfigRef = { current: { it: { enabled: false, description: '' }, venue: { enabled: false, venue_name: '', date: '', start_time: '', end_time: '' }, catering: { enabled: false, approximate_count: '', description: '' }, stalls: { enabled: false, canopy: false, hardboard: false } } as OperationalConfig };
 
   useEffect(() => {
     if (authIsLoading) return;
@@ -851,6 +852,9 @@ export default function EditEventPage() {
         onToggleArchive={handleToggleArchive}
         onApprovalConfigChange={(enabled, stages) => {
           approvalConfigRef.current = { enabled, stages };
+        }}
+        onOperationalConfigChange={(config) => {
+          operationalConfigRef.current = config;
         }}
       />
       {/* Approval workflow actions */}

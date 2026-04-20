@@ -446,7 +446,7 @@ const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby={`${field.name}-monthyear`}
-            className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-4 w-full sm:w-80"
+            className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-[120] p-4 w-[20rem] max-w-[calc(100vw-2rem)]"
           >
             <div className="flex items-center justify-between mb-3">
               <button
@@ -737,6 +737,34 @@ export const STANDALONE_EVENT_STAGES: WorkflowStage[] = [
   { role: 'stalls',   label: 'Stalls / Misc',    desc: 'Stall allocations',          blocking: false },
 ];
 
+export interface OperationalConfig {
+  it:       { enabled: boolean; description: string };
+  venue:    { enabled: boolean; venue_name: string; date: string; start_time: string; end_time: string };
+  catering: { enabled: boolean; approximate_count: string; description: string };
+  stalls:   { enabled: boolean; canopy: boolean; hardboard: boolean };
+}
+
+const DEFAULT_OPERATIONAL_CONFIG: OperationalConfig = {
+  it:       { enabled: false, description: '' },
+  venue:    { enabled: false, venue_name: '', date: '', start_time: '', end_time: '' },
+  catering: { enabled: false, approximate_count: '', description: '' },
+  stalls:   { enabled: false, canopy: false, hardboard: false },
+};
+
+interface BlockingStageConfig {
+  role: string;
+  label: string;
+  desc: string;
+  enabled: boolean;
+}
+
+const DEFAULT_BLOCKING_STAGES: BlockingStageConfig[] = [
+  { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         enabled: true },
+  { role: 'dean',     label: 'Dean',            desc: 'Dean of the School',         enabled: true },
+  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', enabled: true },
+  { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance',        enabled: true },
+];
+
 interface EventFormProps {
   onSubmit: SubmitHandler<EventFormData>;
   onSubmitDraft?: SubmitHandler<EventFormData>;
@@ -751,6 +779,196 @@ interface EventFormProps {
   isArchiveUpdating?: boolean;
   onToggleArchive?: () => void;
   onApprovalConfigChange?: (enabled: boolean, stages: WorkflowStage[]) => void;
+  onOperationalConfigChange?: (config: OperationalConfig) => void;
+}
+
+function EventApprovalsOperationalSection({
+  config,
+  onChange,
+}: {
+  config: OperationalConfig;
+  onChange: (c: OperationalConfig) => void;
+}) {
+  const toggleEnabled = (role: keyof OperationalConfig, enabled: boolean) =>
+    onChange({ ...config, [role]: { ...config[role], enabled } });
+
+  const updateField = <R extends keyof OperationalConfig>(
+    role: R,
+    field: keyof OperationalConfig[R],
+    value: string | boolean
+  ) => onChange({ ...config, [role]: { ...config[role], [field]: value } });
+
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-800 mb-1">Operational Requests</p>
+      <p className="text-xs text-gray-500 mb-4">
+        Enable any services you need for this event. Forms are submitted to the relevant teams for coordination.
+      </p>
+      <div className="space-y-3">
+        {/* IT Support */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-gray-800">IT Support</p>
+              <p className="text-xs text-gray-400">Technical setup, AV, projectors, network</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={config.it.enabled}
+                onChange={(e) => toggleEnabled('it', e.target.checked)} />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+            </label>
+          </div>
+          {config.it.enabled && (
+            <div className="px-4 pb-4 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-medium text-gray-600 mb-1">What do you need?</label>
+              <textarea
+                rows={2}
+                value={config.it.description}
+                onChange={(e) => updateField('it', 'description', e.target.value)}
+                placeholder="Describe your technical requirements..."
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Venue */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Venue Booking</p>
+              <p className="text-xs text-gray-400">Hall, auditorium, or room reservation</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={config.venue.enabled}
+                onChange={(e) => toggleEnabled('venue', e.target.checked)} />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+            </label>
+          </div>
+          {config.venue.enabled && (
+            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Venue name</label>
+                <input
+                  type="text"
+                  value={config.venue.venue_name}
+                  onChange={(e) => updateField('venue', 'venue_name', e.target.value)}
+                  placeholder="e.g., Main Auditorium"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={config.venue.date}
+                    onChange={(e) => updateField('venue', 'date', e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start time</label>
+                  <input
+                    type="time"
+                    value={config.venue.start_time}
+                    onChange={(e) => updateField('venue', 'start_time', e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End time</label>
+                  <input
+                    type="time"
+                    value={config.venue.end_time}
+                    onChange={(e) => updateField('venue', 'end_time', e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Catering */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Catering</p>
+              <p className="text-xs text-gray-400">Food, beverages, or vendor stalls</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={config.catering.enabled}
+                onChange={(e) => toggleEnabled('catering', e.target.checked)} />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+            </label>
+          </div>
+          {config.catering.enabled && (
+            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Approximate attendee count</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={config.catering.approximate_count}
+                  onChange={(e) => updateField('catering', 'approximate_count', e.target.value)}
+                  placeholder="e.g., 200"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Requirements</label>
+                <textarea
+                  rows={2}
+                  value={config.catering.description}
+                  onChange={(e) => updateField('catering', 'description', e.target.value)}
+                  placeholder="Dietary needs, meal type, timing..."
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Stalls */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Stalls</p>
+              <p className="text-xs text-gray-400">Canopy, hardboard, or exhibition stalls</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={config.stalls.enabled}
+                onChange={(e) => toggleEnabled('stalls', e.target.checked)} />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+            </label>
+          </div>
+          {config.stalls.enabled && (
+            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.stalls.canopy}
+                  onChange={(e) => updateField('stalls', 'canopy', e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
+                />
+                <span className="text-sm text-gray-700">Canopy required</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.stalls.hardboard}
+                  onChange={(e) => updateField('stalls', 'hardboard', e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
+                />
+                <span className="text-sm text-gray-700">Hardboard / display boards required</span>
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const baseButtonClasses =
@@ -1014,11 +1232,12 @@ export default function EventForm({
   isArchiveUpdating,
   onToggleArchive,
   onApprovalConfigChange,
+  onOperationalConfigChange,
 }: EventFormProps) {
-  const [approvalEnabled, setApprovalEnabled] = useState(true);
-  const [approvalStages, setApprovalStages] = useState<WorkflowStage[]>(STANDALONE_EVENT_STAGES);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'details' | 'approvals'>('details');
+  const [blockingStages, setBlockingStages] = useState<BlockingStageConfig[]>(DEFAULT_BLOCKING_STAGES);
+  const [festApprovalStages, setFestApprovalStages] = useState<any[]>([]);
+  const [operationalConfig, setOperationalConfig] = useState<OperationalConfig>(DEFAULT_OPERATIONAL_CONFIG);
   const [fetchedFests, setFetchedFests] = useState<FestOption[]>([]);
 
   useEffect(() => {
@@ -1428,10 +1647,31 @@ export default function EventForm({
   const isStandaloneEvent = !watchedFestEvent || String(watchedFestEvent).toLowerCase() === "none";
 
   useEffect(() => {
-    if (onApprovalConfigChange) {
-      onApprovalConfigChange(approvalEnabled && isStandaloneEvent, approvalStages);
+    if (!onApprovalConfigChange) return;
+    const enabled = blockingStages
+      .filter(s => s.enabled)
+      .map(s => ({ role: s.role, label: s.label, desc: s.desc, blocking: true as const }));
+    onApprovalConfigChange(isStandaloneEvent && enabled.length > 0, enabled);
+  }, [blockingStages, isStandaloneEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (onOperationalConfigChange) onOperationalConfigChange(operationalConfig);
+  }, [operationalConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch parent fest's approval stages when a fest is selected
+  useEffect(() => {
+    if (isStandaloneEvent || !watchedFestEvent || !session?.access_token) {
+      setFestApprovalStages([]);
+      return;
     }
-  }, [approvalEnabled, approvalStages, isStandaloneEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+    const base = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '');
+    fetch(`${base}/api/approvals/${watchedFestEvent}?type=fest`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.approval?.stages) setFestApprovalStages(data.approval.stages); })
+      .catch(() => {});
+  }, [watchedFestEvent, isStandaloneEvent, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isNavigating, setIsNavigating] = React.useState(false);
@@ -1887,16 +2127,31 @@ export default function EventForm({
             </div>
           </div>
           <div className="max-w-4xl mx-auto p-4 sm:p-6 md:p-12">
-            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 sm:p-8 md:p-10">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#063168] mb-6 sm:mb-8">
-                Event details
-              </h2>
+            <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
+              {/* Tab headers */}
+              <div className="flex border-b border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('details')}
+                  className={`flex-1 py-4 px-6 text-sm font-semibold transition-colors focus:outline-none ${activeTab === 'details' ? 'text-[#154CB3] border-b-2 border-[#154CB3] bg-blue-50/40' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                >
+                  Event Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('approvals')}
+                  className={`flex-1 py-4 px-6 text-sm font-semibold transition-colors focus:outline-none ${activeTab === 'approvals' ? 'text-[#154CB3] border-b-2 border-[#154CB3] bg-blue-50/40' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                >
+                  Approvals
+                </button>
+              </div>
               <form
                 onSubmit={handleSubmit(processSubmit, handleInvalidSubmit)}
                 onKeyDown={handleFormKeyDown}
-                className="space-y-6 sm:space-y-8"
                 noValidate
               >
+                {/* ── Details tab ── */}
+                <div className={`p-6 sm:p-8 md:p-10 space-y-6 sm:space-y-8 ${activeTab !== 'details' ? 'hidden' : ''}`}>
                 <div>
                   <InputField
                     label="Event title:"
@@ -2649,130 +2904,88 @@ export default function EventForm({
                   errors={errors}
                 />
 
-                {/* Approval Workflow Section — only for standalone events */}
-                {isStandaloneEvent && (
-                  <div className="mt-8 border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">Approval Workflow</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {approvalEnabled
-                            ? "This event will be submitted for approval after saving."
-                            : "No approval required — event will publish directly."}
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="sr-only peer"
-                          checked={approvalEnabled}
-                          onChange={(e) => setApprovalEnabled(e.target.checked)}
-                        />
-                        <div className={toggleTrackClass} />
-                      </label>
-                    </div>
+                </div>{/* end details tab */}
 
-                    {approvalEnabled && (
-                      <div className="p-4 space-y-2">
+                {/* ── Approvals tab ── */}
+                <div className={`p-6 sm:p-8 md:p-10 space-y-6 ${activeTab !== 'approvals' ? 'hidden' : ''}`}>
+                  {!isStandaloneEvent ? (
+                    /* Under-fest: locked blocking rows + operational toggles */
+                    <div className="space-y-6">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 mb-1">Blocking Approval Stages</p>
                         <p className="text-xs text-gray-500 mb-3">
-                          Drag to reorder. Toggle between Pre-Live (blocking) and Post-Live (operational).
+                          These stages are managed by the parent fest. Shown below is the current approval status from that fest.
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {(["pre", "post"] as const).map((section) => {
-                            const sectionStages = approvalStages.filter((s) =>
-                              section === "pre" ? s.blocking : !s.blocking
-                            );
+                        <div className="space-y-2">
+                          {[
+                            { role: 'hod',      label: 'HOD',             desc: 'Head of Department' },
+                            { role: 'dean',     label: 'Dean',            desc: 'Dean of the School' },
+                            { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight' },
+                            { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance' },
+                          ].map((s) => {
+                            const festStage = festApprovalStages.find(fs => fs.role === s.role);
+                            const statusMap: Record<string, string> = {
+                              approved: 'Approved',
+                              pending:  'Pending',
+                              rejected: 'Returned',
+                              skipped:  'Skipped',
+                            };
+                            const statusText = festStage ? (statusMap[festStage.status] ?? festStage.status) : '—';
                             return (
-                              <div key={section} className="space-y-1">
-                                <p className={`text-xs font-semibold uppercase tracking-wide px-1 ${
-                                  section === "pre" ? "text-blue-700" : "text-green-700"
-                                }`}>
-                                  {section === "pre" ? "Stage 1 — Pre-Live (Blocks publishing)" : "Stage 2 — Post-Live (Operational)"}
-                                </p>
-                                <div
-                                  className="min-h-[60px] rounded-lg border-2 border-dashed border-gray-200 p-1 space-y-1"
-                                  onDragOver={(e) => { e.preventDefault(); }}
-                                  onDrop={(e) => {
-                                    e.preventDefault();
-                                    if (dragIdx === null) return;
-                                    const draggedStage = approvalStages[dragIdx];
-                                    const newStages = approvalStages.filter((_, i) => i !== dragIdx);
-                                    const targetBlocking = section === "pre";
-                                    const targetSectionStages = newStages.filter((s) => s.blocking === targetBlocking);
-                                    const insertAt = newStages.findIndex((s) => s.blocking === targetBlocking && s === targetSectionStages[targetSectionStages.length - 1]);
-                                    const finalInsertAt = insertAt === -1 ? newStages.length : insertAt + 1;
-                                    newStages.splice(finalInsertAt, 0, { ...draggedStage, blocking: targetBlocking });
-                                    setApprovalStages(newStages);
-                                    setDragIdx(null);
-                                    setDragOverIdx(null);
-                                  }}
-                                >
-                                  {sectionStages.length === 0 && (
-                                    <p className="text-xs text-gray-400 text-center py-3">Drop here</p>
-                                  )}
-                                  {sectionStages.map((stage) => {
-                                    const globalIdx = approvalStages.indexOf(stage);
-                                    return (
-                                      <div
-                                        key={stage.role}
-                                        draggable
-                                        onDragStart={() => setDragIdx(globalIdx)}
-                                        onDragOver={(e) => { e.preventDefault(); setDragOverIdx(globalIdx); }}
-                                        onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-                                        onDrop={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          if (dragIdx === null || dragIdx === globalIdx) return;
-                                          const newStages = [...approvalStages];
-                                          const [moved] = newStages.splice(dragIdx, 1);
-                                          newStages.splice(globalIdx, 0, moved);
-                                          setApprovalStages(newStages);
-                                          setDragIdx(null);
-                                          setDragOverIdx(null);
-                                        }}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-grab select-none transition-all ${
-                                          dragIdx === globalIdx
-                                            ? "opacity-40"
-                                            : dragOverIdx === globalIdx
-                                            ? "border-blue-400 bg-blue-50"
-                                            : section === "pre"
-                                            ? "border-blue-200 bg-blue-50/60 text-blue-800"
-                                            : "border-green-200 bg-green-50/60 text-green-800"
-                                        }`}
-                                      >
-                                        <span className="text-gray-400 text-xs">⠿</span>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-medium text-xs">{stage.label}</p>
-                                          <p className="text-xs opacity-60 truncate">{stage.desc}</p>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setApprovalStages((prev) =>
-                                              prev.map((s) =>
-                                                s.role === stage.role ? { ...s, blocking: !s.blocking } : s
-                                              )
-                                            );
-                                          }}
-                                          className="text-xs px-1.5 py-0.5 rounded border border-current opacity-60 hover:opacity-100 shrink-0"
-                                          title={section === "pre" ? "Move to Post-Live" : "Move to Pre-Live"}
-                                        >
-                                          {section === "pre" ? "↓ Post" : "↑ Pre"}
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
+                              <div key={s.role} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 opacity-70 cursor-not-allowed">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-600">{s.label}</p>
+                                  <p className="text-xs text-gray-400">{s.desc}</p>
                                 </div>
+                                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                                  {statusText}
+                                </span>
                               </div>
                             );
                           })}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
+                      <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
+                    </div>
+                  ) : (
+                    /* Standalone: per-stage toggles for blocking + operational */
+                    <div className="space-y-6">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 mb-1">Approval Stages</p>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Toggle off any stages that are not required for this event.
+                        </p>
+                        <div className="space-y-2">
+                          {blockingStages.map((s) => (
+                            <div key={s.role} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
+                              <div>
+                                <p className="text-sm font-medium text-gray-800">{s.label}</p>
+                                <p className="text-xs text-gray-400">{s.desc}</p>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="sr-only peer"
+                                  checked={s.enabled}
+                                  onChange={(e) =>
+                                    setBlockingStages(prev =>
+                                      prev.map(bs => bs.role === s.role ? { ...bs, enabled: e.target.checked } : bs)
+                                    )
+                                  }
+                                />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
+                    </div>
+                  )}
+                </div>{/* end approvals tab */}
 
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-8 sm:mt-10 pt-6 border-t border-gray-200">
+                {/* ── Action buttons — always visible ── */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 sm:px-8 md:px-10 py-5 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={handleNavigationToDashboard}

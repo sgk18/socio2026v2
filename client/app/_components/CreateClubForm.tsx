@@ -630,13 +630,15 @@ export default function CreateClubForm({
                   onClick={() => setRegistrationsOpen((prev) => !prev)}
                   aria-label={`Registrations ${registrationsOpen ? "on" : "off"}`}
                   aria-pressed={registrationsOpen}
-                  className={`relative h-5 w-10 rounded-full transition-colors ${
-                    registrationsOpen ? "bg-[#1f57c3]" : "bg-[#c2ccda]"
+                  className={`relative h-6 w-11 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-[#1f57c3]/40 ${
+                    registrationsOpen
+                      ? "border-[#1f57c3] bg-[#1f57c3]"
+                      : "border-[#b7c2d2] bg-[#c2ccda]"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                      registrationsOpen ? "translate-x-5" : "translate-x-0.5"
+                    className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                      registrationsOpen ? "translate-x-5" : "translate-x-0"
                     }`}
                   />
                 </button>
