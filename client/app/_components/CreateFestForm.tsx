@@ -1779,21 +1779,6 @@ function CreateFestForm(props?: CreateFestProps) {
           case "department":
             if ((value as string[]).length === 0)
               newErrors.department = "Select at least one department";
-            else if (formData.organizingSchool) {
-              const allowedDepartmentValues = new Set(
-                getDepartmentOptionsForSchool(formData.organizingSchool).map(
-                  (option) => option.value
-                )
-              );
-              const hasInvalidDepartment = (value as string[]).some(
-                (departmentValue) => !allowedDepartmentValues.has(departmentValue)
-              );
-              if (hasInvalidDepartment) {
-                newErrors.department = "Department access must match selected school";
-              } else {
-                delete newErrors.department;
-              }
-            }
             else delete newErrors.department;
             break;
           case "category":
