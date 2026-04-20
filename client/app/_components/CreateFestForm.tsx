@@ -898,9 +898,8 @@ function ApprovalsSetupView({
   onBackToDetails,
 }: ApprovalsSetupViewProps) {
   const [stages, setStages] = React.useState<WorkflowStage[]>(DEFAULT_WORKFLOW_STAGES);
-  const [dragIndex, setDragIndex] = React.useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
-  const [dragSection, setDragSection] = React.useState<'pre' | 'post' | null>(null);
+  const [draggedRole, setDraggedRole] = React.useState<string | null>(null);
+  const [dropTarget, setDropTarget] = React.useState<{ role: string | null; position: 'before' | 'after'; section: 'pre' | 'post' } | null>(null);
   const [budgetItems, setBudgetItems] = React.useState<BudgetItem[]>(initialBudgetItems ?? []);
 
   React.useEffect(() => {
@@ -945,137 +944,144 @@ function ApprovalsSetupView({
   const preLiveStages  = stages.filter(s => s.blocking);
   const postLiveStages = stages.filter(s => !s.blocking);
 
-  function handleDragStart(idx: number, section: 'pre' | 'post') {
-    setDragIndex(idx);
-    setDragSection(section);
+  function handleDragStart(e: React.DragEvent, role: string) {
+    setDraggedRole(role);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', role);
   }
 
-  function handleDragOver(e: React.DragEvent, idx: number) {
+  function handleDragOverItem(e: React.DragEvent, role: string, section: 'pre' | 'post') {
     e.preventDefault();
-    setDragOverIndex(idx);
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    setDropTarget({ role, position, section });
   }
 
-  function handleDrop(e: React.DragEvent, dropIdx: number, targetSection: 'pre' | 'post') {
+  function handleDropOnItem(e: React.DragEvent, targetRole: string, targetSection: 'pre' | 'post') {
     e.preventDefault();
-    if (dragIndex === null || dragSection === null) return;
-
-    const sourceBlocking = dragSection === 'pre';
+    e.stopPropagation();
+    if (!draggedRole || !dropTarget) return;
+    const sourceStage = stages.find(s => s.role === draggedRole);
+    if (!sourceStage || draggedRole === targetRole) { setDraggedRole(null); setDropTarget(null); return; }
     const targetBlocking = targetSection === 'pre';
+    const withoutDragged = stages.filter(s => s.role !== draggedRole);
+    const targetIdx = withoutDragged.findIndex(s => s.role === targetRole);
+    if (targetIdx === -1) { setDraggedRole(null); setDropTarget(null); return; }
+    const insertAt = dropTarget.position === 'after' ? targetIdx + 1 : targetIdx;
+    const spliced = [
+      ...withoutDragged.slice(0, insertAt),
+      { ...sourceStage, blocking: targetBlocking },
+      ...withoutDragged.slice(insertAt),
+    ];
+    setStages([...spliced.filter(s => s.blocking), ...spliced.filter(s => !s.blocking)]);
+    setDraggedRole(null);
+    setDropTarget(null);
+  }
 
-    // Find the actual index in the full stages array
-    const sectionStages = sourceBlocking ? preLiveStages : postLiveStages;
-    const draggedStage = sectionStages[dragIndex];
-    if (!draggedStage) return;
+  function handleDragOverEmpty(e: React.DragEvent, section: 'pre' | 'post') {
+    e.preventDefault();
+    setDropTarget({ role: null, position: 'after', section });
+  }
 
-    const newStages = stages.filter(s => s !== draggedStage);
-    const targetSectionStages = targetBlocking
-      ? newStages.filter(s => s.blocking)
-      : newStages.filter(s => !s.blocking);
-
-    // Insert at position within target section
-    const insertAfter = targetSectionStages.slice(0, dropIdx);
-    const insertBefore = targetSectionStages.slice(dropIdx);
-    const updatedSection = [...insertAfter, { ...draggedStage, blocking: targetBlocking }, ...insertBefore];
-
-    // Rebuild full stages: pre-live first, then post-live
-    const otherSection = targetBlocking
-      ? newStages.filter(s => !s.blocking)
-      : newStages.filter(s => s.blocking);
-
-    const rebuilt = targetBlocking
-      ? [...updatedSection, ...otherSection]
-      : [...otherSection, ...updatedSection];
-
-    setStages(rebuilt);
-    setDragIndex(null);
-    setDragOverIndex(null);
-    setDragSection(null);
+  function handleDropOnEmpty(e: React.DragEvent, section: 'pre' | 'post') {
+    e.preventDefault();
+    if (!draggedRole) return;
+    const sourceStage = stages.find(s => s.role === draggedRole);
+    if (!sourceStage) return;
+    const targetBlocking = section === 'pre';
+    const updated = stages.map(s => s.role === draggedRole ? { ...s, blocking: targetBlocking } : s);
+    setStages([...updated.filter(s => s.blocking), ...updated.filter(s => !s.blocking)]);
+    setDraggedRole(null);
+    setDropTarget(null);
   }
 
   function handleDragEnd() {
-    setDragIndex(null);
-    setDragOverIndex(null);
-    setDragSection(null);
+    setDraggedRole(null);
+    setDropTarget(null);
   }
 
   function moveToPostLive(role: string) {
-    setStages(prev => prev.map(s => s.role === role ? { ...s, blocking: false } : s));
+    setStages(prev => {
+      const updated = prev.map(s => s.role === role ? { ...s, blocking: false } : s);
+      return [...updated.filter(s => s.blocking), ...updated.filter(s => !s.blocking)];
+    });
   }
 
   function moveToPreLive(role: string) {
     setStages(prev => {
       const updated = prev.map(s => s.role === role ? { ...s, blocking: true } : s);
-      // Keep pre-live stages first
       return [...updated.filter(s => s.blocking), ...updated.filter(s => !s.blocking)];
     });
   }
 
-  function SectionList({
-    sectionStages,
-    section,
-    emptyText,
-  }: {
-    sectionStages: WorkflowStage[];
-    section: 'pre' | 'post';
-    emptyText: string;
-  }) {
+  function renderSectionList(sectionStages: WorkflowStage[], section: 'pre' | 'post', emptyText: string) {
+    const accentColor = section === 'pre' ? '#3b82f6' : '#a855f7';
+    const isEmpty = sectionStages.length === 0;
+    const isEmptyDropTarget = dropTarget?.section === section && dropTarget?.role === null;
     return (
       <div
-        className="min-h-[60px] space-y-2"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => sectionStages.length === 0 && handleDrop(e, 0, section)}
+        className={`min-h-[60px] space-y-0.5 rounded-lg transition-colors ${isEmptyDropTarget ? 'bg-blue-50/50' : ''}`}
+        onDragOver={(e) => isEmpty && handleDragOverEmpty(e, section)}
+        onDrop={(e) => isEmpty && handleDropOnEmpty(e, section)}
+        onDragLeave={(e) => {
+          if (isEmpty && !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+            setDropTarget(null);
+          }
+        }}
       >
-        {sectionStages.length === 0 ? (
-          <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center text-xs text-gray-400">
+        {isEmpty ? (
+          <div className={`border-2 border-dashed rounded-lg p-4 text-center text-xs transition-colors ${
+            isEmptyDropTarget ? 'border-blue-400 text-blue-500 bg-blue-50' : 'border-gray-200 text-gray-400'
+          }`}>
             {emptyText}
           </div>
         ) : (
           sectionStages.map((s, i) => {
-            const globalIdx = stages.indexOf(s);
-            const isDragging = dragSection === section && dragIndex === i;
-            const isDragOver = dragSection === section && dragOverIndex === i;
+            const isDragging = draggedRole === s.role;
+            const isDropBefore = dropTarget?.role === s.role && dropTarget.position === 'before';
+            const isDropAfter = dropTarget?.role === s.role && dropTarget.position === 'after';
+            const isLocked = s.role === 'accounts' && cfoEnabled;
             return (
-              <div
-                key={s.role}
-                draggable
-                onDragStart={() => handleDragStart(i, section)}
-                onDragOver={(e) => handleDragOver(e, i)}
-                onDrop={(e) => handleDrop(e, i, section)}
-                onDragEnd={handleDragEnd}
-                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 bg-white transition-all cursor-grab active:cursor-grabbing select-none ${
-                  isDragging ? 'opacity-40 scale-95' : 'opacity-100'
-                } ${isDragOver ? 'border-[#154CB3] ring-1 ring-[#154CB3]' : 'border-gray-200 hover:border-gray-300'}`}
-              >
-                {/* Drag handle */}
-                <svg className="w-4 h-4 text-gray-300 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
-                </svg>
+              <div key={s.role}>
+                {/* Insertion line — before */}
+                <div className={`h-0.5 rounded-full mx-1 transition-all ${isDropBefore ? 'bg-blue-500 mb-1' : 'bg-transparent mb-0'}`} style={isDropBefore ? { backgroundColor: accentColor } : {}} />
 
-                {/* Step number */}
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                  section === 'pre' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                }`}>
-                  {i + 1}
-                </span>
+                <div
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, s.role)}
+                  onDragOver={(e) => handleDragOverItem(e, s.role, section)}
+                  onDrop={(e) => handleDropOnItem(e, s.role, section)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 bg-white cursor-grab active:cursor-grabbing select-none transition-all ${
+                    isDragging ? 'opacity-30 scale-[0.98]' : 'opacity-100'
+                  } border-gray-200 hover:border-gray-300 hover:shadow-sm`}
+                >
+                  {/* Drag handle */}
+                  <svg className="w-4 h-4 text-gray-300 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+                  </svg>
 
-                {/* Label + desc */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-gray-800">{s.label}</p>
-                  <p className="text-xs text-gray-400">{s.desc}</p>
-                </div>
+                  {/* Step number */}
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                    section === 'pre' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                  }`}>
+                    {i + 1}
+                  </span>
 
-                {/* Required lock OR optional toggle + move button */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {s.required ? (
-                    <span
-                      title="Mandatory — cannot be disabled"
-                      className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium select-none"
-                    >
-                      Required
-                    </span>
-                  ) : (() => {
-                    const isLocked = s.role === 'accounts' && cfoEnabled;
-                    return (
+                  {/* Label + desc */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-gray-800">{s.label}</p>
+                    <p className="text-xs text-gray-400">{s.desc}</p>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {s.required ? (
+                      <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium select-none">
+                        Required
+                      </span>
+                    ) : (
                       <label
                         className={`relative inline-flex items-center ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                         title={isLocked ? 'Finance Officer is locked ON while CFO is enabled' : 'Toggle this approval on/off'}
@@ -1089,19 +1095,22 @@ function ApprovalsSetupView({
                         />
                         <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#154CB3]" />
                       </label>
-                    );
-                  })()}
-                  {!s.required && (
-                    <button
-                      type="button"
-                      title={section === 'pre' ? 'Move to Post-Live' : 'Move to Pre-Live'}
-                      onClick={() => section === 'pre' ? moveToPostLive(s.role) : moveToPreLive(s.role)}
-                      className="text-xs text-gray-400 hover:text-gray-600 shrink-0 px-1 py-0.5 rounded hover:bg-gray-100 transition-colors"
-                    >
-                      {section === 'pre' ? '↓' : '↑'}
-                    </button>
-                  )}
+                    )}
+                    {!s.required && (
+                      <button
+                        type="button"
+                        title={section === 'pre' ? 'Move to Post-Live' : 'Move to Pre-Live'}
+                        onClick={() => section === 'pre' ? moveToPostLive(s.role) : moveToPreLive(s.role)}
+                        className="text-xs text-gray-400 hover:text-gray-600 shrink-0 px-1 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                      >
+                        {section === 'pre' ? '↓' : '↑'}
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Insertion line — after (only for last item or when dropping after) */}
+                <div className={`h-0.5 rounded-full mx-1 transition-all ${isDropAfter ? 'bg-blue-500 mt-1' : 'bg-transparent mt-0'}`} style={isDropAfter ? { backgroundColor: accentColor } : {}} />
               </div>
             );
           })
@@ -1135,7 +1144,7 @@ function ApprovalsSetupView({
             <span className="text-xs text-blue-500 ml-auto">Blocks publishing</span>
           </div>
           <p className="text-xs text-blue-600 mb-3">These approvals must complete before your fest goes live.</p>
-          <SectionList sectionStages={preLiveStages} section="pre" emptyText="Drag stages here to require approval before going live" />
+          {renderSectionList(preLiveStages, 'pre', 'Drag stages here to require approval before going live')}
         </div>
 
         {/* Post-Live Section */}
@@ -1146,7 +1155,7 @@ function ApprovalsSetupView({
             <span className="text-xs text-purple-500 ml-auto">Operational</span>
           </div>
           <p className="text-xs text-purple-600 mb-3">These run in parallel after the fest is live.</p>
-          <SectionList sectionStages={postLiveStages} section="post" emptyText="Drag stages here for post-live operational tasks" />
+          {renderSectionList(postLiveStages, 'post', 'Drag stages here for post-live operational tasks')}
         </div>
       </div>
 
