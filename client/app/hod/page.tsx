@@ -41,6 +41,12 @@ function hodStatus(item: QueueItem) {
   return item.stages?.find((s) => s.role === "hod")?.status ?? "pending";
 }
 
+function hodActedBy(item: QueueItem): string | null {
+  const log = (item as any).action_log as { step: string; action: string; by: string; byEmail: string }[] | null;
+  const entry = log?.find((e) => e.step === "hod" && (e.action === "approve" || e.action === "reject"));
+  return entry?.by || entry?.byEmail || null;
+}
+
 export default function HodDashboard() {
   const { session, userData, isLoading: authLoading } = useAuth();
   const router = useRouter();
@@ -134,6 +140,7 @@ export default function HodDashboard() {
 
   function QueueCard({ item, showActions }: { item: QueueItem; showActions: boolean }) {
     const status = hodStatus(item);
+    const actedBy = status !== "pending" ? hodActedBy(item) : null;
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1 min-w-0">
@@ -147,6 +154,11 @@ export default function HodDashboard() {
             {item.organizing_department_snapshot ? ` · ${item.organizing_department_snapshot}` : ""}
           </p>
           <p className="text-xs text-gray-400 mt-0.5">Submitted {timeAgo(item.created_at)}</p>
+          {actedBy && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              {status === "approved" ? "Approved" : "Returned"} by <span className="font-medium text-gray-600">{actedBy}</span>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

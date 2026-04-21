@@ -396,38 +396,23 @@ router.get(
       const user = req.userInfo;
       const results = [];
 
-      if (user.is_hod) {
-        // All items directly assigned to this HOD (any status — so approved items stay visible)
-        const { data: assigned } = await supabase
+      if (user.is_hod && user.department) {
+        // All HOD approvals for this department — every HOD of the same dept sees the full list
+        // (assigned to someone else, assigned to me, or unassigned — all visible)
+        let q = supabase
           .from("approvals")
           .select("*")
-          .filter("stages", "cs", JSON.stringify([{ role: "hod", assignee_user_id: String(user.auth_uuid) }]))
+          .eq("organizing_department_snapshot", user.department)
+          .filter("stages", "cs", JSON.stringify([{ role: "hod" }]))
           .order("created_at", { ascending: true });
-
-        // Unassigned pending — match by department + campus
-        let unassigned = [];
-        if (user.department) {
-          let q = supabase
-            .from("approvals")
-            .select("*")
-            .eq("organizing_department_snapshot", user.department)
-            .filter("stages", "cs", JSON.stringify([{ role: "hod", status: "pending", routing_state: "waiting_for_assignment" }]))
-            .order("created_at", { ascending: true });
-          if (user.campus) {
-            q = q.or(`organizing_campus_snapshot.eq.${user.campus},organizing_campus_snapshot.is.null`);
-          }
-          const { data: unassignedRows } = await q;
-          unassigned = (unassignedRows || []).filter(r =>
-            !user.campus || !r.organizing_campus_snapshot || r.organizing_campus_snapshot === user.campus
-          );
+        if (user.campus) {
+          q = q.or(`organizing_campus_snapshot.eq.${user.campus},organizing_campus_snapshot.is.null`);
         }
-
-        const seenIds = new Set();
-        for (const r of [...(assigned || []), ...unassigned]) {
-          if (seenIds.has(r.id)) continue;
+        const { data: rows } = await q;
+        for (const r of (rows || [])) {
           const hodStage = r.stages?.find(s => s.role === "hod");
           if (hodStage && isPriorBlockingDone(r.stages, hodStage.step)) {
-            seenIds.add(r.id); results.push({ ...r, _queue_role: "hod" });
+            results.push({ ...r, _queue_role: "hod" });
           }
         }
       }
