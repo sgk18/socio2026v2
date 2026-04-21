@@ -107,6 +107,17 @@ export default function CreateEventPage() {
       return;
     }
 
+    const isFestEventEarly = dataFromHookForm.festEvent && dataFromHookForm.festEvent !== "none";
+    if (!isFestEventEarly && !saveAsDraft) {
+      const { stages: approvalStagesEarly, budgetItems: budgetItemsEarly } = approvalConfigRef.current;
+      const hasCfoOrAccounts = approvalStagesEarly.filter(s => s.blocking).some(s => s.role === 'cfo' || s.role === 'accounts');
+      if (hasCfoOrAccounts && (!budgetItemsEarly || budgetItemsEarly.length === 0)) {
+        alert("Budget Estimate is required when CFO or Finance Officer is included in the approval workflow.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const formData = new FormData();
     const appendIfExists = (key: string, value: any) => {
       if (value !== null && value !== undefined && String(value).trim() !== "") {

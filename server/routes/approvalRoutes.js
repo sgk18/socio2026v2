@@ -177,8 +177,10 @@ router.post(
 
       let stages;
       if (customStages && Array.isArray(customStages) && customStages.length > 0) {
-        stages = customStages.map((s, idx) =>
-          makeStageObject(idx, s.role, s.label, s.blocking, isUnderFest)
+        // Only accept blocking stages via customStages; operational stages are attached separately via PATCH /operational
+        const blockingOnly = customStages.filter(s => s.blocking !== false);
+        stages = blockingOnly.map((s, idx) =>
+          makeStageObject(idx, s.role, s.label, true, isUnderFest)
         );
       } else {
         stages = await buildStagesFromWorkflowConfig(type, parentFestId);

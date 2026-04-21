@@ -1747,16 +1747,20 @@ export default function EventForm({
     if (!watchedIsTeamEvent) {
       setValue("maxParticipants", "1", { shouldValidate: false });
       setValue("minParticipants", "1", { shouldValidate: false });
-    } else {
-      // Auto-fill to 2 when team event is enabled (1 is just the registrant themselves), if not already set
-      if (!watch("minParticipants")) {
-        setValue("minParticipants", "2", { shouldValidate: false });
-      }
-      if (!watch("maxParticipants")) {
-        setValue("maxParticipants", "2", { shouldValidate: false });
-      }
+      return;
     }
-  }, [watchedIsTeamEvent, setValue, watch]);
+
+    const currentMin = Number(getValues("minParticipants") || 0);
+    const currentMax = Number(getValues("maxParticipants") || 0);
+
+    // Team events require at least 2 members.
+    if (!Number.isFinite(currentMin) || currentMin < 2) {
+      setValue("minParticipants", "2", { shouldValidate: false });
+    }
+    if (!Number.isFinite(currentMax) || currentMax < 2) {
+      setValue("maxParticipants", "2", { shouldValidate: false });
+    }
+  }, [watchedIsTeamEvent, setValue, getValues]);
 
   useEffect(() => {
     if (!watchedIsTeamEvent) return;
@@ -2322,7 +2326,7 @@ export default function EventForm({
             </div>
           </div>
           <div className="max-w-4xl mx-auto p-4 sm:p-6 md:p-12">
-            <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-visible">
               {/* Tab headers */}
               <div className="flex border-b border-gray-200">
                 <button
@@ -2501,7 +2505,7 @@ export default function EventForm({
                     {watchedIsTeamEvent && (
                       <div className="flex flex-col gap-3 w-full">
                         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                          <div className="flex-1 sm:flex-none">
+                          <div className="flex-1 sm:w-[220px]">
                             <label className="block text-xs font-medium text-gray-600 mb-1.5">
                               Min
                             </label>
@@ -2539,12 +2543,12 @@ export default function EventForm({
                               }}
                             />
                             {errors.minParticipants && (
-                              <p className="text-red-500 text-xs mt-1">
+                              <p className="text-red-500 text-xs mt-1 leading-tight break-words">
                                 {errors.minParticipants.message}
                               </p>
                             )}
                           </div>
-                          <div className="flex-1 sm:flex-none">
+                          <div className="flex-1 sm:w-[220px]">
                             <label className="block text-xs font-medium text-gray-600 mb-1.5">
                               Max
                             </label>
@@ -2582,7 +2586,7 @@ export default function EventForm({
                               }}
                             />
                             {errors.maxParticipants && (
-                              <p className="text-red-500 text-xs mt-1">
+                              <p className="text-red-500 text-xs mt-1 leading-tight break-words">
                                 {errors.maxParticipants.message}
                               </p>
                             )}
@@ -2869,10 +2873,15 @@ export default function EventForm({
                 </div>
 
                 <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 sm:py-3.5">
-                  <div className="flex items-center justify-between gap-4">
-                    <label className="text-sm font-medium text-gray-700">
-                      Are claims provided for this fest?
-                    </label>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Are claims provided for this fest?
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Select Yes if this event includes claim support.
+                      </p>
+                    </div>
                     <Controller
                       name="provideClaims"
                       control={control}
@@ -2880,9 +2889,10 @@ export default function EventForm({
                         const claimsEnabled = Boolean(field.value);
 
                         return (
-                          <label
-                            htmlFor="provideClaims"
-                            className="relative inline-flex items-center cursor-pointer select-none"
+                          <div
+                            role="radiogroup"
+                            aria-label="Claims provided"
+                            className="inline-flex items-center rounded-xl border border-gray-300 bg-white p-1 shadow-sm"
                           >
                             <input
                               type="checkbox"
@@ -2892,64 +2902,33 @@ export default function EventForm({
                               className="sr-only"
                             />
 
-                            <div
-                              className={`relative h-8 w-20 rounded-full border-2 transition-colors ${
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={claimsEnabled}
+                              onClick={() => field.onChange(true)}
+                              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
                                 claimsEnabled
-                                  ? "border-green-500 bg-green-50"
-                                  : "border-red-500 bg-red-50"
+                                  ? "bg-green-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
                               }`}
                             >
-                              <span
-                                className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-semibold tracking-wide ${
-                                  claimsEnabled
-                                    ? "left-2 text-green-700"
-                                    : "right-2 text-red-700"
-                                }`}
-                              >
-                                {claimsEnabled ? "YES" : "NO"}
-                              </span>
-
-                              <span
-                                className={`absolute top-0.5 left-0.5 flex h-6 w-6 items-center justify-center rounded-full border bg-white transition-transform ${
-                                  claimsEnabled
-                                    ? "translate-x-[3.25rem] border-green-500 text-green-600"
-                                    : "translate-x-0 border-red-500 text-red-600"
-                                }`}
-                              >
-                                {claimsEnabled ? (
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    strokeWidth={2.5}
-                                    stroke="currentColor"
-                                    className="h-3.5 w-3.5"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M4.5 12.75l6 6 9-13.5"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    strokeWidth={2.5}
-                                    stroke="currentColor"
-                                    className="h-3.5 w-3.5"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                )}
-                              </span>
-                            </div>
-                          </label>
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={!claimsEnabled}
+                              onClick={() => field.onChange(false)}
+                              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                !claimsEnabled
+                                  ? "bg-red-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              No
+                            </button>
+                          </div>
                         );
                       }}
                     />
@@ -3175,7 +3154,12 @@ export default function EventForm({
                         </div>
                         {/* Budget estimator appears when CFO or Accounts is enabled */}
                         {blockingStages.some(s => (s.role === 'cfo' || s.role === 'accounts') && s.enabled) && (
-                          <BudgetEstimator items={budgetItems} onChange={setBudgetItems} />
+                          <>
+                            <BudgetEstimator items={budgetItems} onChange={setBudgetItems} />
+                            {budgetItems.length === 0 && (
+                              <p className="text-xs text-red-500 mt-1">Budget Estimate is required when CFO or Finance Officer is included.</p>
+                            )}
+                          </>
                         )}
                       </div>
                       <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
@@ -3300,13 +3284,19 @@ export default function EventForm({
                     )}
                   </div>
                   
-                  {shouldBlockPublishByApproval ? (
+                  {activeTab === 'details' ? (
                     <button
                       type="button"
                       onClick={() => setActiveTab('approvals')}
-                      className="w-full sm:w-auto px-6 py-2.5 bg-[#154CB3] text-white text-sm font-medium rounded-md hover:bg-[#0f3a7a] focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-2 transition-colors"
+                      disabled={
+                        isSubmittingProp ||
+                        rhfIsSubmitting ||
+                        isDeleting ||
+                        isOpeningPreview
+                      }
+                      className="w-full sm:w-auto px-6 py-2.5 bg-[#154CB3] text-white text-sm font-medium rounded-md hover:bg-[#0f3a7a] focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Go to Approvals Tab
+                      Go ahead for Approvals Tab
                     </button>
                   ) : (
                     <button

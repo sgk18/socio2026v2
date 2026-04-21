@@ -1365,24 +1365,29 @@ function CreateFestForm(props?: CreateFestProps) {
     allowOutsiders: false,
     customFields,
   });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false); // Used for delete operation
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitIntent, setSubmitIntent] = useState<"publish" | "draft">("publish");
-  const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
-  const actionsDropdownRef = useRef<HTMLDivElement>(null);
-  const [isLoadingFestData, setIsLoadingFestData] = useState(false);
-  const [pendingFestSuccess, setPendingFestSuccess] = useState(false);
-  const [wasDraftOnSubmit, setWasDraftOnSubmit] = useState(false);
-  const [successAction, setSuccessAction] = useState<"publish" | "draft">("publish");
-  const [festModalVisible, setFestModalVisible] = useState(false);
-  const [isOpeningPreview, setIsOpeningPreview] = useState(false);
-  const [activeView, setActiveView] = useState<'details' | 'approvals'>('details');
+  const [activeView, setActiveView] = useState<"details" | "approvals">("details");
   const [savedFestId, setSavedFestId] = useState<string | null>(null);
-  const [approvalExists, setApprovalExists] = useState<boolean | null>(null);
+  const [approvalExists, setApprovalExists] = useState(false);
   const [approvalPhase1Complete, setApprovalPhase1Complete] = useState(false);
   const [existingBudgetItems, setExistingBudgetItems] = useState<BudgetItem[]>([]);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isOpeningPreview, setIsOpeningPreview] = useState(false);
+  const [isLoadingFestData, setIsLoadingFestData] = useState(false);
+  const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+  const actionsDropdownRef = useRef<HTMLDivElement>(null);
+  const [submitIntent, setSubmitIntent] = useState<"publish" | "draft">("publish");
+  const [successAction, setSuccessAction] = useState<"publish" | "draft">("publish");
+  const [wasDraftOnSubmit, setWasDraftOnSubmit] = useState(false);
+  const [pendingFestSuccess, setPendingFestSuccess] = useState(false);
+  const [festModalVisible, setFestModalVisible] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false); // Used for delete operation
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionMode, setSubmissionMode] = useState<"publish" | "draft">(
+    "publish"
+  );
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [pendingSuccess, setPendingSuccess] = useState<"publish" | "draft" | null>(null);
 
   const { session } = useAuth();
   const currentDateRef = useRef(new Date());
@@ -1692,27 +1697,27 @@ function CreateFestForm(props?: CreateFestProps) {
                 formData.openingDate &&
                 parseYYYYMMDD(formData.openingDate)
               ) {
-                if (inputDate < parseYYYYMMDD(formData.openingDate)!)
+                if (inputDate < parseYYYYMMDD(formData.openingDate)!) {
                   newErrors[name] = "Must be on/after opening date";
-                else delete newErrors[name];
-              } else delete newErrors[name];
+                }
+              }
             }
+
             if (
               name === "openingDate" &&
               formData.closingDate &&
-              parseYYYYMMDD(value as string) &&
+              parseYYYYMMDD(String(value)) &&
               parseYYYYMMDD(formData.closingDate) &&
-              parseYYYYMMDD(value as string)! >
-                parseYYYYMMDD(formData.closingDate)!
+              parseYYYYMMDD(String(value))! > parseYYYYMMDD(formData.closingDate)!
             ) {
               newErrors.closingDate =
                 "Closing date must be on/after opening date";
             } else if (
               name === "closingDate" &&
               formData.openingDate &&
-              parseYYYYMMDD(value as string) &&
+              parseYYYYMMDD(String(value)) &&
               parseYYYYMMDD(formData.openingDate) &&
-              parseYYYYMMDD(value as string)! <
+              parseYYYYMMDD(String(value))! <
                 parseYYYYMMDD(formData.openingDate)!
             ) {
               newErrors.closingDate =
@@ -1721,9 +1726,9 @@ function CreateFestForm(props?: CreateFestProps) {
               name === "openingDate" &&
               newErrors.closingDate ===
                 "Closing date must be on/after opening date" &&
-              parseYYYYMMDD(value as string) &&
+              parseYYYYMMDD(String(value)) &&
               parseYYYYMMDD(formData.closingDate) &&
-              parseYYYYMMDD(value as string)! <=
+              parseYYYYMMDD(String(value))! <=
                 parseYYYYMMDD(formData.closingDate)!
             ) {
               delete newErrors.closingDate;
@@ -3572,7 +3577,7 @@ function CreateFestForm(props?: CreateFestProps) {
                                 }}
                                 onBlur={() => handleEventHeadBlur(index)}
                                 aria-label={`Event head ${index + 1} expiration date and time`}
-                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent bg-white"
+                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]"
                               />
                               {errors[`eventHeadExpiry_${index}`] && (
                                 <p className="text-red-500 text-xs mt-1">
@@ -3968,18 +3973,17 @@ function CreateFestForm(props?: CreateFestProps) {
                           disabled={isSubmitting || isNavigating || isOpeningPreview}
                           className="w-full sm:w-auto px-5 py-2.5 border border-amber-400 text-amber-800 bg-amber-50 text-sm font-medium rounded-md hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          {isSubmitting && submitIntent === "draft"
+                          {isSubmitting && submissionMode === "draft"
                             ? "Saving Draft..."
                             : "Save as Draft"}
                         </button>
 
                         <button
-                          type="button"
-                          onClick={handlePreview}
+                          type="submit"
                           disabled={isSubmitting || isNavigating || isOpeningPreview}
-                          className="w-full sm:w-auto px-5 py-2.5 border border-[#154CB3] text-[#154CB3] bg-white text-sm font-medium rounded-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                          className="w-full sm:w-auto px-5 py-2.5 border border-[#154CB3] text-[#154CB3] bg-white text-sm font-medium rounded-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                         >
-                          {isOpeningPreview ? "Opening preview..." : "Preview"}
+                          {isUploadingImage ? "Uploading image..." : isSubmitting ? (submissionMode === "draft" ? "Saving Draft..." : isDraftFest ? "Publishing..." : "Updating...") : isDraftFest ? "Publish Fest" : "Update Fest"}
                         </button>
                       </>
                     )}
@@ -4040,7 +4044,7 @@ function CreateFestForm(props?: CreateFestProps) {
                         </svg>
                       )}
                       <span>
-                        {isUploadingImage ? "Uploading image..." : isSubmitting ? (submitIntent === "draft" ? "Saving Draft..." : isDraftFest ? "Publishing..." : "Updating...") : isDraftFest ? "Publish Fest" : "Update Fest"}
+                        {isUploadingImage ? "Uploading image..." : isSubmitting ? (submissionMode === "draft" ? "Saving Draft..." : isDraftFest ? "Publishing..." : "Updating...") : isDraftFest ? "Publish Fest" : "Update Fest"}
                       </span>
                     </button>
                   ) : (
