@@ -139,7 +139,12 @@ router.post(
         return res.status(409).json({ error: "A venue with that name already exists for this campus" });
       }
       console.error("[Venues] POST /venues error:", err);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(500).json({
+        error: err?.message || "Internal server error",
+        code: err?.code,
+        hint: err?.hint,
+        details: err?.details,
+      });
     }
   }
 );

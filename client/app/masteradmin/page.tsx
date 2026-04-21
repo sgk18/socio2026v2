@@ -266,7 +266,14 @@ export default function MasterAdminPage() {
         }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { setVenueFormError(body.error || "Failed to create venue"); return; }
+      if (!res.ok) {
+        const parts = [body.error || "Failed to create venue"];
+        if (body.code)    parts.push(`code: ${body.code}`);
+        if (body.details) parts.push(`details: ${body.details}`);
+        if (body.hint)    parts.push(`hint: ${body.hint}`);
+        setVenueFormError(parts.join(" · "));
+        return;
+      }
       toast.success("Venue created");
       setVenueForm({ campus: "", name: "", capacity: "", location: "" });
       fetchAllVenues();
