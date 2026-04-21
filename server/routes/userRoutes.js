@@ -594,21 +594,31 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
 
     console.log(`[MasterAdmin] User roles updated: ${email} by ${req.userInfo.email}`);
 
-    // Auto-routing: bind pending approval requests to newly-assigned HOD/Dean
-    // Uses the route_approvals_to_user RPC (added in migration 014) which does a
-    // bulk JSONB update in a single Postgres query.
-    const schoolForRouting = updates.school || existingUser.school;
+    // Auto-routing: bind pending waiting_for_assignment approvals to newly-assigned HOD/Dean.
+    // HOD matches by department (organizing_department_snapshot).
+    // Dean matches by school (organizing_school_snapshot) via the existing RPC.
+    const deptForRouting   = updates.department || existingUser.department;
+    const schoolForRouting = updates.school     || existingUser.school;
 
-    if (updates.is_hod === true && schoolForRouting) {
+    if (updates.is_hod === true && deptForRouting) {
       setImmediate(async () => {
         try {
-          const { data: count, error } = await supabase.rpc("route_approvals_to_user", {
-            p_user_id: updatedUser.auth_uuid,
-            p_role:    "hod",
-            p_school:  schoolForRouting,
-          });
-          if (error) throw error;
-          console.log(`[AutoRoute] Bound ${count} pending HOD approval(s) to ${email} (school: ${schoolForRouting})`);
+          const { data: rows } = await supabase
+            .from("approvals")
+            .select("id, stages")
+            .eq("organizing_department_snapshot", deptForRouting)
+            .filter("stages", "cs", JSON.stringify([{ role: "hod", status: "pending", routing_state: "waiting_for_assignment" }]));
+          let count = 0;
+          for (const row of rows || []) {
+            const newStages = row.stages.map(s =>
+              s.role === "hod" && s.status === "pending" && s.routing_state === "waiting_for_assignment"
+                ? { ...s, assignee_user_id: String(updatedUser.auth_uuid), routing_state: "assigned" }
+                : s
+            );
+            await supabase.from("approvals").update({ stages: newStages, updated_at: new Date().toISOString() }).eq("id", row.id);
+            count++;
+          }
+          console.log(`[AutoRoute] Bound ${count} pending HOD approval(s) to ${email} (dept: ${deptForRouting})`);
         } catch (err) {
           console.warn("[AutoRoute] HOD auto-routing failed (non-critical):", err?.message);
         }
