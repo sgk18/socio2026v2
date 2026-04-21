@@ -230,7 +230,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                         type="checkbox"
                         checked={selectedValues.includes(option.value)}
                         onChange={() => handleCheckboxChange(option.value)}
-                        className="h-4 w-4 text-[#154CB3] border-gray-300 rounded focus:ring-[#154CB3]"
+                        className="h-4 w-4 text-[#154CB3] border-gray-300 rounded focus:ring-[#154CB3] cursor-pointer"
                       />
                       <span className="ml-2 text-sm text-gray-700">
                         {option.label}
@@ -1607,6 +1607,11 @@ export default function EventForm({
     },
     [scrollToFirstValidationError]
   );
+
+  const handleDraftSave = () => {
+    const formData = getValues();
+    processDraftSubmit(formData);
+  };
 
   const handleFormKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLFormElement>) => {
@@ -3211,20 +3216,15 @@ export default function EventForm({
                       </button>
                     )}
 
-                    {onSubmitDraft && !shouldBlockPublishByApproval && (
+                    {onSubmitDraft && (
                       <button
                         type="button"
-                        onClick={handleSubmit(processDraftSubmit, handleInvalidSubmit)}
-                        disabled={
-                          isSubmittingProp ||
-                          rhfIsSubmitting ||
-                          isDeleting ||
-                          isOpeningPreview
-                        }
-                        className="w-full sm:w-auto px-5 py-2.5 border border-amber-400 text-amber-800 bg-amber-50 text-sm font-medium rounded-md hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                        onClick={handleDraftSave}
+                        className={secondaryButtonClasses}
+                        disabled={isSubmittingProp || rhfIsSubmitting || isDeleting}
                       >
                         {isSubmittingProp || rhfIsSubmitting
-                          ? "Saving Draft..."
+                          ? "Saving..."
                           : "Save as Draft"}
                       </button>
                     )}
