@@ -231,12 +231,16 @@ export default function ApprovalsPage() {
   const operationalStages = approval.stages.filter((s) => !s.blocking);
   const phase1Done        = isPhase1Complete(approval.stages);
   const hasRejection      = approval.action_log.some((e) => e.action === "reject");
+  const pendingCount = approval.stages.filter((s) => s.status === "pending").length;
+  const approvedCount = approval.stages.filter((s) => s.status === "approved").length;
+  const rejectedCount = approval.stages.filter((s) => s.status === "rejected").length;
+  const totalEstimate = approval.budget_items?.reduce((s, b) => s + b.quantity * b.unitPrice, 0) || 0;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div>
+        <div className="space-y-3">
           <button
             onClick={() => router.back()}
             className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
@@ -246,154 +250,169 @@ export default function ApprovalsPage() {
           </button>
           <h1 className="text-2xl font-bold text-gray-900">Approval Status</h1>
           {item && (
-            <p className="text-gray-600 mt-1">
-              <span className="font-medium">{item.title}</span>{" "}
-              <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full ml-1 uppercase">
-                {approval.type}
-              </span>
+            <p className="text-gray-700 font-medium leading-snug">
+              {item.title}
             </p>
           )}
-          {item?.organizing_school && (
-            <p className="text-sm text-gray-500 mt-1">
-              {item.organizing_school}{item.organizing_dept ? ` · ${item.organizing_dept}` : ""}
-            </p>
-          )}
+          <p className="text-sm text-slate-500">
+            {approval.type.toUpperCase()}
+            {item?.organizing_school ? ` · ${item.organizing_school}` : ""}
+            {item?.organizing_dept ? ` · ${item.organizing_dept}` : ""}
+          </p>
         </div>
 
-        {/* Stage indicator */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-            phase1Done ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-800"
-          }`}>
-            {phase1Done ? "Stage 2: Operational" : "Stage 1: Pending Approval"}
-          </span>
-          {approval.went_live_at && (
-            <span className="text-sm text-green-700 font-medium">
-              Live since {formatDate(approval.went_live_at)}
+        {/* Compact status strip */}
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+              phase1Done ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-800"
+            }`}>
+              {phase1Done ? "Stage 2: Operational" : "Stage 1: Pending Approval"}
             </span>
-          )}
+            {approval.went_live_at && (
+              <span className="text-sm text-slate-600">
+                Live since {formatDate(approval.went_live_at)}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Rejection alert */}
-        {hasRejection && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <WarningIcon className="h-5 w-5 text-rose-700" />
-              <p className="text-rose-800 font-semibold text-sm">Submission Returned</p>
-            </div>
-            {approval.action_log.filter((e) => e.action === "reject").map((e, i) => (
-              <div key={i} className={`${i > 0 ? "mt-3 pt-3 border-t border-red-200" : ""}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold bg-rose-100 text-rose-800 px-2 py-0.5 rounded uppercase">
-                    {e.step}
-                  </span>
-                  <span className="text-xs text-rose-700/80">{e.by} · {formatDate(e.at)}</span>
-                  {e.is_override && (
-                    <span className="text-xs bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Override</span>
-                  )}
+        {/* Minimal metrics strip */}
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-slate-700">
+            <span><span className="font-semibold">Pending:</span> {pendingCount}</span>
+            <span><span className="font-semibold">Approved:</span> {approvedCount}</span>
+            <span><span className="font-semibold">Rejected:</span> {rejectedCount}</span>
+            <span><span className="font-semibold">Budget:</span> ₹{totalEstimate.toLocaleString("en-IN")}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+          <div className="space-y-6 lg:col-span-7">
+            {/* Rejection alert */}
+            {hasRejection && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <WarningIcon className="h-5 w-5 text-rose-700" />
+                  <p className="text-rose-800 font-semibold text-sm">Submission Returned</p>
                 </div>
-                {e.note ? (
-                  <p className="text-sm text-rose-800 bg-white rounded-lg px-3 py-2 border border-rose-200 italic">
-                    "{e.note}"
-                  </p>
-                ) : (
-                  <p className="text-xs text-rose-700/70 italic">No reason provided.</p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Blocking stages */}
-        {blockingStages.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Stage 1 — Blocking Approvals
-            </h2>
-            {blockingStages.map((s) => (
-              <StepCard key={s.step} label={s.label} status={s.status} routingState={s.routing_state} />
-            ))}
-          </div>
-        )}
-
-        {/* Operational stages */}
-        {operationalStages.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Stage 2 — Operational Lanes
-            </h2>
-            {operationalStages.map((s) => (
-              <StepCard key={s.step} label={s.label} status={s.status} />
-            ))}
-          </div>
-        )}
-
-        {/* Budget estimate */}
-        {approval.budget_items && approval.budget_items.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-              Budget Estimate
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                    <th className="text-left pb-2 font-semibold">Item</th>
-                    <th className="text-center pb-2 font-semibold">Qty</th>
-                    <th className="text-right pb-2 font-semibold">Unit (₹)</th>
-                    <th className="text-right pb-2 font-semibold">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {approval.budget_items.map((b, i) => (
-                    <tr key={i} className="border-b border-gray-50">
-                      <td className="py-1.5 text-gray-800">{b.name || "—"}</td>
-                      <td className="py-1.5 text-center text-gray-600">{b.quantity}</td>
-                      <td className="py-1.5 text-right text-gray-600">{b.unitPrice.toLocaleString("en-IN")}</td>
-                      <td className="py-1.5 text-right font-medium text-gray-800">
-                        {(b.quantity * b.unitPrice).toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={3} className="pt-3 text-right text-xs font-semibold text-gray-500 uppercase">Total Estimate</td>
-                    <td className="pt-3 text-right text-base font-bold text-gray-900">
-                      ₹{approval.budget_items.reduce((s, b) => s + b.quantity * b.unitPrice, 0).toLocaleString("en-IN")}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Activity timeline */}
-        {approval.action_log.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
-              Activity Timeline
-            </h2>
-            <ol className="relative border-l border-gray-200 space-y-4 ml-2">
-              {[...approval.action_log].reverse().map((entry, i) => (
-                <li key={i} className="ml-4">
-                  <span className="absolute -left-3 mt-0.5 rounded-full bg-white p-0.5">
-                    <StatusIcon status={entry.action === "approve" ? "approved" : "rejected"} className="h-4 w-4" />
-                  </span>
-                  <p className="text-sm font-medium text-gray-900">
-                    {entry.step.toUpperCase()} — {entry.action === "approve" ? "Approved" : "Rejected"}
-                    {entry.is_override && (
-                      <span className="ml-2 text-xs bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Override</span>
+                {approval.action_log.filter((e) => e.action === "reject").map((e, i) => (
+                  <div key={i} className={`${i > 0 ? "mt-3 pt-3 border-t border-red-200" : ""}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-semibold bg-rose-100 text-rose-800 px-2 py-0.5 rounded uppercase">
+                        {e.step}
+                      </span>
+                      <span className="text-xs text-rose-700/80">{e.by} · {formatDate(e.at)}</span>
+                      {e.is_override && (
+                        <span className="text-xs bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Override</span>
+                      )}
+                    </div>
+                    {e.note ? (
+                      <p className="text-sm text-rose-800 bg-white rounded-lg px-3 py-2 border border-rose-200 italic">
+                        "{e.note}"
+                      </p>
+                    ) : (
+                      <p className="text-xs text-rose-700/70 italic">No reason provided.</p>
                     )}
-                  </p>
-                  <p className="text-xs text-gray-500">{entry.by} · {formatDate(entry.at)}</p>
-                  {entry.note && <p className="text-sm text-gray-600 mt-1 italic">"{entry.note}"</p>}
-                </li>
-              ))}
-            </ol>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Blocking stages */}
+            {blockingStages.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  Stage 1 — Blocking Approvals
+                </h2>
+                {blockingStages.map((s) => (
+                  <StepCard key={s.step} label={s.label} status={s.status} routingState={s.routing_state} />
+                ))}
+              </div>
+            )}
+
+            {/* Operational stages */}
+            {operationalStages.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  Stage 2 — Operational Lanes
+                </h2>
+                {operationalStages.map((s) => (
+                  <StepCard key={s.step} label={s.label} status={s.status} />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="space-y-6 lg:col-span-5">
+            {/* Budget estimate */}
+            {approval.budget_items && approval.budget_items.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+                  Budget Estimate
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                        <th className="text-left pb-2 font-semibold">Item</th>
+                        <th className="text-center pb-2 font-semibold">Qty</th>
+                        <th className="text-right pb-2 font-semibold">Unit (₹)</th>
+                        <th className="text-right pb-2 font-semibold">Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {approval.budget_items.map((b, i) => (
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-1.5 text-gray-800">{b.name || "—"}</td>
+                          <td className="py-1.5 text-center text-gray-600">{b.quantity}</td>
+                          <td className="py-1.5 text-right text-gray-600">{b.unitPrice.toLocaleString("en-IN")}</td>
+                          <td className="py-1.5 text-right font-medium text-gray-800">
+                            {(b.quantity * b.unitPrice).toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3} className="pt-3 text-right text-xs font-semibold text-gray-500 uppercase">Total Estimate</td>
+                        <td className="pt-3 text-right text-base font-bold text-gray-900">
+                          ₹{approval.budget_items.reduce((s, b) => s + b.quantity * b.unitPrice, 0).toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Activity timeline */}
+            {approval.action_log.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                  Activity Timeline
+                </h2>
+                <ol className="relative border-l border-gray-200 space-y-4 ml-2">
+                  {[...approval.action_log].reverse().map((entry, i) => (
+                    <li key={i} className="ml-4">
+                      <span className="absolute -left-3 mt-0.5 rounded-full bg-white p-0.5">
+                        <StatusIcon status={entry.action === "approve" ? "approved" : "rejected"} className="h-4 w-4" />
+                      </span>
+                      <p className="text-sm font-medium text-gray-900">
+                        {entry.step.toUpperCase()} — {entry.action === "approve" ? "Approved" : "Rejected"}
+                        {entry.is_override && (
+                          <span className="ml-2 text-xs bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Override</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500">{entry.by} · {formatDate(entry.at)}</p>
+                      {entry.note && <p className="text-sm text-gray-600 mt-1 italic">"{entry.note}"</p>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        </div>
 
         <p className="text-xs text-gray-400 text-center">
           Submitted on {formatDate(approval.created_at)}

@@ -30,6 +30,7 @@ import {
   ChevronDown,
   History,
   Pencil,
+  CheckCircle2,
 } from "lucide-react";
 
 // ─── TYPES & CONSTANTS ──────────────────────────────────────────────────────
@@ -160,9 +161,11 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
           alt={fest.fest_title}
           className="w-full h-full object-cover"
         />
-        {isDraft && (
+        {(isDraft || isArchived) && (
           <div className="absolute inset-0 bg-white/65 flex items-center justify-center pointer-events-none">
-            <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">DRAFT</span>
+            <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">
+              {isDraft ? "DRAFT" : "ARCHIVED"}
+            </span>
           </div>
         )}
         <div className="absolute top-3 right-3">
@@ -189,7 +192,7 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
           {fest.fest_title}
         </h3>
         <p className="text-sm text-slate-500 line-clamp-2">
-          {fest.description || "No description provided. Click manage to add one."}
+          {fest.description || "No description provided. Click edit to add one."}
         </p>
       </div>
       <div className="px-5 py-3.5 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -198,22 +201,50 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
           {formatDateFull(fest.opening_date, "TBD")}
         </div>
         {isDraft ? (
-          <Link href={`/${baseUrl}/${fest.fest_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
-            Edit <ArrowRight className="w-4 h-4" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/approvals/${fest.fest_id}?type=fest`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
+              title="View approvals"
+              aria-label="View approvals"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+            </Link>
+            <Link href={`/${baseUrl}/${fest.fest_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
+              Edit <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         ) : isArchived ? (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              onArchiveToggle?.(fest.fest_id, false);
-            }}
-            disabled={isArchiveUpdating}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isArchiveUpdating ? "Restoring..." : "Restore"} <History className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/approvals/${fest.fest_id}?type=fest`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
+              title="View approvals"
+              aria-label="View approvals"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+            </Link>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                onArchiveToggle?.(fest.fest_id, false);
+              }}
+              disabled={isArchiveUpdating}
+              className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isArchiveUpdating ? "Restoring..." : "Restore"} <History className="w-4 h-4" />
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
+            <Link
+              href={`/approvals/${fest.fest_id}?type=fest`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
+              title="View approvals"
+              aria-label="View approvals"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+            </Link>
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -225,7 +256,7 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
               {isArchiveUpdating ? "Archiving..." : "Archive"} <History className="w-4 h-4" />
             </button>
             <Link href={`/${baseUrl}/${fest.fest_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
-              Manage <ArrowRight className="w-4 h-4" />
+              Edit <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         )}
@@ -275,9 +306,11 @@ const MappedEventCard = ({
           alt={event.title}
           className="w-full h-full object-cover"
         />
-        {isDraft && (
+        {(isDraft || isArchived) && (
           <div className="absolute inset-0 bg-white/65 flex items-center justify-center pointer-events-none">
-            <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">DRAFT</span>
+            <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">
+              {isDraft ? "DRAFT" : "ARCHIVED"}
+            </span>
           </div>
         )}
         <div className="absolute top-3 right-3">
@@ -335,6 +368,14 @@ const MappedEventCard = ({
           )}
           <Link href={`/${baseUrl}/${event.event_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
             Edit <Pencil className="w-4 h-4" />
+          </Link>
+          <Link
+            href={`/approvals/${event.event_id}?type=event`}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
+            title="View approvals"
+            aria-label="View approvals"
+          >
+            <CheckCircle2 className="w-4 h-4" />
           </Link>
           {!isDraft && (
             <EventReminderButton

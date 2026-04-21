@@ -15,6 +15,7 @@ interface Event {
   image: string;
   allow_outsiders?: boolean | null;
   is_archived?: boolean | null;
+  is_draft?: boolean | null;
 }
 
 interface EventsSectionProps {
@@ -55,6 +56,7 @@ export const EventsSection = ({
             baseUrl={baseUrl}
             idForLink={event.event_id}
             isArchived={Boolean(event.is_archived)}
+            isDraft={Boolean(event.is_draft)}
             archivedVisualMode={archivedVisualMode}
             onArchiveToggle={onArchiveToggle}
             isArchiveLoading={archiveLoadingIds.has(event.event_id)}

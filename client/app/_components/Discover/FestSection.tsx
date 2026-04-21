@@ -13,6 +13,7 @@ interface Fest {
   opening_date: Date;
   closing_date: Date;
   is_archived?: boolean | null;
+  is_draft?: boolean | null;
 }
 
 interface FestsSectionProps {
@@ -43,6 +44,7 @@ export const FestsSection = ({
               image={fest.fest_image_url}
               baseUrl={baseUrl}
               isArchived={Boolean(fest.is_archived)}
+              isDraft={Boolean(fest.is_draft)}
             />
           </div>
         ))}

@@ -19,6 +19,7 @@ interface EventCardProps {
   idForLink?: string;
   authToken?: string;
   isArchived?: boolean;
+  isDraft?: boolean;
   archivedVisualMode?: "tag" | "muted";
   onArchiveToggle?: (eventId: string, shouldArchive: boolean) => Promise<void>;
   isArchiveLoading?: boolean;
@@ -38,6 +39,7 @@ export const EventCard = ({
   idForLink,
   authToken,
   isArchived = false,
+  isDraft = false,
   archivedVisualMode = "tag",
   onArchiveToggle,
   isArchiveLoading = false,
@@ -59,7 +61,8 @@ export const EventCard = ({
 
   const showArchivedTag =
     isArchived && isAdminOrOrganizer && archivedVisualMode === "tag";
-  const shouldMuteArchivedCard = isArchived && archivedVisualMode === "muted";
+  const shouldMuteArchivedCard = (isArchived || isDraft) && archivedVisualMode === "muted";
+  const overlayLabel = isDraft ? "DRAFT" : isArchived ? "ARCHIVED" : null;
 
   return (
     <div className={`bg-[#f9f9f9] rounded-lg overflow-hidden border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0 ${
@@ -124,6 +127,11 @@ export const EventCard = ({
           {image ? (
             <>
               <div className="absolute inset-0 bg-gradient-to-t from-[#063168]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+              {overlayLabel && (
+                <div className="absolute inset-0 z-20 bg-white/65 flex items-center justify-center pointer-events-none">
+                  <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">{overlayLabel}</span>
+                </div>
+              )}
               <img
                 src={image}
                 alt={title}

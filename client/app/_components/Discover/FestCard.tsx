@@ -10,6 +10,7 @@ interface FestCardProps {
   image: string | null;
   baseUrl?: string;
   isArchived?: boolean;
+  isDraft?: boolean;
 }
 
 export const FestCard = ({
@@ -21,6 +22,7 @@ export const FestCard = ({
   image,
   baseUrl = "fest",
   isArchived = false,
+  isDraft = false,
 }: FestCardProps) => {
   const formattedTitle = (title || "")
     .toLowerCase()
@@ -31,15 +33,22 @@ export const FestCard = ({
   // Use id if available, otherwise fallback to title slug
   const slug = id || formattedTitle;
 
+  const overlayLabel = isDraft ? "DRAFT" : isArchived ? "ARCHIVED" : null;
+
   return (
     <Link href={`/${baseUrl}/${slug}`} className="block w-full h-full min-w-0">
       <div className={`bg-[#F9F9F9] rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0 ${
-        isArchived ? "opacity-60 grayscale" : ""
+        (isArchived || isDraft) ? "opacity-60 grayscale" : ""
       }`}>
         <div className="relative h-40 bg-gray-200 overflow-hidden rounded-t-lg">
           {image ? (
             <>
               <div className="absolute inset-0 rounded-t-lg bg-gradient-to-t from-[#063168]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none"></div>
+              {overlayLabel && (
+                <div className="absolute inset-0 z-20 bg-white/65 flex items-center justify-center pointer-events-none">
+                  <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">{overlayLabel}</span>
+                </div>
+              )}
               <img
                 src={image}
                 alt={title}

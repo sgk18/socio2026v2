@@ -33,6 +33,7 @@ interface Fest {
   allowed_campuses?: string[] | string | null;
   venue?: string | null;
   is_archived?: boolean;
+  is_draft?: boolean;
   archived_at?: string | null;
 }
 
@@ -118,6 +119,7 @@ const DiscoverPageContent = () => {
               allowed_campuses: fest.allowed_campuses ?? fest.allowedCampuses ?? [],
               venue: fest.venue ?? null,
               is_archived: Boolean(fest.is_archived),
+              is_draft: Boolean(fest.is_draft),
               archived_at: fest.archived_at ?? null,
             }))
           : [];
@@ -506,6 +508,7 @@ const DiscoverPageContent = () => {
                       opening_date: openingDate,
                       closing_date: closingDate,
                       is_archived: Boolean(fest.is_archived),
+                      is_draft: Boolean(fest.is_draft),
                     };
                   })}
                   showAll={true}
