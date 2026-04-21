@@ -95,6 +95,15 @@ type User = {
   created_at: string;
   course?: string | null;
   register_number?: number | null;
+  // Approval workflow roles
+  is_hod?: boolean;
+  is_dean?: boolean;
+  is_cfo?: boolean;
+  is_campus_director?: boolean;
+  is_accounts_office?: boolean;
+  school?: string | null;
+  department?: string | null;
+  campus?: string | null;
 };
 
 type Event = {
@@ -202,6 +211,15 @@ export default function MasterAdminPage() {
   const [roleDept, setRoleDept] = useState("");
   const [roleCampus, setRoleCampus] = useState("");
   const [roleSaving, setRoleSaving] = useState(false);
+  // Role list view
+  const [roleHolders, setRoleHolders] = useState<User[]>([]);
+  const [roleHoldersLoading, setRoleHoldersLoading] = useState(false);
+  const [roleListRoleFilter, setRoleListRoleFilter] = useState("all");
+  const [roleListDeptFilter, setRoleListDeptFilter] = useState("");
+  const [roleListSchoolFilter, setRoleListSchoolFilter] = useState("");
+  const [roleListCampusFilter, setRoleListCampusFilter] = useState("");
+  const [roleListSearch, setRoleListSearch] = useState("");
+  const [roleRemoving, setRoleRemoving] = useState<string | null>(null);
   const [showDeleteUserConfirm, setShowDeleteUserConfirm] = useState<string | null>(null);
   const [userPage, setUserPage] = useState(1);
   
@@ -372,6 +390,11 @@ export default function MasterAdminPage() {
     if (!isMasterAdmin || !authToken || activeTab !== "clubs") return;
     fetchClubs();
   }, [activeTab, isMasterAdmin, authToken, clubPage, debouncedClubSearch, clubStatusFilter, clubSortKey, clubSortDir]);
+
+  useEffect(() => {
+    if (!isMasterAdmin || !authToken || activeTab !== "roles") return;
+    fetchRoleHolders();
+  }, [activeTab, isMasterAdmin, authToken]); // eslint-disable-line
 
   const fetchRegistrations = async () => {
     try {
@@ -763,6 +786,63 @@ export default function MasterAdminPage() {
       console.error("Error updating roles:", error);
       toast.error(error.message || "Failed to update roles");
     }
+  };
+
+  // Fetch all role holders (called when Roles tab opens)
+  const fetchRoleHolders = async () => {
+    setRoleHoldersLoading(true);
+    try {
+      const token = await getFreshToken();
+      const res = await fetch(`${API_URL}/api/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const all: User[] = data.users || data || [];
+      setRoleHolders(all.filter(u => u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
+    } catch { /* non-critical */ }
+    finally { setRoleHoldersLoading(false); }
+  };
+
+  const removeApprovalRole = async (user: User, roleKey: string) => {
+    setRoleRemoving(`${user.email}:${roleKey}`);
+    try {
+      const token = await getFreshToken();
+      const fieldMap: Record<string, string> = {
+        hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
+        director: "is_campus_director", accounts: "is_accounts_office",
+      };
+      const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(user.email)}/roles`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ [fieldMap[roleKey]]: false }),
+      });
+      if (!res.ok) throw new Error();
+      // Update local state
+      setRoleHolders(prev => prev.map(u => {
+        if (u.email !== user.email) return u;
+        const updated = { ...u, [fieldMap[roleKey]]: false };
+        return updated;
+      }).filter(u => u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
+      toast.success("Role removed");
+    } catch { toast.error("Failed to remove role"); }
+    finally { setRoleRemoving(null); }
+  };
+
+  const exportRolesToCSV = (rows: Array<{ user: User; role: string; roleLabel: string }>) => {
+    const header = ["Name", "Email", "Role", "Department / School", "Campus"];
+    const lines = rows.map(({ user, roleLabel }) => [
+      user.name || "",
+      user.email,
+      roleLabel,
+      user.department || user.school || "",
+      user.campus || "",
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    const csv = [header.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "role_holders.csv"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Roles tab: search users by email prefix
@@ -2431,163 +2511,225 @@ export default function MasterAdminPage() {
         )}
 
         {/* Roles Tab */}
-        {activeTab === "roles" && (
-          <div className="p-6 max-w-xl mx-auto space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Assign Approval Roles</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Assign HOD, Dean, CFO, Campus Director, or Finance Officer roles to users. All fields are overridden on save.
-              </p>
-            </div>
+        {activeTab === "roles" && (() => {
+          const ROLE_DEFS = [
+            { key: "hod",      label: "HOD",             flag: "is_hod" as const },
+            { key: "dean",     label: "Dean",            flag: "is_dean" as const },
+            { key: "cfo",      label: "CFO",             flag: "is_cfo" as const },
+            { key: "director", label: "Campus Dir",      flag: "is_campus_director" as const },
+            { key: "accounts", label: "Finance Officer", flag: "is_accounts_office" as const },
+          ] as const;
 
-            {/* Email search */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
-              <input
-                type="text"
-                value={roleEmailInput}
-                onChange={(e) => {
-                  setRoleEmailInput(e.target.value);
-                  setRoleSelectedEmail("");
-                  searchRoleEmails(e.target.value);
-                }}
-                placeholder="Type email or name to search..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              {roleEmailSuggestions.length > 0 && !roleSelectedEmail && (
-                <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                  {roleEmailSuggestions.map((s) => (
-                    <li key={s.email}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRoleSelectedEmail(s.email);
-                          setRoleEmailInput(s.email);
-                          setRoleEmailSuggestions([]);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
-                      >
-                        <span className="font-medium text-gray-900">{s.name}</span>
-                        {s.name !== s.email && (
-                          <span className="text-gray-500 ml-2 text-xs">{s.email}</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {roleSelectedEmail && (
-                <p className="mt-1 text-xs text-green-600 font-medium">✓ {roleSelectedEmail}</p>
-              )}
-            </div>
+          // Flatten role holders into one row per user-role
+          type RoleRow = { user: User; roleKey: string; roleLabel: string };
+          const allRoleRows: RoleRow[] = [];
+          roleHolders.forEach(u => {
+            ROLE_DEFS.forEach(({ key, label, flag }) => {
+              if (u[flag]) allRoleRows.push({ user: u, roleKey: key, roleLabel: label });
+            });
+          });
 
-            {/* Role selector */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {([
-                  { key: "hod",      label: "HOD",              desc: "Head of Department" },
-                  { key: "dean",     label: "Dean",             desc: "Dean of School" },
-                  { key: "cfo",      label: "CFO",              desc: "Campus Finance Officer" },
-                  { key: "director", label: "Campus Director",  desc: "Campus Director" },
-                  { key: "accounts", label: "Finance Officer",  desc: "Accounts Office" },
-                ] as const).map((r) => (
-                  <button
-                    key={r.key}
-                    type="button"
-                    onClick={() => {
-                      setRoleSelectedRole(r.key);
-                      setRoleSchool(""); setRoleDept(""); setRoleCampus("");
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      roleSelectedRole === r.key
-                        ? "border-blue-500 bg-blue-50 text-blue-800"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <p className="text-sm font-semibold">{r.label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{r.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
+          const filteredRows = allRoleRows.filter(({ user, roleKey }) => {
+            if (roleListRoleFilter !== "all" && roleKey !== roleListRoleFilter) return false;
+            if (roleListDeptFilter && (user.department || "") !== roleListDeptFilter) return false;
+            if (roleListSchoolFilter && (user.school || "") !== roleListSchoolFilter) return false;
+            if (roleListCampusFilter && (user.campus || "") !== roleListCampusFilter) return false;
+            if (roleListSearch) {
+              const q = roleListSearch.toLowerCase();
+              if (!user.email.toLowerCase().includes(q) && !(user.name || "").toLowerCase().includes(q)) return false;
+            }
+            return true;
+          });
 
-            {/* Conditional fields */}
-            {roleSelectedRole && (
-              <div className="space-y-4 bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Required context for {roleSelectedRole === "hod" ? "HOD" : roleSelectedRole === "dean" ? "Dean" : roleSelectedRole === "cfo" ? "CFO" : roleSelectedRole === "director" ? "Campus Director" : "Finance Officer"}
-                </p>
+          const needsDept = roleListRoleFilter === "hod";
+          const needsSchool = roleListRoleFilter === "dean";
 
-                {/* Campus — needed by all roles */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Campus</label>
-                  <select
-                    value={roleCampus}
-                    onChange={(e) => setRoleCampus(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                  >
-                    <option value="">Select campus…</option>
-                    {christCampuses.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+          return (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* ── Assign form (compact) ── */}
+              <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
+                <div className="flex gap-3 items-start flex-wrap">
+                  {/* Email */}
+                  <div className="relative min-w-[220px] flex-1">
+                    <input
+                      type="text"
+                      value={roleEmailInput}
+                      onChange={(e) => { setRoleEmailInput(e.target.value); setRoleSelectedEmail(""); searchRoleEmails(e.target.value); }}
+                      placeholder="Email or name…"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    {roleEmailSuggestions.length > 0 && !roleSelectedEmail && (
+                      <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
+                        {roleEmailSuggestions.map(s => (
+                          <li key={s.email}>
+                            <button type="button"
+                              onClick={() => { setRoleSelectedEmail(s.email); setRoleEmailInput(s.email); setRoleEmailSuggestions([]); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50"
+                            >
+                              <span className="font-medium">{s.name}</span>
+                              {s.name !== s.email && <span className="text-gray-400 text-xs ml-2">{s.email}</span>}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {roleSelectedEmail && <p className="mt-0.5 text-[11px] text-green-600 font-medium">✓ selected</p>}
+                  </div>
+
+                  {/* Role pills */}
+                  <div className="flex gap-1.5 flex-wrap">
+                    {ROLE_DEFS.map(r => (
+                      <button key={r.key} type="button"
+                        onClick={() => { setRoleSelectedRole(r.key as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${roleSelectedRole === r.key ? "bg-[#154cb3] text-white border-[#154cb3]" : "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"}`}
+                      >{r.label}</button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
-                {/* School — HOD and Dean */}
-                {(roleSelectedRole === "hod" || roleSelectedRole === "dean") && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">School</label>
-                    <select
-                      value={roleSchool}
-                      onChange={(e) => { setRoleSchool(e.target.value); setRoleDept(""); }}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                    >
-                      <option value="">Select school…</option>
-                      {organizingSchools.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Department — HOD only */}
-                {roleSelectedRole === "hod" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                    <select
-                      value={roleDept}
-                      onChange={(e) => setRoleDept(e.target.value)}
-                      disabled={!roleSchool}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white disabled:opacity-50"
-                    >
-                      <option value="">{roleSchool ? "Select department…" : "Select school first…"}</option>
-                      {getDepartmentOptionsForSchool(roleSchool).map((d) => (
-                        <option key={d.value} value={d.label}>{d.label}</option>
-                      ))}
-                    </select>
+                {/* Conditional context fields */}
+                {roleSelectedRole && (
+                  <div className="flex gap-3 flex-wrap items-end">
+                    <div className="min-w-[160px]">
+                      <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Campus</label>
+                      <select value={roleCampus} onChange={e => setRoleCampus(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        <option value="">Select…</option>
+                        {christCampuses.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    {(roleSelectedRole === "hod" || roleSelectedRole === "dean") && (
+                      <div className="min-w-[200px]">
+                        <label className="block text-[11px] font-medium text-gray-500 mb-0.5">School</label>
+                        <select value={roleSchool} onChange={e => { setRoleSchool(e.target.value); setRoleDept(""); }}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                          <option value="">Select…</option>
+                          {organizingSchools.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {roleSelectedRole === "hod" && (
+                      <div className="min-w-[200px]">
+                        <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Department</label>
+                        <select value={roleDept} onChange={e => setRoleDept(e.target.value)} disabled={!roleSchool}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40">
+                          <option value="">{roleSchool ? "Select…" : "Pick school first"}</option>
+                          {getDepartmentOptionsForSchool(roleSchool).map(d => <option key={d.value} value={d.label}>{d.label}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <button onClick={saveApprovalRole}
+                      disabled={!roleSelectedEmail || !roleSelectedRole || !roleCampus || (roleSelectedRole === "hod" && (!roleSchool || !roleDept)) || (roleSelectedRole === "dean" && !roleSchool) || roleSaving}
+                      className="px-4 py-1.5 bg-[#154cb3] text-white rounded-lg text-sm font-semibold hover:bg-[#1240a0] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                    >{roleSaving ? "Saving…" : "Assign Role"}</button>
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Save button */}
-            <button
-              onClick={saveApprovalRole}
-              disabled={
-                !roleSelectedEmail ||
-                !roleSelectedRole ||
-                !roleCampus ||
-                (roleSelectedRole === "hod" && (!roleSchool || !roleDept)) ||
-                (roleSelectedRole === "dean" && !roleSchool) ||
-                roleSaving
-              }
-              className="w-full py-2.5 px-4 bg-[#154cb3] text-white rounded-lg text-sm font-semibold hover:bg-[#1240a0] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {roleSaving ? "Saving…" : "Assign Role"}
-            </button>
-          </div>
-        )}
+              {/* ── Role holders list ── */}
+              <div className="flex-1 overflow-y-auto">
+                {/* Filter bar */}
+                <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-3 flex gap-2 flex-wrap items-center">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mr-1">Filter</span>
+                  <select value={roleListRoleFilter} onChange={e => { setRoleListRoleFilter(e.target.value); setRoleListDeptFilter(""); setRoleListSchoolFilter(""); }}
+                    className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <option value="all">All Roles</option>
+                    {ROLE_DEFS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  </select>
+                  {needsDept && (
+                    <select value={roleListDeptFilter} onChange={e => setRoleListDeptFilter(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 max-w-[200px]">
+                      <option value="">All Departments</option>
+                      {[...new Set(roleHolders.filter(u => u.is_hod).map(u => u.department || "").filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  )}
+                  {needsSchool && (
+                    <select value={roleListSchoolFilter} onChange={e => setRoleListSchoolFilter(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 max-w-[220px]">
+                      <option value="">All Schools</option>
+                      {organizingSchools.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  )}
+                  <select value={roleListCampusFilter} onChange={e => setRoleListCampusFilter(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <option value="">All Campuses</option>
+                    {christCampuses.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input value={roleListSearch} onChange={e => setRoleListSearch(e.target.value)}
+                    placeholder="Search name / email…"
+                    className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 min-w-[150px]" />
+                  <span className="ml-auto text-xs text-gray-400">{filteredRows.length} result{filteredRows.length !== 1 ? "s" : ""}</span>
+                  <button onClick={() => exportRolesToCSV(filteredRows.map(r => ({ user: r.user, role: r.roleKey, roleLabel: r.roleLabel })))}
+                    className="ml-1 flex items-center gap-1.5 px-3 py-1 rounded-lg border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Export CSV
+                  </button>
+                  <button onClick={fetchRoleHolders} title="Refresh"
+                    className="p-1 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  </button>
+                </div>
+
+                {/* Table */}
+                {roleHoldersLoading ? (
+                  <div className="flex items-center justify-center py-16 text-gray-400 text-sm">Loading…</div>
+                ) : filteredRows.length === 0 ? (
+                  <div className="flex items-center justify-center py-16 text-gray-400 text-sm">No role holders found.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-left">
+                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dept / School</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Campus</th>
+                        <th className="px-5 py-2.5 w-10" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map(({ user, roleKey, roleLabel }, i) => {
+                        const removingThis = roleRemoving === `${user.email}:${roleKey}`;
+                        const ROLE_COLORS: Record<string, string> = {
+                          hod: "bg-purple-100 text-purple-700",
+                          dean: "bg-blue-100 text-blue-700",
+                          cfo: "bg-amber-100 text-amber-700",
+                          director: "bg-cyan-100 text-cyan-700",
+                          accounts: "bg-green-100 text-green-700",
+                        };
+                        return (
+                          <tr key={`${user.email}:${roleKey}`} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}>
+                            <td className="px-5 py-2.5 font-medium text-gray-900 truncate max-w-[140px]">{user.name || "—"}</td>
+                            <td className="px-5 py-2.5 text-gray-500 text-xs truncate max-w-[180px]">{user.email}</td>
+                            <td className="px-5 py-2.5">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${ROLE_COLORS[roleKey] || "bg-gray-100 text-gray-600"}`}>{roleLabel}</span>
+                            </td>
+                            <td className="px-5 py-2.5 text-gray-600 text-xs truncate max-w-[200px]">{user.department || user.school || "—"}</td>
+                            <td className="px-5 py-2.5 text-gray-500 text-xs truncate max-w-[160px]">{user.campus || "—"}</td>
+                            <td className="px-3 py-2.5">
+                              <button
+                                onClick={() => removeApprovalRole(user, roleKey)}
+                                disabled={!!roleRemoving}
+                                title={`Remove ${roleLabel} role`}
+                                className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
+                              >
+                                {removingThis
+                                  ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                }
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
       </main>
     </div>
