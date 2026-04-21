@@ -278,40 +278,46 @@ router.get(
       const user = req.userInfo;
       const results = [];
 
+      console.log(`[Queue] user=${user.email} is_hod=${user.is_hod} dept=${user.department} is_dean=${user.is_dean} school=${user.school} campus=${user.campus}`);
+
       // Campus match helper — never use .or() with interpolated campus values (breaks on spaces/parens)
       const campusOkJS = (r) =>
         !user.campus || !r.organizing_campus_snapshot || r.organizing_campus_snapshot === user.campus;
 
       // HOD: all approvals for this department, campus-filtered in JS
       if (user.is_hod && user.department) {
-        const { data: rows } = await supabase
+        const { data: rows, error: hodErr } = await supabase
           .from("approvals")
           .select("*")
           .eq("organizing_department_snapshot", user.department)
-          .filter("stages", "cs", JSON.stringify([{ role: "hod" }]))
           .order("created_at", { ascending: true });
+        console.log(`[Queue] HOD raw rows=${rows?.length ?? 0} err=${hodErr?.message}`);
         for (const r of (rows || [])) {
-          if (!campusOkJS(r)) continue;
+          if (!campusOkJS(r)) { console.log(`[Queue] HOD skip campus ${r.organizing_campus_snapshot}`); continue; }
           const hodStage = r.stages?.find(s => s.role === "hod");
           if (hodStage && isPriorBlockingDone(r.stages, hodStage.step)) {
             results.push({ ...r, _queue_role: "hod" });
+          } else {
+            console.log(`[Queue] HOD skip priorBlocking fail for ${r.event_or_fest_id} hodStep=${hodStage?.step}`);
           }
         }
       }
 
       // Dean: all approvals for this school, campus-filtered in JS
       if (user.is_dean && user.school) {
-        const { data: rows } = await supabase
+        const { data: rows, error: deanErr } = await supabase
           .from("approvals")
           .select("*")
           .eq("organizing_school_snapshot", user.school)
-          .filter("stages", "cs", JSON.stringify([{ role: "dean" }]))
           .order("created_at", { ascending: true });
+        console.log(`[Queue] Dean raw rows=${rows?.length ?? 0} err=${deanErr?.message}`);
         for (const r of (rows || [])) {
-          if (!campusOkJS(r)) continue;
+          if (!campusOkJS(r)) { console.log(`[Queue] Dean skip campus ${r.organizing_campus_snapshot}`); continue; }
           const deanStage = r.stages?.find(s => s.role === "dean");
           if (deanStage && isPriorBlockingDone(r.stages, deanStage.step)) {
             results.push({ ...r, _queue_role: "dean" });
+          } else {
+            console.log(`[Queue] Dean skip priorBlocking fail for ${r.event_or_fest_id} deanStep=${deanStage?.step}`);
           }
         }
       }
