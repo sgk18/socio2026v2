@@ -529,9 +529,9 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
 }) => {
   const [mode, setMode] = useState<"hour" | "minute">("hour");
   const parsed = parseHHMM(value) || { hours: 12, minutes: 0 };
-  const radius = 80;
-  const centerX = 120;
-  const centerY = 120;
+  const radius = 60;
+  const centerX = 90;
+  const centerY = 90;
 
   const handleClockClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = e.currentTarget;
@@ -560,12 +560,12 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
   const minuteMarks = Array.from({ length: 60 }, (_, i) => i);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex gap-2 mb-2">
+    <div className="flex flex-col items-center gap-2">
+      <div className="flex gap-1">
         <button
           type="button"
           onClick={() => setMode("hour")}
-          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
             mode === "hour"
               ? "bg-[#154CB3] text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -576,25 +576,25 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
         <button
           type="button"
           onClick={() => setMode("minute")}
-          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
             mode === "minute"
               ? "bg-[#154CB3] text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
-          Minute
+          Min
         </button>
       </div>
 
       <svg
-        width="240"
-        height="240"
-        viewBox="0 0 240 240"
+        width="180"
+        height="180"
+        viewBox="0 0 180 180"
         onClick={handleClockClick}
-        className="cursor-pointer rounded-full border-2 border-gray-200 bg-white"
+        className="cursor-pointer rounded-full border border-gray-300 bg-white flex-shrink-0"
       >
         {/* Center circle */}
-        <circle cx={centerX} cy={centerY} r="4" fill="#154CB3" />
+        <circle cx={centerX} cy={centerY} r="3" fill="#154CB3" />
 
         {/* Hour markers or minute marks */}
         {mode === "hour" ? (
@@ -609,8 +609,8 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
                   key={`hour-${hour}`}
                   cx={x}
                   cy={y}
-                  r={hour === displayHour ? "6" : "4"}
-                  fill={hour === displayHour ? "#154CB3" : "#D1D5DB"}
+                  r={hour === displayHour ? "5" : "3"}
+                  fill={hour === displayHour ? "#154CB3" : "#E5E7EB"}
                 />
               );
             })}
@@ -618,8 +618,8 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
             {/* Hour hand */}
             {(() => {
               const angle = (displayHour * 30 - 90) * (Math.PI / 180);
-              const x = centerX + (radius - 10) * Math.cos(angle);
-              const y = centerY + (radius - 10) * Math.sin(angle);
+              const x = centerX + (radius - 8) * Math.cos(angle);
+              const y = centerY + (radius - 8) * Math.sin(angle);
               return (
                 <line
                   x1={centerX}
@@ -636,17 +636,17 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
             {/* Hour labels */}
             {hourNumbers.map((hour) => {
               const angle = (hour * 30 - 90) * (Math.PI / 180);
-              const x = centerX + (radius - 25) * Math.cos(angle);
-              const y = centerY + (radius - 25) * Math.sin(angle);
+              const x = centerX + (radius - 18) * Math.cos(angle);
+              const y = centerY + (radius - 18) * Math.sin(angle);
               return (
                 <text
                   key={`label-${hour}`}
                   x={x}
                   y={y}
                   textAnchor="middle"
-                  dy="0.3em"
-                  className="text-sm font-semibold"
-                  fill={hour === displayHour ? "#154CB3" : "#374151"}
+                  dy="0.25em"
+                  className="text-xs font-bold"
+                  fill={hour === displayHour ? "#154CB3" : "#6B7280"}
                   pointerEvents="none"
                 >
                   {hour}
@@ -662,8 +662,8 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
               const angle = (minute * 6 - 90) * (Math.PI / 180);
               const x1 = centerX + radius * Math.cos(angle);
               const y1 = centerY + radius * Math.sin(angle);
-              const x2 = centerX + (radius - 8) * Math.cos(angle);
-              const y2 = centerY + (radius - 8) * Math.sin(angle);
+              const x2 = centerX + (radius - 6) * Math.cos(angle);
+              const y2 = centerY + (radius - 6) * Math.sin(angle);
               return (
                 <line
                   key={`tick-${minute}`}
@@ -680,8 +680,8 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
             {/* Minute hand */}
             {(() => {
               const angle = (parsed.minutes * 6 - 90) * (Math.PI / 180);
-              const x = centerX + (radius - 10) * Math.cos(angle);
-              const y = centerY + (radius - 10) * Math.sin(angle);
+              const x = centerX + (radius - 8) * Math.cos(angle);
+              const y = centerY + (radius - 8) * Math.sin(angle);
               return (
                 <line
                   x1={centerX}
@@ -698,15 +698,15 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
             {/* Minute labels */}
             {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((minute) => {
               const angle = (minute * 6 - 90) * (Math.PI / 180);
-              const x = centerX + (radius - 25) * Math.cos(angle);
-              const y = centerY + (radius - 25) * Math.sin(angle);
+              const x = centerX + (radius - 18) * Math.cos(angle);
+              const y = centerY + (radius - 18) * Math.sin(angle);
               return (
                 <text
                   key={`min-label-${minute}`}
                   x={x}
                   y={y}
                   textAnchor="middle"
-                  dy="0.3em"
+                  dy="0.25em"
                   className="text-xs font-semibold"
                   fill={minute === parsed.minutes ? "#154CB3" : "#9CA3AF"}
                   pointerEvents="none"
@@ -730,7 +730,7 @@ const CircularClockPicker: React.FC<CircularClockPickerProps> = ({
       </svg>
 
       <div className="text-center">
-        <div className="text-2xl font-bold text-[#154CB3]">
+        <div className="text-lg font-bold text-[#154CB3]">
           {displayHour.toString().padStart(2, "0")}:
           {parsed.minutes.toString().padStart(2, "0")}
         </div>
@@ -851,13 +851,13 @@ const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
             id={`${field.name}-time-panel`}
             role="dialog"
             aria-modal="true"
-            className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-[120] p-4 w-[min(28rem,calc(100vw-2rem))]"
+            className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-[120] p-3 w-[min(20rem,calc(100vw-3rem))]"
           >
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Quick presets */}
               <div>
-                <label className="mb-2 block text-xs font-medium text-gray-600">Quick presets</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="mb-1.5 block text-xs font-medium text-gray-600">Quick presets</label>
+                <div className="grid grid-cols-2 gap-1.5">
                   {quickTimes.map((time) => (
                     <button
                       key={time}
@@ -867,10 +867,10 @@ const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
                         field.onChange(time);
                         setIsOpen(false);
                       }}
-                      className={`rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                         draftTime === time
-                          ? "border-[#154CB3] bg-[#154CB3]/10 text-[#154CB3]"
-                          : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                          ? "border border-[#154CB3] bg-[#154CB3]/10 text-[#154CB3]"
+                          : "border border-gray-200 text-gray-700 hover:bg-gray-50"
                       }`}
                     >
                       {formatHHMMTo12Hour(time)}
@@ -880,7 +880,7 @@ const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
               </div>
 
               {/* Circular clock picker */}
-              <div className="flex justify-center py-2">
+              <div className="flex justify-center py-1">
                 <CircularClockPicker
                   value={draftTime}
                   onChange={setDraftTime}
@@ -889,23 +889,21 @@ const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
 
               {/* Native input fallback */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Or enter exact time</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={nativeTimeRef}
-                    type="time"
-                    step={300}
-                    value={draftTime}
-                    onChange={(e) => setDraftTime(e.target.value)}
-                    className="h-10 w-full rounded-md border border-gray-300 px-2 text-sm focus:border-[#154CB3] focus:outline-none focus:ring-1 focus:ring-[#154CB3]"
-                  />
-                </div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Or type exact time</label>
+                <input
+                  ref={nativeTimeRef}
+                  type="time"
+                  step={300}
+                  value={draftTime}
+                  onChange={(e) => setDraftTime(e.target.value)}
+                  className="h-9 w-full rounded border border-gray-300 px-2 text-sm focus:border-[#154CB3] focus:outline-none focus:ring-1 focus:ring-[#154CB3]"
+                />
               </div>
             </div>
             <button
               type="button"
               onClick={handleSetTime}
-              className="mt-4 w-full bg-[#154CB3] text-white text-sm py-2 rounded-md hover:bg-[#154cb3eb] transition-colors"
+              className="mt-3 w-full bg-[#154CB3] text-white text-sm py-2 rounded hover:bg-[#154cb3eb] transition-colors"
             >
               Set Time
             </button>
