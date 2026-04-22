@@ -9,7 +9,7 @@ interface VenueOption { id: string; name: string; capacity: number | null; locat
 
 interface Props {
   open: boolean;
-  onClose: () => void;
+  onClose: () => void; 
   onSubmitted?: () => void;
 }
 

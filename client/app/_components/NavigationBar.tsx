@@ -89,7 +89,31 @@ function NavigationBar() {
   const displayAvatar = userData?.avatar_url || session?.user?.user_metadata?.avatar_url || null;
   const avatarInitial = (displayName || "U").charAt(0).toUpperCase();
   const isMasterAdmin = Boolean((userData as any)?.is_masteradmin);
+  const isAccountsOffice = Boolean((userData as any)?.is_accounts_office);
+  const isCfo = Boolean((userData as any)?.is_cfo);
+  const isDean = Boolean((userData as any)?.is_dean);
+  const isHod = Boolean((userData as any)?.is_hod);
   const isOrganiser = Boolean(userData?.is_organiser);
+  const isVenueManager = Boolean((userData as any)?.is_vendor_manager);
+
+  const primaryRoleAction = !userData
+    ? null
+    : isMasterAdmin
+      ? { label: "Admin", href: "/masteradmin", variant: "admin" as const }
+      : isAccountsOffice
+        ? { label: "Accounts", href: "/accounts", variant: "default" as const }
+        : isCfo
+          ? { label: "CFO", href: "/cfo", variant: "default" as const }
+          : isDean
+            ? { label: "Dean", href: "/dean", variant: "default" as const }
+            : isHod
+              ? { label: "HOD", href: "/hod", variant: "default" as const }
+              : isOrganiser
+                ? { label: "Organiser", href: "/manage", variant: "default" as const }
+                : isVenueManager
+                  ? { label: "Venue", href: "/venue", variant: "default" as const }
+                  : null;
+  const hasPrimaryRoleAction = Boolean(primaryRoleAction);
 
   useEffect(() => {
     setAvatarLoadError(false);
@@ -345,20 +369,19 @@ function NavigationBar() {
                 <div className="h-9 w-24 rounded-full bg-gray-200 animate-pulse" />
               </div>
             ) : session ? (
-              userData && (isOrganiser || isMasterAdmin) ? (
+              userData && hasPrimaryRoleAction ? (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   <NotificationSystem />
-                  {!isDesktopCompact && isMasterAdmin && (
-                    <Link href="/masteradmin">
-                      <button className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm hover:bg-red-50 border-red-600 text-red-600 transition-all duration-200 ease-in-out">
-                        Admin
-                      </button>
-                    </Link>
-                  )}
-                  {!isDesktopCompact && isOrganiser && (
-                    <Link href="/manage">
-                      <button className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm hover:bg-[#f3f3f3] transition-all duration-200 ease-in-out">
-                        Organiser
+                  {!isDesktopCompact && primaryRoleAction && (
+                    <Link href={primaryRoleAction.href}>
+                      <button
+                        className={`cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out ${
+                          primaryRoleAction.variant === "admin"
+                            ? "hover:bg-red-50 border-red-600 text-red-600"
+                            : "hover:bg-[#f3f3f3]"
+                        }`}
+                      >
+                        {primaryRoleAction.label}
                       </button>
                     </Link>
                   )}
@@ -593,30 +616,24 @@ function NavigationBar() {
               })}
             </div>
 
-            {session && userData && (isMasterAdmin || isOrganiser) && (
+            {session && userData && hasPrimaryRoleAction && (
               <div className="px-4 pb-4 border-t border-gray-200">
                 <p className="pt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                   Quick actions
                 </p>
 
                 <div className="mt-2 space-y-2">
-                  {isMasterAdmin && (
+                  {primaryRoleAction && (
                     <Link
-                      href="/masteradmin"
+                      href={primaryRoleAction.href}
                       onClick={closeDesktopMenu}
-                      className="block rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors duration-200"
+                      className={`block rounded-lg border px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
+                        primaryRoleAction.variant === "admin"
+                          ? "border-red-200 text-red-600 hover:bg-red-50"
+                          : "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10"
+                      }`}
                     >
-                      Admin
-                    </Link>
-                  )}
-
-                  {isOrganiser && (
-                    <Link
-                      href="/manage"
-                      onClick={closeDesktopMenu}
-                      className="block rounded-lg border border-[#154CB3]/30 px-3 py-2 text-sm font-semibold text-[#154CB3] hover:bg-[#154CB3]/10 transition-colors duration-200"
-                    >
-                      Organiser
+                      {primaryRoleAction.label}
                     </Link>
                   )}
                 </div>
@@ -653,21 +670,16 @@ function NavigationBar() {
               Fests
             </Link>
 
-            {isMasterAdmin && (
+            {primaryRoleAction && (
               <Link
-                href="/masteradmin"
-                className="inline-flex items-center justify-center rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors duration-200"
+                href={primaryRoleAction.href}
+                className={`inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
+                  primaryRoleAction.variant === "admin"
+                    ? "border-red-200 text-red-600 hover:bg-red-50"
+                    : "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10"
+                }`}
               >
-                Admin
-              </Link>
-            )}
-
-            {isOrganiser && (
-              <Link
-                href="/manage"
-                className="inline-flex items-center justify-center rounded-full border border-[#154CB3]/30 bg-white px-3 py-2 text-sm font-semibold text-[#154CB3] hover:bg-[#154CB3]/10 transition-colors duration-200"
-              >
-                Organiser
+                {primaryRoleAction.label}
               </Link>
             )}
           </div>

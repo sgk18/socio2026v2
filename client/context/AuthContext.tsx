@@ -24,6 +24,11 @@ type UserData = {
   is_organiser: boolean;
   is_support: boolean;
   is_masteradmin: boolean;
+  is_hod?: boolean;
+  is_dean?: boolean;
+  is_cfo?: boolean;
+  is_accounts_office?: boolean;
+  is_vendor_manager?: boolean;
   organiser_expires_at?: string | null;
   support_expires_at?: string | null;
   masteradmin_expires_at?: string | null;
