@@ -147,6 +147,12 @@ type Registration = {
   user_email?: string;
   registration_type: string;
   created_at: string;
+  individual_name?: string;
+  team_leader_name?: string;
+  individual_email?: string;
+  team_leader_email?: string;
+  individual_register_number?: string | number;
+  team_leader_register_number?: string | number;
   participant_organization?: string;
   teammates?: any[];
 };
@@ -231,6 +237,9 @@ export default function MasterAdminPage() {
   const [eventPagination, setEventPagination] = useState<PaginationState>(createDefaultPagination());
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [showDeleteEventConfirm, setShowDeleteEventConfirm] = useState<string | null>(null);
+  const [selectedEventForBookings, setSelectedEventForBookings] = useState<Event | null>(null);
+  const [eventBookings, setEventBookings] = useState<Registration[]>([]);
+  const [eventBookingsLoading, setEventBookingsLoading] = useState(false);
   const [eventPage, setEventPage] = useState(1);
   const [eventStatusFilter, setEventStatusFilter] = useState<"all" | "live" | "upcoming" | "thisweek" | "past">("all");
   const [eventSortKey, setEventSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
@@ -481,6 +490,11 @@ export default function MasterAdminPage() {
       setVenueBookings([]);
       setVenueBookingsLoading(false);
     }
+    if (activeTab !== "events") {
+      setSelectedEventForBookings(null);
+      setEventBookings([]);
+      setEventBookingsLoading(false);
+    }
   }, [activeTab]);
 
   useEffect(() => {
@@ -577,6 +591,35 @@ export default function MasterAdminPage() {
       setRegistrations(data.registrations || []);
     } catch (error) {
       console.error("Error fetching registrations:", error);
+    }
+  };
+
+  const handleViewEventBookings = async (event: Event) => {
+    if (selectedEventForBookings?.event_id === event.event_id) {
+      setSelectedEventForBookings(null);
+      setEventBookings([]);
+      return;
+    }
+
+    setSelectedEventForBookings(event);
+    setEventBookingsLoading(true);
+    try {
+      const token = await getFreshToken();
+      const headers: Record<string, string> = token
+        ? { Authorization: `Bearer ${token}` }
+        : {};
+      const response = await fetch(
+        `${API_URL}/api/registrations?event_id=${encodeURIComponent(event.event_id)}`,
+        { headers }
+      );
+      if (!response.ok) throw new Error("Failed to load event bookings");
+      const data = await response.json();
+      setEventBookings(data.registrations || []);
+    } catch {
+      toast.error("Failed to load event bookings");
+      setEventBookings([]);
+    } finally {
+      setEventBookingsLoading(false);
     }
   };
 
@@ -2002,10 +2045,20 @@ export default function MasterAdminPage() {
                                     View
                                   </a>
                                   <button
-                                    onClick={() => setShowDeleteEventConfirm(event.event_id)}
-                                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 hover:-translate-y-0.5 transition-all"
+                                    onClick={() => handleViewEventBookings(event)}
+                                    className="h-8 w-8 inline-flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 hover:-translate-y-0.5 transition-all"
+                                    title="View bookings"
+                                    aria-label="View bookings"
                                   >
-                                    Delete
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setShowDeleteEventConfirm(event.event_id)}
+                                    className="h-8 w-8 inline-flex items-center justify-center bg-red-600 text-white rounded-lg hover:bg-red-700 hover:-translate-y-0.5 transition-all"
+                                    title="Delete event"
+                                    aria-label="Delete event"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
                               </td>
@@ -2015,6 +2068,81 @@ export default function MasterAdminPage() {
                       </tbody>
                     </table>
                   </div>
+                  {selectedEventForBookings && (
+                    <div className="border-t border-gray-200 p-6 bg-gray-50">
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            Bookings for {selectedEventForBookings.title}
+                          </h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Event ID: {selectedEventForBookings.event_id}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedEventForBookings(null);
+                            setEventBookings([]);
+                          }}
+                          className="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                          Close
+                        </button>
+                      </div>
+
+                      {eventBookingsLoading ? (
+                        <div className="text-sm text-gray-600">Loading event bookings...</div>
+                      ) : eventBookings.length === 0 ? (
+                        <div className="text-sm text-gray-600">No bookings found for this event.</div>
+                      ) : (
+                        <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
+                          <table className="w-full">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Email</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Register No.</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Type</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Booked At</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {eventBookings.map((booking) => {
+                                const isTeam = booking.registration_type?.toLowerCase().includes("team");
+                                const name = isTeam
+                                  ? booking.team_leader_name
+                                  : booking.individual_name;
+                                const email = isTeam
+                                  ? booking.team_leader_email
+                                  : booking.individual_email;
+                                const registerNo = isTeam
+                                  ? booking.team_leader_register_number
+                                  : booking.individual_register_number;
+
+                                return (
+                                  <tr key={booking.registration_id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 text-sm text-gray-700">{name || "-"}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-700">{email || booking.user_email || "-"}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-700">{registerNo ?? "-"}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-700 capitalize">{booking.registration_type || "-"}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-700">
+                                      {new Date(booking.created_at).toLocaleString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <PaginationControls
                     currentPage={eventPage}
                     totalPages={eventPagination.totalPages}
