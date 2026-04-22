@@ -126,26 +126,23 @@ export default function ChatBot() {
     setIsUnavailable(false);
   }, [pathname]);
 
-  // Word-by-word typing effect — abortable via typingVersion
+  // Character-by-character typing — abortable via typingVersion
   const typeMessage = useCallback(async (content: string) => {
     const version = ++typingVersion.current;
     setIsTyping(true);
-    // Seed an empty assistant bubble
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
-    const tokens = content.match(/\S+\s*/g) ?? [content]; // words + trailing space
     let built = "";
-
-    for (const token of tokens) {
-      if (typingVersion.current !== version) break; // reset/abort
-      built += token;
+    for (let i = 0; i < content.length; i++) {
+      if (typingVersion.current !== version) break;
+      built += content[i];
       setMessages(prev => {
         const next = [...prev];
         const last = next[next.length - 1];
         if (last?.role === "assistant") next[next.length - 1] = { ...last, content: built };
         return next;
       });
-      await new Promise(r => setTimeout(r, 28));
+      await new Promise(r => setTimeout(r, 18));
     }
     if (typingVersion.current === version) setIsTyping(false);
   }, []);
