@@ -114,19 +114,24 @@ export const getUserInfo = () => {
   return async (req, res, next) => {
     try {
       if (!req.userId) {
-        console.warn('[UserInfo] ❌ No req.userId set by previous middleware');
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      console.log(`[UserInfo] 🔍 Fetching user info for UUID: ${req.userId}`);
-      const user = await queryOne('users', { where: { auth_uuid: req.userId } });
+      let user = await queryOne('users', { where: { auth_uuid: req.userId } });
+
+      // Fallback: look up by email and backfill auth_uuid (handles accounts where UUID drifted)
+      if (!user && req.user?.email) {
+        user = await queryOne('users', { where: { email: req.user.email } });
+        if (user) {
+          await update('users', { auth_uuid: req.userId }, { email: req.user.email });
+          user.auth_uuid = req.userId;
+        }
+      }
 
       if (!user) {
-        console.warn(`[UserInfo] ❌ User not found in database for UUID: ${req.userId}`);
         return res.status(404).json({ error: 'User not found in database' });
       }
 
-      console.log(`[UserInfo] ✅ Found user: ${user.email}`);
       req.userInfo = user;
       next();
     } catch (error) {

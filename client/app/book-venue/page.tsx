@@ -279,19 +279,25 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
   const [loadingCal,    setLoadingCal]    = useState(false);
   const [modal,         setModal]         = useState<{ date: string; start_time: string; end_time: string } | null>(null);
 
-  // Load campuses — masteradmin sees all; everyone else sees only their own campus
+  // Load campuses from DB; pre-select profile campus; only masteradmin with multiple campuses can switch
   useEffect(() => {
-    if (!session?.access_token) return;
-    if (!userData?.is_masteradmin && userData?.campus) {
-      setCampuses([userData.campus]);
-      setSelectedCampus(userData.campus);
-      return;
-    }
+    if (!session?.access_token || !userData) return;
     fetch(`${API_URL}/api/venues/campuses`, { headers: { Authorization: `Bearer ${session.access_token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setCampuses(d?.campuses?.length ? d.campuses : [...christCampuses].sort()))
-      .catch(() => setCampuses([...christCampuses].sort()));
-  }, [session?.access_token, userData?.is_masteradmin, userData?.campus]);
+      .then(r => r.ok ? r.json() : { campuses: [] })
+      .then(d => {
+        const dbCampuses: string[] = d?.campuses || [];
+        setCampuses(dbCampuses);
+        const profileCampus = userData?.campus;
+        if (profileCampus && dbCampuses.includes(profileCampus)) {
+          setSelectedCampus(profileCampus);
+        } else if (dbCampuses.length === 1) {
+          setSelectedCampus(dbCampuses[0]);
+        }
+      })
+      .catch(() => {});
+  }, [session?.access_token, userData?.campus, userData?.is_masteradmin]);
+
+  const canSwitchCampus = Boolean(userData?.is_masteradmin && campuses.length > 1);
 
   // Campus → Blocks
   useEffect(() => {
@@ -375,7 +381,8 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
             <select
               value={selectedCampus}
               onChange={e => setSelectedCampus(e.target.value)}
-              className={selectCls}
+              disabled={!canSwitchCampus}
+              className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
             >
               <option value="">Select campus…</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
@@ -986,17 +993,23 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
   const [picked,   setPicked]   = useState<Venue | null>(null);
 
   useEffect(() => {
-    if (!session?.access_token) return;
-    if (!userData?.is_masteradmin && userData?.campus) {
-      setCampuses([userData.campus]);
-      setCampus(userData.campus);
-      return;
-    }
+    if (!session?.access_token || !userData) return;
     fetch(`${API_URL}/api/venues/campuses`, { headers: { Authorization: `Bearer ${session.access_token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setCampuses(d?.campuses?.length ? d.campuses : [...christCampuses].sort()))
-      .catch(() => setCampuses([...christCampuses].sort()));
-  }, [session?.access_token, userData?.is_masteradmin, userData?.campus]);
+      .then(r => r.ok ? r.json() : { campuses: [] })
+      .then(d => {
+        const dbCampuses: string[] = d?.campuses || [];
+        setCampuses(dbCampuses);
+        const profileCampus = userData?.campus;
+        if (profileCampus && dbCampuses.includes(profileCampus)) {
+          setCampus(profileCampus);
+        } else if (dbCampuses.length === 1) {
+          setCampus(dbCampuses[0]);
+        }
+      })
+      .catch(() => {});
+  }, [session?.access_token, userData?.campus, userData?.is_masteradmin]);
+
+  const canSwitchCampus = Boolean(userData?.is_masteradmin && campuses.length > 1);
 
   async function search() {
     if (!session?.access_token || !campus) return;
@@ -1056,7 +1069,12 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
         <div className="grid grid-cols-6 gap-3 items-end max-lg:grid-cols-3 max-md:grid-cols-2">
           <FormField label="Campus">
-            <select value={campus} onChange={e => setCampus(e.target.value)} className={selectCls}>
+            <select
+              value={campus}
+              onChange={e => setCampus(e.target.value)}
+              disabled={!canSwitchCampus}
+              className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
+            >
               <option value="">Select…</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
