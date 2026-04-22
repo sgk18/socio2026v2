@@ -878,26 +878,27 @@ export default function Page() {
             Prizes
           </p>
         )}
-        <div className="ml-auto flex flex-col items-end gap-2">
-          <button
-            onClick={handleRegistration}
-            disabled={buttonState.disabled}
-            className="bg-[#154CB3] cursor-pointer text-white py-2 sm:py-3 px-4 sm:px-6 rounded-full font-medium hover:bg-[#154cb3eb] transition-colors text-sm sm:text-base disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {buttonState.text}
-          </button>
-          {isUserRegisteredForThisEvent && userRegistrationId && (
+        <div className="ml-auto flex flex-col items-end">
+          {isUserRegisteredForThisEvent && userRegistrationId ? (
             <button
               onClick={isEventWithin24Hours ? undefined : handleCancelRegistration}
-              disabled={isCancelling}
-              title={isEventWithin24Hours ? "Cannot cancel — event starts in less than 24 hours" : "Cancel your registration"}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              disabled={isCancelling || isEventWithin24Hours}
+              title={isEventWithin24Hours ? "Cannot cancel — event starts in less than 24 hours" : undefined}
+              className={`py-2 sm:py-3 px-4 sm:px-6 rounded-full font-medium transition-colors text-sm sm:text-base border ${
                 isEventWithin24Hours
-                  ? "border-gray-200 text-gray-400 cursor-not-allowed"
-                  : "border-red-300 text-red-500 hover:bg-red-50 cursor-pointer"
-              } disabled:opacity-50`}
+                  ? "border-gray-300 text-gray-400 bg-white cursor-not-allowed"
+                  : "border-red-400 text-red-500 bg-white hover:bg-red-50 cursor-pointer"
+              } disabled:opacity-60`}
             >
               {isCancelling ? "Cancelling…" : "Cancel registration"}
+            </button>
+          ) : (
+            <button
+              onClick={handleRegistration}
+              disabled={buttonState.disabled}
+              className="bg-[#154CB3] cursor-pointer text-white py-2 sm:py-3 px-4 sm:px-6 rounded-full font-medium hover:bg-[#154cb3eb] transition-colors text-sm sm:text-base disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {buttonState.text}
             </button>
           )}
         </div>
@@ -1200,25 +1201,26 @@ export default function Page() {
                   </div>
                 )
               )}
-            <button
-              onClick={handleRegistration}
-              disabled={buttonState.disabled}
-              className="bg-[#154CB3] cursor-pointer text-white py-3 px-8 rounded-full font-semibold hover:bg-[#154cb3eb] transition-colors text-base disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {buttonState.text === "Register" ? "Register" : buttonState.text}
-            </button>
-            {isUserRegisteredForThisEvent && userRegistrationId && (
+            {isUserRegisteredForThisEvent && userRegistrationId ? (
               <button
                 onClick={isEventWithin24Hours ? undefined : handleCancelRegistration}
-                disabled={isCancelling}
-                title={isEventWithin24Hours ? "Cannot cancel — event starts in less than 24 hours" : "Cancel your registration"}
-                className={`mt-2 text-sm px-5 py-2 rounded-full border transition-colors ${
+                disabled={isCancelling || isEventWithin24Hours}
+                title={isEventWithin24Hours ? "Cannot cancel — event starts in less than 24 hours" : undefined}
+                className={`py-3 px-8 rounded-full font-semibold transition-colors text-base border ${
                   isEventWithin24Hours
-                    ? "border-gray-200 text-gray-400 cursor-not-allowed"
-                    : "border-red-300 text-red-500 hover:bg-red-50 cursor-pointer"
-                } disabled:opacity-50`}
+                    ? "border-gray-300 text-gray-400 bg-white cursor-not-allowed"
+                    : "border-red-400 text-red-500 bg-white hover:bg-red-50 cursor-pointer"
+                } disabled:opacity-60`}
               >
                 {isCancelling ? "Cancelling…" : "Cancel registration"}
+              </button>
+            ) : (
+              <button
+                onClick={handleRegistration}
+                disabled={buttonState.disabled}
+                className="bg-[#154CB3] cursor-pointer text-white py-3 px-8 rounded-full font-semibold hover:bg-[#154cb3eb] transition-colors text-base disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {buttonState.text === "Register" ? "Register" : buttonState.text}
               </button>
             )}
           </div>
