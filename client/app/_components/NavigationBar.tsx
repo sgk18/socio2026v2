@@ -94,26 +94,24 @@ function NavigationBar() {
   const isDean = Boolean((userData as any)?.is_dean);
   const isHod = Boolean((userData as any)?.is_hod);
   const isOrganiser = Boolean(userData?.is_organiser);
+  const isSupport = Boolean(userData?.is_support);
   const isVenueManager = Boolean((userData as any)?.is_vendor_manager);
 
-  const primaryRoleAction = !userData
-    ? null
-    : isMasterAdmin
-      ? { label: "Admin", href: "/masteradmin", variant: "admin" as const }
-      : isAccountsOffice
-        ? { label: "Accounts", href: "/accounts", variant: "default" as const }
-        : isCfo
-          ? { label: "CFO", href: "/cfo", variant: "default" as const }
-          : isDean
-            ? { label: "Dean", href: "/dean", variant: "default" as const }
-            : isHod
-              ? { label: "HOD", href: "/hod", variant: "default" as const }
-              : isOrganiser
-                ? { label: "Organiser", href: "/manage", variant: "default" as const }
-                : isVenueManager
-                  ? { label: "Venue", href: "/venue", variant: "default" as const }
-                  : null;
-  const hasPrimaryRoleAction = Boolean(primaryRoleAction);
+  const roleActions = !userData
+    ? []
+    : [
+        isMasterAdmin ? { label: "Admin", href: "/masteradmin", variant: "admin" as const } : null,
+        isAccountsOffice ? { label: "Accounts", href: "/accounts", variant: "default" as const } : null,
+        isCfo ? { label: "CFO", href: "/cfo", variant: "default" as const } : null,
+        isDean ? { label: "Dean", href: "/dean", variant: "default" as const } : null,
+        isHod ? { label: "HOD", href: "/hod", variant: "default" as const } : null,
+        isOrganiser ? { label: "Organiser", href: "/manage", variant: "default" as const } : null,
+        isSupport ? { label: "Support", href: "/support", variant: "default" as const } : null,
+        isVenueManager ? { label: "Venue", href: "/venue", variant: "default" as const } : null,
+      ].filter((action): action is { label: string; href: string; variant: "admin" | "default" } => Boolean(action));
+  const hasRoleActions = roleActions.length > 0;
+  const shouldCollapseRoleActions = roleActions.length > 3;
+  const visibleRoleActions = shouldCollapseRoleActions ? roleActions.slice(0, 1) : roleActions;
 
   useEffect(() => {
     setAvatarLoadError(false);
@@ -369,21 +367,45 @@ function NavigationBar() {
                 <div className="h-9 w-24 rounded-full bg-gray-200 animate-pulse" />
               </div>
             ) : session ? (
-              userData && hasPrimaryRoleAction ? (
+              userData && hasRoleActions ? (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   <NotificationSystem />
-                  {!isDesktopCompact && primaryRoleAction && (
-                    <Link href={primaryRoleAction.href}>
-                      <button
-                        className={`cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out ${
-                          primaryRoleAction.variant === "admin"
-                            ? "hover:bg-red-50 border-red-600 text-red-600"
-                            : "hover:bg-[#f3f3f3]"
-                        }`}
-                      >
-                        {primaryRoleAction.label}
-                      </button>
-                    </Link>
+                  {!isDesktopCompact && (
+                    <>
+                      {visibleRoleActions.map((roleAction) => (
+                        <Link key={`${roleAction.label}:${roleAction.href}`} href={roleAction.href}>
+                          <button
+                            className={`cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out ${
+                              roleAction.variant === "admin"
+                                ? "hover:bg-red-50 border-red-600 text-red-600"
+                                : "hover:bg-[#f3f3f3]"
+                            }`}
+                          >
+                            {roleAction.label}
+                          </button>
+                        </Link>
+                      ))}
+                      {shouldCollapseRoleActions && (
+                        <select
+                          defaultValue=""
+                          onChange={(event) => {
+                            const href = event.target.value;
+                            if (!href) return;
+                            router.push(href);
+                            event.target.value = "";
+                          }}
+                          className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out hover:bg-[#f3f3f3]"
+                          aria-label="Choose role action"
+                        >
+                          <option value="">More Roles</option>
+                          {roleActions.map((roleAction) => (
+                            <option key={`desktop-role-option-${roleAction.href}`} value={roleAction.href}>
+                              {roleAction.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </>
                   )}
                   {/* CHANGED ORGANISED AND ADMIN BUTTON */}
                   <div className="relative">
@@ -616,25 +638,47 @@ function NavigationBar() {
               })}
             </div>
 
-            {session && userData && hasPrimaryRoleAction && (
+            {session && userData && hasRoleActions && (
               <div className="px-4 pb-4 border-t border-gray-200">
                 <p className="pt-3 px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                   Quick actions
                 </p>
 
                 <div className="mt-2 space-y-2">
-                  {primaryRoleAction && (
+                  {visibleRoleActions.map((roleAction) => (
                     <Link
-                      href={primaryRoleAction.href}
+                      key={`compact-role-${roleAction.href}`}
+                      href={roleAction.href}
                       onClick={closeDesktopMenu}
                       className={`block rounded-lg border px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
-                        primaryRoleAction.variant === "admin"
+                        roleAction.variant === "admin"
                           ? "border-red-200 text-red-600 hover:bg-red-50"
                           : "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10"
                       }`}
                     >
-                      {primaryRoleAction.label}
+                      {roleAction.label}
                     </Link>
+                  ))}
+                  {shouldCollapseRoleActions && (
+                    <select
+                      defaultValue=""
+                      onChange={(event) => {
+                        const href = event.target.value;
+                        if (!href) return;
+                        closeDesktopMenu();
+                        router.push(href);
+                        event.target.value = "";
+                      }}
+                      className="w-full rounded-lg border border-[#154CB3]/30 px-3 py-2 text-sm font-semibold text-[#154CB3] bg-white focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30"
+                      aria-label="Choose role action"
+                    >
+                      <option value="">More Roles</option>
+                      {roleActions.map((roleAction) => (
+                        <option key={`compact-role-option-${roleAction.href}`} value={roleAction.href}>
+                          {roleAction.label}
+                        </option>
+                      ))}
+                    </select>
                   )}
                 </div>
               </div>
@@ -670,17 +714,39 @@ function NavigationBar() {
               Fests
             </Link>
 
-            {primaryRoleAction && (
+            {visibleRoleActions.map((roleAction) => (
               <Link
-                href={primaryRoleAction.href}
+                key={`mobile-role-${roleAction.href}`}
+                href={roleAction.href}
                 className={`inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
-                  primaryRoleAction.variant === "admin"
+                  roleAction.variant === "admin"
                     ? "border-red-200 text-red-600 hover:bg-red-50"
                     : "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10"
                 }`}
               >
-                {primaryRoleAction.label}
+                {roleAction.label}
               </Link>
+            ))}
+
+            {shouldCollapseRoleActions && (
+              <select
+                defaultValue=""
+                onChange={(event) => {
+                  const href = event.target.value;
+                  if (!href) return;
+                  router.push(href);
+                  event.target.value = "";
+                }}
+                className="col-span-2 rounded-full border border-[#154CB3]/30 bg-white px-3 py-2 text-sm font-semibold text-[#154CB3] focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30"
+                aria-label="Choose role action"
+              >
+                <option value="">More Roles</option>
+                {roleActions.map((roleAction) => (
+                  <option key={`mobile-role-option-${roleAction.href}`} value={roleAction.href}>
+                    {roleAction.label}
+                  </option>
+                ))}
+              </select>
             )}
           </div>
         </div>
