@@ -26,6 +26,7 @@ interface EventsSectionProps {
   archivedVisualMode?: "tag" | "muted";
   onArchiveToggle?: (eventId: string, shouldArchive: boolean) => Promise<void>;
   archiveLoadingIds?: Set<string>;
+  approvalStatuses?: Record<string, "pending_approvals" | "live">;
 }
 
 export const EventsSection = ({
@@ -35,6 +36,7 @@ export const EventsSection = ({
   archivedVisualMode = "tag",
   onArchiveToggle,
   archiveLoadingIds = new Set(),
+  approvalStatuses = {},
 }: EventsSectionProps) => {
   return (
     <div className="min-w-0">
@@ -57,6 +59,7 @@ export const EventsSection = ({
             idForLink={event.event_id}
             isArchived={Boolean(event.is_archived)}
             isDraft={Boolean(event.is_draft)}
+            isPendingApproval={approvalStatuses[event.event_id] === "pending_approvals"}
             archivedVisualMode={archivedVisualMode}
             onArchiveToggle={onArchiveToggle}
             isArchiveLoading={archiveLoadingIds.has(event.event_id)}

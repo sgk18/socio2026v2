@@ -20,6 +20,7 @@ interface EventCardProps {
   authToken?: string;
   isArchived?: boolean;
   isDraft?: boolean;
+  isPendingApproval?: boolean;
   archivedVisualMode?: "tag" | "muted";
   onArchiveToggle?: (eventId: string, shouldArchive: boolean) => Promise<void>;
   isArchiveLoading?: boolean;
@@ -40,6 +41,7 @@ export const EventCard = ({
   authToken,
   isArchived = false,
   isDraft = false,
+  isPendingApproval = false,
   archivedVisualMode = "tag",
   onArchiveToggle,
   isArchiveLoading = false,
@@ -62,7 +64,7 @@ export const EventCard = ({
   const showArchivedTag =
     isArchived && isAdminOrOrganizer && archivedVisualMode === "tag";
   const shouldMuteArchivedCard = (isArchived || isDraft) && archivedVisualMode === "muted";
-  const overlayLabel = isDraft ? "DRAFT" : isArchived ? "ARCHIVED" : null;
+  const overlayLabel = isDraft ? (isPendingApproval ? "PENDING" : "DRAFT") : isArchived ? "ARCHIVED" : null;
 
   return (
     <div className={`bg-[#f9f9f9] rounded-lg overflow-hidden border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md flex flex-col group w-full h-full min-w-0 ${

@@ -383,6 +383,47 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/approvals/statuses – Batch approval status for multiple items
+// Returns { [id]: "pending_approvals" | "live" | "none" } for each requested id
+// ---------------------------------------------------------------------------
+router.get(
+  "/approvals/statuses",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const { ids, type } = req.query;
+      if (!ids) return res.json({});
+
+      const idList = String(ids).split(",").map(s => s.trim()).filter(Boolean);
+      if (!idList.length) return res.json({});
+
+      let query = supabase
+        .from("approvals")
+        .select("event_or_fest_id, type, stages, went_live_at")
+        .in("event_or_fest_id", idList);
+
+      if (type) query = query.eq("type", type);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const result = {};
+      for (const record of (data || [])) {
+        const stages = Array.isArray(record.stages) ? record.stages : [];
+        const hasAnyPendingBlocking = stages.some(s => s.blocking && s.status === "pending");
+        result[record.event_or_fest_id] = hasAnyPendingBlocking ? "pending_approvals" : "live";
+      }
+      return res.json(result);
+    } catch (error) {
+      console.error("[Approvals] GET /approvals/statuses error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // GET /api/approvals/:itemId – Get approval record (creator or approver)
 // ---------------------------------------------------------------------------
 router.get(

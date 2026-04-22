@@ -122,6 +122,7 @@ type Event = {
   registration_count?: number;
   fest?: string | null;
   is_archived?: boolean | null;
+  is_draft?: boolean | null;
   archived_at?: string | null;
   archived_by?: string | null;
   archived_effective?: boolean | null;
@@ -258,6 +259,8 @@ export default function MasterAdminPage() {
   const [festPage, setFestPage] = useState(1);
   const [festSortKey, setFestSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
   const [festSortDir, setFestSortDir] = useState<"asc" | "desc">("desc");
+
+  const [approvalStatuses, setApprovalStatuses] = useState<Record<string, "pending_approvals" | "live">>({});
 
   // Club management state
   const [clubs, setClubs] = useState<ClubRecord[]>([]);
@@ -552,6 +555,14 @@ export default function MasterAdminPage() {
       return { label: "Archived", color: "bg-amber-100 text-amber-700" };
     }
 
+    const isDraft = Boolean(event.is_draft);
+    if (isDraft) {
+      if (approvalStatuses[event.event_id] === "pending_approvals") {
+        return { label: "Pending Approvals", color: "bg-amber-100 text-amber-700" };
+      }
+      return { label: "Draft", color: "bg-slate-100 text-slate-700" };
+    }
+
     const now = new Date();
     const eventDate = new Date(event.event_date);
     const diffMs = eventDate.getTime() - now.getTime();
@@ -612,6 +623,20 @@ export default function MasterAdminPage() {
     if (!isMasterAdmin || !authToken || activeTab !== "clubs") return;
     fetchClubs();
   }, [activeTab, isMasterAdmin, authToken, clubPage, debouncedClubSearch, clubStatusFilter, clubSortKey, clubSortDir]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    const draftEventIds = events.filter(e => e.is_draft).map(e => e.event_id);
+    const draftFestIds = fests.filter((f: any) => f.is_draft).map((f: any) => f.fest_id);
+    const allIds = [...draftEventIds, ...draftFestIds];
+    if (!allIds.length) return;
+    fetch(`${API_URL}/api/approvals/statuses?ids=${allIds.join(",")}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setApprovalStatuses(prev => ({ ...prev, ...data })))
+      .catch(() => {});
+  }, [authToken, events, fests]); // eslint-disable-line
 
   useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "roles") return;

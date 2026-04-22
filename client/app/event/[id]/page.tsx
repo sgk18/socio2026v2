@@ -833,14 +833,14 @@ export default function Page() {
               </p>
             </div>
           )}
-          {/* Show "Open Registration" for events without deadline */}
+          {/* Show "Registrations Open" for events without deadline */}
           {eventData.daysLeft === null && !isDeadlineOverForThisEvent && (
-            <div className="flex flex-col items-center bg-gradient-to-b from-[#22C55E] to-[#86EFAC] rounded-xl border-2 border-[#22C55E80] py-3 px-3 sm:px-4 sm:py-5 mb-4 sm:mb-0">
+            <div className="flex flex-col items-center bg-gradient-to-b from-[#15803D] to-[#22C55E] rounded-xl border-2 border-[#15803D80] py-3 px-3 sm:px-4 sm:py-5 mb-4 sm:mb-0">
               <p className="text-lg sm:text-xl font-bold m-0 text-black">
-                Open
+                Registrations
               </p>
               <p className="text-sm sm:text-base font-medium text-black">
-                Registration
+                Open
               </p>
             </div>
           )}
