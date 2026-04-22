@@ -197,19 +197,28 @@ export default function BookVenuePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pt-[72px]">
-      <div className="max-w-screen-xl mx-auto px-6 py-6">
+      <div className="max-w-screen-xl mx-auto px-6 pt-3 pb-6">
 
-        {/* Breadcrumb */}
-        <nav className="text-xs text-gray-400 mb-1">
-          <Link href="/manage" className="hover:text-[#154CB3] transition-colors">Manage</Link>
-          <span className="mx-1.5">›</span>
-          <span className="text-gray-600">Venue Booking</span>
-        </nav>
+        {/* Compact header row */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Link href="/manage" className="hover:text-[#154CB3] transition-colors">Manage</Link>
+              <span>›</span>
+              <span className="text-gray-600 font-medium">Venue Booking</span>
+            </div>
+          </div>
 
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight mb-5">Venue Booking</h1>
+          {/* Compact tab strip */}
+          <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 max-md:hidden">
+            <TabButton active={tab === "mine"}     onClick={() => setTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
+            <TabButton active={tab === "specific"} onClick={() => setTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
+            <TabButton active={tab === "any"}      onClick={() => setTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+          </div>
+        </div>
 
-        {/* Tab row */}
-        <div className="grid grid-cols-3 gap-3 mb-5 max-md:grid-cols-1">
+        {/* Mobile tab strip */}
+        <div className="hidden max-md:flex flex-col gap-1.5 mb-3">
           <TabButton active={tab === "mine"}     onClick={() => setTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
           <TabButton active={tab === "specific"} onClick={() => setTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
           <TabButton active={tab === "any"}      onClick={() => setTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
@@ -229,10 +238,12 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl text-sm font-semibold tracking-wide transition-all border ${
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
         active
-          ? "bg-[#154CB3] text-white border-[#154CB3] shadow-sm"
-          : "bg-white text-gray-600 border-gray-200 hover:border-[#154CB3] hover:text-[#154CB3]"
+          ? "bg-[#154CB3] text-white shadow-sm"
+          : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+      } max-md:justify-center max-md:py-2.5 max-md:rounded-lg max-md:border max-md:text-sm ${
+        active ? "max-md:border-[#154CB3]" : "max-md:bg-white max-md:border-gray-200"
       }`}
     >
       {icon}
@@ -354,8 +365,8 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
   return (
     <>
       {/* Filter row */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
-        <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 mb-3">
+        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
           <FormField label="Campus">
             <select
               value={selectedCampus}
@@ -415,8 +426,8 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
         </div>
 
         {selectedVenue && (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500 border-t border-gray-100 pt-3">
-            <span className="font-semibold text-gray-800 text-sm">{selectedVenue.name}</span>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500 border-t border-gray-100 pt-2">
+            <span className="font-semibold text-gray-800">{selectedVenue.name}</span>
             {selectedVenue.location && <span>· {selectedVenue.location}</span>}
             {selectedVenue.capacity != null && (
               <span className="flex items-center gap-1"><IconUsers /> {selectedVenue.capacity} capacity</span>
@@ -431,7 +442,7 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
       </div>
 
       {/* Calendar */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {!selectedVenueId ? (
           <div className="py-16 text-center text-sm text-gray-400">
             Select a campus, location, and venue to view the calendar.
@@ -826,12 +837,15 @@ function BookingModal({
 // VIEW 2 — MY BOOKINGS
 // ══════════════════════════════════════════════════════════════════════════════
 
+const MY_BOOKINGS_PAGE_SIZE = 8;
+
 function MyBookingsView({ session }: { session: any }) {
   const [sub,      setSub]      = useState<"upcoming" | "past">("upcoming");
   const [upcoming, setUpcoming] = useState<MyBooking[]>([]);
   const [past,     setPast]     = useState<MyBooking[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
+  const [page,     setPage]     = useState(1);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -849,14 +863,18 @@ function MyBookingsView({ session }: { session: any }) {
       .finally(() => setLoading(false));
   }, [session?.access_token]);
 
-  const rows = sub === "upcoming" ? upcoming : past;
+  const rows       = sub === "upcoming" ? upcoming : past;
+  const totalPages = Math.max(1, Math.ceil(rows.length / MY_BOOKINGS_PAGE_SIZE));
+  const pagedRows  = rows.slice((page - 1) * MY_BOOKINGS_PAGE_SIZE, page * MY_BOOKINGS_PAGE_SIZE);
+
+  function switchSub(s: "upcoming" | "past") { setSub(s); setPage(1); }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Sub-tab toggle */}
       <div className="flex items-center border-b border-gray-200 px-5 py-3 gap-2">
         <button
-          onClick={() => setSub("upcoming")}
+          onClick={() => switchSub("upcoming")}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
             sub === "upcoming" ? "bg-[#154CB3] text-white" : "text-gray-500 hover:text-gray-800"
           }`}
@@ -864,7 +882,7 @@ function MyBookingsView({ session }: { session: any }) {
           Upcoming
         </button>
         <button
-          onClick={() => setSub("past")}
+          onClick={() => switchSub("past")}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
             sub === "past" ? "bg-[#154CB3] text-white" : "text-gray-500 hover:text-gray-800"
           }`}
@@ -886,40 +904,62 @@ function MyBookingsView({ session }: { session: any }) {
           No {sub} bookings.
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100">
-          {rows.map(r => (
-            <li key={r.id} className="px-5 py-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{r.title}</p>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${statusStyle(r.status)}`}>
-                      {statusLabel(r.status)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                    {r.venue?.name && <span className="font-medium text-gray-700">{r.venue.name}</span>}
-                    <span className="flex items-center gap-1">
-                      <IconClock />{r.date} · {formatTime12(r.start_time)} – {formatTime12(r.end_time)}
-                    </span>
-                    {r.headcount && (
-                      <span className="flex items-center gap-1"><IconUsers />{r.headcount}</span>
+        <>
+          <ul className="divide-y divide-gray-100">
+            {pagedRows.map(r => (
+              <li key={r.id} className="px-5 py-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{r.title}</p>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${statusStyle(r.status)}`}>
+                        {statusLabel(r.status)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                      {r.venue?.name && <span className="font-medium text-gray-700">{r.venue.name}</span>}
+                      <span className="flex items-center gap-1">
+                        <IconClock />{r.date} · {formatTime12(r.start_time)} – {formatTime12(r.end_time)}
+                      </span>
+                      {r.headcount && (
+                        <span className="flex items-center gap-1"><IconUsers />{r.headcount}</span>
+                      )}
+                    </div>
+                    {r.decision_notes && (
+                      <p className={`mt-1.5 text-xs italic border-l-2 pl-2 ${
+                        r.status === "rejected" ? "border-red-300 text-red-600" :
+                        r.status === "returned_for_revision" ? "border-purple-300 text-purple-700" :
+                        "border-gray-200 text-gray-400"
+                      }`}>
+                        {r.decision_notes}
+                      </p>
                     )}
                   </div>
-                  {r.decision_notes && (
-                    <p className={`mt-1.5 text-xs italic border-l-2 pl-2 ${
-                      r.status === "rejected" ? "border-red-300 text-red-600" :
-                      r.status === "returned_for_revision" ? "border-purple-300 text-purple-700" :
-                      "border-gray-200 text-gray-400"
-                    }`}>
-                      {r.decision_notes}
-                    </p>
-                  )}
                 </div>
+              </li>
+            ))}
+          </ul>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <p className="text-xs text-gray-500">
+                {(page - 1) * MY_BOOKINGS_PAGE_SIZE + 1}–{Math.min(page * MY_BOOKINGS_PAGE_SIZE, rows.length)} of {rows.length}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="px-2.5 py-1 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >← Prev</button>
+                <span className="text-xs text-gray-500">{page} / {totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  className="px-2.5 py-1 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >Next →</button>
               </div>
-            </li>
-          ))}
-        </ul>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -993,6 +1033,17 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
 
   const free      = results?.filter(r => r.free)  || [];
   const occupied  = results?.filter(r => !r.free) || [];
+  const RESULTS_PAGE_SIZE = 8;
+  const [freePage,     setFreePage]     = useState(1);
+  const [occupiedPage, setOccupiedPage] = useState(1);
+
+  // Reset pages when results change
+  useEffect(() => { setFreePage(1); setOccupiedPage(1); }, [results]);
+
+  const freeTotalPages     = Math.max(1, Math.ceil(free.length     / RESULTS_PAGE_SIZE));
+  const occupiedTotalPages = Math.max(1, Math.ceil(occupied.length / RESULTS_PAGE_SIZE));
+  const pagedFree     = free.slice    ((freePage     - 1) * RESULTS_PAGE_SIZE, freePage     * RESULTS_PAGE_SIZE);
+  const pagedOccupied = occupied.slice((occupiedPage - 1) * RESULTS_PAGE_SIZE, occupiedPage * RESULTS_PAGE_SIZE);
 
   return (
     <>
@@ -1038,22 +1089,35 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
             {free.length === 0 ? (
               <p className="px-4 py-8 text-sm text-gray-400 text-center">No venues available in this window.</p>
             ) : (
-              <ul className="divide-y divide-gray-100">
-                {free.map(({ venue }) => (
-                  <li key={venue.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{venue.name}</p>
-                      <p className="text-xs text-gray-400">{venue.location}{venue.capacity != null ? ` · cap ${venue.capacity}` : ""}</p>
+              <>
+                <ul className="divide-y divide-gray-100">
+                  {pagedFree.map(({ venue }) => (
+                    <li key={venue.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{venue.name}</p>
+                        <p className="text-xs text-gray-400">{venue.location}{venue.capacity != null ? ` · cap ${venue.capacity}` : ""}</p>
+                      </div>
+                      <button
+                        onClick={() => setPicked(venue)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#154CB3] text-white hover:bg-[#0f3a7a] transition-colors"
+                      >
+                        Book
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {freeTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+                    <span className="text-xs text-gray-500">{freePage} / {freeTotalPages}</span>
+                    <div className="flex gap-1">
+                      <button disabled={freePage <= 1} onClick={() => setFreePage(p => p - 1)}
+                        className="px-2 py-1 text-xs rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
+                      <button disabled={freePage >= freeTotalPages} onClick={() => setFreePage(p => p + 1)}
+                        className="px-2 py-1 text-xs rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
                     </div>
-                    <button
-                      onClick={() => setPicked(venue)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#154CB3] text-white hover:bg-[#0f3a7a] transition-colors"
-                    >
-                      Book
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -1064,19 +1128,32 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
             {occupied.length === 0 ? (
               <p className="px-4 py-8 text-sm text-gray-400 text-center">None.</p>
             ) : (
-              <ul className="divide-y divide-gray-100">
-                {occupied.map(({ venue, conflict }) => (
-                  <li key={venue.id} className="px-4 py-3">
-                    <p className="text-sm font-semibold text-gray-900">{venue.name}</p>
-                    <p className="text-xs text-red-500 mt-0.5">
-                      {conflict?.end_time === "capacity"
-                        ? `Below minimum capacity (${venue.capacity})`
-                        : `Booked ${formatTime12(conflict?.start_time || "")} – ${formatTime12(conflict?.end_time || "")}`
-                      }
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="divide-y divide-gray-100">
+                  {pagedOccupied.map(({ venue, conflict }) => (
+                    <li key={venue.id} className="px-4 py-3">
+                      <p className="text-sm font-semibold text-gray-900">{venue.name}</p>
+                      <p className="text-xs text-red-500 mt-0.5">
+                        {conflict?.end_time === "capacity"
+                          ? `Below minimum capacity (${venue.capacity})`
+                          : `Booked ${formatTime12(conflict?.start_time || "")} – ${formatTime12(conflict?.end_time || "")}`
+                        }
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                {occupiedTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+                    <span className="text-xs text-gray-500">{occupiedPage} / {occupiedTotalPages}</span>
+                    <div className="flex gap-1">
+                      <button disabled={occupiedPage <= 1} onClick={() => setOccupiedPage(p => p - 1)}
+                        className="px-2 py-1 text-xs rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
+                      <button disabled={occupiedPage >= occupiedTotalPages} onClick={() => setOccupiedPage(p => p + 1)}
+                        className="px-2 py-1 text-xs rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1101,7 +1178,7 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
 function FormField({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
         {label}
       </label>
       {children}
@@ -1111,7 +1188,7 @@ function FormField({ label, children }: { label: React.ReactNode; children: Reac
 
 // Shared Tailwind class strings
 const selectCls =
-  "w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed";
+  "w-full h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed";
 
 const inputCls =
-  "w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent";
+  "w-full h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent";

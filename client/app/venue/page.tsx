@@ -212,6 +212,9 @@ export default function VenueDashboard() {
   const [loading,  setLoading]  = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [venueFilter, setVenueFilter] = useState("all");
+  const [pendingPage,  setPendingPage]  = useState(1);
+  const [reviewedPage, setReviewedPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   // Notes modal (used for both return and reject)
   const [notesModal, setNotesModal] = useState<{ id: string; action: "rejected" | "returned_for_revision" } | null>(null);
@@ -282,6 +285,11 @@ export default function VenueDashboard() {
   const filteredPending  = pending.filter(matchFilter);
   const filteredReviewed = reviewed.filter(matchFilter);
 
+  const pendingTotalPages  = Math.max(1, Math.ceil(filteredPending.length  / PAGE_SIZE));
+  const reviewedTotalPages = Math.max(1, Math.ceil(filteredReviewed.length / PAGE_SIZE));
+  const pagedPending  = filteredPending.slice( (pendingPage  - 1) * PAGE_SIZE, pendingPage  * PAGE_SIZE);
+  const pagedReviewed = filteredReviewed.slice((reviewedPage - 1) * PAGE_SIZE, reviewedPage * PAGE_SIZE);
+
   return (
     <div className="min-h-screen bg-slate-50 pt-[72px]">
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
@@ -300,7 +308,7 @@ export default function VenueDashboard() {
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter</label>
             <select
               value={venueFilter}
-              onChange={e => setVenueFilter(e.target.value)}
+              onChange={e => { setVenueFilter(e.target.value); setPendingPage(1); setReviewedPage(1); }}
               className="h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#154CB3]"
             >
               <option value="all">All venues</option>
@@ -315,16 +323,33 @@ export default function VenueDashboard() {
           <>
             {/* Pending */}
             <section>
-              <p className="text-sm font-semibold text-gray-700 mb-2">
-                Pending <span className="text-gray-400 font-normal">({filteredPending.length})</span>
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-gray-700">
+                  Pending <span className="text-gray-400 font-normal">({filteredPending.length})</span>
+                </p>
+                {pendingTotalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      disabled={pendingPage <= 1}
+                      onClick={() => setPendingPage(p => p - 1)}
+                      className="px-2.5 py-1 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >← Prev</button>
+                    <span className="text-xs text-gray-500">{pendingPage} / {pendingTotalPages}</span>
+                    <button
+                      disabled={pendingPage >= pendingTotalPages}
+                      onClick={() => setPendingPage(p => p + 1)}
+                      className="px-2.5 py-1 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >Next →</button>
+                  </div>
+                )}
+              </div>
               {filteredPending.length === 0 ? (
                 <div className="bg-white rounded-xl border border-gray-200 py-10 text-center">
                   <p className="text-sm text-gray-400">No pending venue requests.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredPending.map(row => (
+                  {pagedPending.map(row => (
                     <BookingCard
                       key={row.id}
                       row={row}
@@ -342,11 +367,28 @@ export default function VenueDashboard() {
             {/* Reviewed */}
             {filteredReviewed.length > 0 && (
               <section>
-                <p className="text-sm font-semibold text-gray-700 mb-2">
-                  Reviewed <span className="text-gray-400 font-normal">({filteredReviewed.length})</span>
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-gray-700">
+                    Reviewed <span className="text-gray-400 font-normal">({filteredReviewed.length})</span>
+                  </p>
+                  {reviewedTotalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        disabled={reviewedPage <= 1}
+                        onClick={() => setReviewedPage(p => p - 1)}
+                        className="px-2.5 py-1 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >← Prev</button>
+                      <span className="text-xs text-gray-500">{reviewedPage} / {reviewedTotalPages}</span>
+                      <button
+                        disabled={reviewedPage >= reviewedTotalPages}
+                        onClick={() => setReviewedPage(p => p + 1)}
+                        className="px-2.5 py-1 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >Next →</button>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-3">
-                  {filteredReviewed.map(row => (
+                  {pagedReviewed.map(row => (
                     <BookingCard
                       key={row.id}
                       row={row}

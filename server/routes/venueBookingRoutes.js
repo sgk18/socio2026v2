@@ -161,6 +161,59 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/venue-bookings?venue_id=X&page=1&limit=20
+// Masteradmin: all bookings for a specific venue (all statuses, all time)
+// ---------------------------------------------------------------------------
+router.get(
+  "/venue-bookings",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const user = req.userInfo;
+      if (!user.is_masteradmin) return res.status(403).json({ error: "Masteradmin only" });
+
+      const { venue_id, page = "1", limit = "25" } = req.query;
+      if (!venue_id) return res.status(400).json({ error: "venue_id is required" });
+
+      const pageNum  = Math.max(1, parseInt(page, 10));
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+      const from = (pageNum - 1) * limitNum;
+
+      const { data, error, count } = await supabase
+        .from("venue_bookings")
+        .select("*", { count: "exact" })
+        .eq("venue_id", venue_id)
+        .order("date",       { ascending: false })
+        .order("start_time", { ascending: false })
+        .range(from, from + limitNum - 1);
+      if (error) throw error;
+
+      // Fetch requester names
+      const nameMap = await getNameMap((data || []).map(r => r.requested_by));
+
+      const rows = (data || []).map(r => ({
+        ...r,
+        requested_by_name: nameMap.get(r.requested_by) || null,
+      }));
+
+      return res.json({
+        bookings:   rows,
+        total:      count ?? 0,
+        page:       pageNum,
+        totalPages: Math.ceil((count ?? 0) / limitNum),
+        hasNext:    pageNum * limitNum < (count ?? 0),
+        hasPrev:    pageNum > 1,
+      });
+    } catch (err) {
+      console.error("[VenueBookings] GET /?venue_id error:", err);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // GET /api/venue-bookings/mine
 // Returns the current user's bookings split into upcoming and past.
 // ---------------------------------------------------------------------------

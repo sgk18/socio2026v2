@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -33,6 +33,7 @@ import {
   MapPin,
   Trash2,
   PlusCircle,
+  Pencil,
 } from "lucide-react";
 import {
   organizingSchools,
@@ -291,9 +292,20 @@ export default function MasterAdminPage() {
   const [venueSubmitting,  setVenueSubmitting]  = useState(false);
   const [deleteVenueId,    setDeleteVenueId]    = useState<string | null>(null);
   const [editingVenue,     setEditingVenue]     = useState<VenueRow | null>(null);
+  const [editVenueForm,    setEditVenueForm]    = useState({ name: "", capacity: "", location: "", is_approval_needed: false, is_active: true });
+  const [editVenueSaving,  setEditVenueSaving]  = useState(false);
+  // Venue list pagination
+  const [venuePage,        setVenuePage]        = useState(1);
+  const VENUE_PAGE_SIZE = 15;
   const [selectedVenueForBookings, setSelectedVenueForBookings] = useState<VenueRow | null>(null);
   const [venueBookings, setVenueBookings] = useState<VenueBookingRow[]>([]);
   const [venueBookingsLoading, setVenueBookingsLoading] = useState(false);
+  const [venueBookingsPage, setVenueBookingsPage] = useState(1);
+  const [venueBookingsTotal, setVenueBookingsTotal] = useState(0);
+  const [venueBookingsTotalPages, setVenueBookingsTotalPages] = useState(1);
+  const VENUE_BOOKINGS_PAGE_SIZE = 10;
+  const venueBookingsPanelRef = useRef<HTMLDivElement>(null);
+  const [venueBookingsHighlight, setVenueBookingsHighlight] = useState(false);
 
   async function fetchAllVenues() {
     setVenuesLoading(true);
@@ -374,56 +386,70 @@ export default function MasterAdminPage() {
     } catch { toast.error("Network error"); }
   }
 
-  async function handleViewVenueBookings(v: VenueRow) {
-    if (selectedVenueForBookings?.id === v.id) {
+  async function handleViewVenueBookings(v: VenueRow, page = 1) {
+    if (selectedVenueForBookings?.id === v.id && page === venueBookingsPage) {
       setSelectedVenueForBookings(null);
       setVenueBookings([]);
       return;
     }
-
     setSelectedVenueForBookings(v);
+    setVenueBookingsPage(page);
     setVenueBookingsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/service-requests/my-queue`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) {
-        toast.error("Failed to load venue bookings");
-        setVenueBookings([]);
-        return;
-      }
-
+      const res = await fetch(
+        `${API_URL}/api/venue-bookings?venue_id=${encodeURIComponent(v.id)}&page=${page}&limit=${VENUE_BOOKINGS_PAGE_SIZE}`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (!res.ok) { toast.error("Failed to load venue bookings"); setVenueBookings([]); return; }
       const payload = await res.json();
-      const pending = Array.isArray(payload?.pending) ? payload.pending : [];
-      const reviewed = Array.isArray(payload?.reviewed) ? payload.reviewed : [];
-
-      const rows: VenueBookingRow[] = [...pending, ...reviewed]
-        .filter((row: any) => row?.details?.venue_id === v.id)
-        .map((row: any) => ({
-          id: String(row.id),
-          date: String(row.details?.date || ""),
-          start_time: String(row.details?.start_time || ""),
-          end_time: String(row.details?.end_time || ""),
-          requested_by_name: row.requested_by_name || null,
-          requested_by: row.requested_by || null,
-          booking_title: row.details?.booking_title || row.entity_title || null,
-          entity_type: row.entity_type || "standalone",
-          status: row.status || "pending",
-        }))
-        .filter((row) => row.date && row.start_time && row.end_time)
-        .sort((a, b) => {
-          const aTime = new Date(`${a.date}T${a.start_time}`).getTime();
-          const bTime = new Date(`${b.date}T${b.start_time}`).getTime();
-          return bTime - aTime;
-        });
-
+      const rows: VenueBookingRow[] = (payload.bookings || []).map((row: any) => ({
+        id:                String(row.id),
+        date:              String(row.date || ""),
+        start_time:        String(row.start_time || ""),
+        end_time:          String(row.end_time || ""),
+        requested_by_name: row.requested_by_name || null,
+        requested_by:      row.requested_by || null,
+        booking_title:     row.title || null,
+        entity_type:       row.entity_type || "standalone",
+        status:            row.status || "pending",
+      }));
       setVenueBookings(rows);
+      setVenueBookingsTotal(payload.total ?? 0);
+      setVenueBookingsTotalPages(payload.totalPages ?? 1);
+      // Scroll + highlight the panel
+      setTimeout(() => {
+        venueBookingsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        setVenueBookingsHighlight(true);
+        setTimeout(() => setVenueBookingsHighlight(false), 1400);
+      }, 80);
     } catch {
       toast.error("Network error");
       setVenueBookings([]);
     } finally {
       setVenueBookingsLoading(false);
     }
+  }
+
+  async function handleSaveVenueEdit() {
+    if (!editingVenue) return;
+    setEditVenueSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/venues/${editingVenue.id}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:               editVenueForm.name.trim() || undefined,
+          capacity:           editVenueForm.capacity ? Number(editVenueForm.capacity) : null,
+          location:           editVenueForm.location.trim() || null,
+          is_approval_needed: editVenueForm.is_approval_needed,
+          is_active:          editVenueForm.is_active,
+        }),
+      });
+      if (!res.ok) { toast.error("Failed to save changes"); return; }
+      toast.success("Venue updated");
+      setEditingVenue(null);
+      fetchAllVenues();
+    } catch { toast.error("Network error"); } finally { setEditVenueSaving(false); }
   }
 
   const [isLoading, setIsLoading] = useState(true);
@@ -1497,52 +1523,18 @@ export default function MasterAdminPage() {
                   <label className="text-sm font-medium text-gray-700">
                     Is approval needed for bookings at this venue?
                   </label>
-                  <label
-                    htmlFor="venueApprovalNeeded"
-                    className="relative inline-flex items-center cursor-pointer select-none"
-                  >
-                    <input
-                      type="checkbox"
-                      id="venueApprovalNeeded"
-                      checked={venueForm.is_approval_needed}
-                      onChange={(e) => setVenueForm(f => ({ ...f, is_approval_needed: e.target.checked }))}
-                      className="sr-only"
-                    />
-                    <div
-                      className={`relative h-8 w-20 rounded-full border-2 transition-colors ${
-                        venueForm.is_approval_needed
-                          ? "border-green-500 bg-green-50"
-                          : "border-red-500 bg-red-50"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-semibold tracking-wide ${
-                          venueForm.is_approval_needed
-                            ? "left-2 text-green-700"
-                            : "right-2 text-red-700"
-                        }`}
-                      >
-                        {venueForm.is_approval_needed ? "YES" : "NO"}
-                      </span>
-                      <span
-                        className={`absolute top-0.5 left-0.5 flex h-6 w-6 items-center justify-center rounded-full border bg-white transition-transform ${
-                          venueForm.is_approval_needed
-                            ? "translate-x-[3.25rem] border-green-500 text-green-600"
-                            : "translate-x-0 border-red-500 text-red-600"
-                        }`}
-                      >
-                        {venueForm.is_approval_needed ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        )}
-                      </span>
-                    </div>
-                  </label>
+                  <div className="inline-flex rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setVenueForm(f => ({ ...f, is_approval_needed: true }))}
+                      className={`px-4 py-1.5 text-xs font-semibold transition-colors ${venueForm.is_approval_needed ? "bg-[#154CB3] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                    >Yes</button>
+                    <button
+                      type="button"
+                      onClick={() => setVenueForm(f => ({ ...f, is_approval_needed: false }))}
+                      className={`px-4 py-1.5 text-xs font-semibold transition-colors ${!venueForm.is_approval_needed ? "bg-red-500 text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                    >No</button>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">When YES, any booking request for this venue is routed to the venue dashboard for approval.</p>
               </div>
@@ -1563,142 +1555,136 @@ export default function MasterAdminPage() {
               ) : venues.length === 0 ? (
                 <div className="p-8 text-center text-sm text-gray-400">No venues yet. Add one above.</div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Name</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Campus</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Location</th>
-                      <th className="text-center px-4 py-3 font-semibold text-gray-600">Cap.</th>
-                      <th className="text-center px-4 py-3 font-semibold text-gray-600">Active</th>
-                      <th className="text-center px-4 py-3 font-semibold text-gray-600">Needs Approval</th>
-                      <th className="text-right px-4 py-3 font-semibold text-gray-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {venues.map(v => (
-                      <tr key={v.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-900">{v.name}</td>
-                        <td className="px-4 py-3 text-gray-600">{v.campus}</td>
-                        <td className="px-4 py-3 text-gray-500">{v.location || "—"}</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{v.capacity ?? "—"}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleVenueActive(v)}
-                              className="relative inline-flex items-center cursor-pointer select-none"
-                              title={v.is_active ? "Active — click to disable" : "Inactive — click to enable"}
-                            >
-                              <div
-                                className={`relative h-8 w-20 rounded-full border-2 transition-colors ${
-                                  v.is_active
-                                    ? "border-green-500 bg-green-50"
-                                    : "border-red-500 bg-red-50"
-                                }`}
-                              >
-                                <span
-                                  className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-semibold tracking-wide ${
-                                    v.is_active
-                                      ? "left-2 text-green-700"
-                                      : "right-2 text-red-700"
-                                  }`}
-                                >
-                                  {v.is_active ? "YES" : "NO"}
-                                </span>
-                                <span
-                                  className={`absolute top-0.5 left-0.5 flex h-6 w-6 items-center justify-center rounded-full border bg-white transition-transform ${
-                                    v.is_active
-                                      ? "translate-x-[3.25rem] border-green-500 text-green-600"
-                                      : "translate-x-0 border-red-500 text-red-600"
-                                  }`}
-                                >
-                                  {v.is_active ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                    </svg>
-                                  ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  )}
-                                </span>
-                              </div>
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleVenueApproval(v)}
-                              className="relative inline-flex items-center cursor-pointer select-none"
-                              title={v.is_approval_needed ? "Approval required — click to disable" : "No approval needed — click to enable"}
-                            >
-                              <div
-                                className={`relative h-8 w-20 rounded-full border-2 transition-colors ${
-                                  v.is_approval_needed
-                                    ? "border-green-500 bg-green-50"
-                                    : "border-red-500 bg-red-50"
-                                }`}
-                              >
-                                <span
-                                  className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-semibold tracking-wide ${
-                                    v.is_approval_needed
-                                      ? "left-2 text-green-700"
-                                      : "right-2 text-red-700"
-                                  }`}
-                                >
-                                  {v.is_approval_needed ? "YES" : "NO"}
-                                </span>
-                                <span
-                                  className={`absolute top-0.5 left-0.5 flex h-6 w-6 items-center justify-center rounded-full border bg-white transition-transform ${
-                                    v.is_approval_needed
-                                      ? "translate-x-[3.25rem] border-green-500 text-green-600"
-                                      : "translate-x-0 border-red-500 text-red-600"
-                                  }`}
-                                >
-                                  {v.is_approval_needed ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                    </svg>
-                                  ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  )}
-                                </span>
-                              </div>
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              onClick={() => handleViewVenueBookings(v)}
-                              className="text-slate-500 hover:text-slate-700 p-1.5 rounded hover:bg-slate-100 transition-colors"
-                              title="View venue bookings"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteVenueId(v.id)}
-                              className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
-                              title="Delete venue"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
+                <>
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-600">Name</th>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-600">Campus</th>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-600">Location</th>
+                        <th className="text-center px-4 py-3 font-semibold text-gray-600">Cap.</th>
+                        <th className="text-center px-4 py-3 font-semibold text-gray-600">Active</th>
+                        <th className="text-center px-4 py-3 font-semibold text-gray-600">Needs Approval</th>
+                        <th className="text-right px-4 py-3 font-semibold text-gray-600">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {venues.slice((venuePage - 1) * VENUE_PAGE_SIZE, venuePage * VENUE_PAGE_SIZE).map(v => (
+                        <tr key={v.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium text-gray-900">{v.name}</td>
+                          <td className="px-4 py-3 text-gray-600">{v.campus}</td>
+                          <td className="px-4 py-3 text-gray-500">{v.location || "—"}</td>
+                          <td className="px-4 py-3 text-center text-gray-600">{v.capacity ?? "—"}</td>
+
+                          {/* Active toggle — pill style */}
+                          <td className="px-4 py-3">
+                            <div className="flex justify-center">
+                              <div className="inline-flex rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => !v.is_active && handleToggleVenueActive(v)}
+                                  className={`px-3 py-1 text-xs font-semibold transition-colors ${v.is_active ? "bg-[#154CB3] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                                >Yes</button>
+                                <button
+                                  type="button"
+                                  onClick={() => v.is_active && handleToggleVenueActive(v)}
+                                  className={`px-3 py-1 text-xs font-semibold transition-colors ${!v.is_active ? "bg-red-500 text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                                >No</button>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Needs Approval toggle — pill style */}
+                          <td className="px-4 py-3">
+                            <div className="flex justify-center">
+                              <div className="inline-flex rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => !v.is_approval_needed && handleToggleVenueApproval(v)}
+                                  className={`px-3 py-1 text-xs font-semibold transition-colors ${v.is_approval_needed ? "bg-[#154CB3] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                                >Yes</button>
+                                <button
+                                  type="button"
+                                  onClick={() => v.is_approval_needed && handleToggleVenueApproval(v)}
+                                  className={`px-3 py-1 text-xs font-semibold transition-colors ${!v.is_approval_needed ? "bg-red-500 text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                                >No</button>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleViewVenueBookings(v)}
+                                className={`p-1.5 rounded transition-colors ${selectedVenueForBookings?.id === v.id ? "bg-[#154CB3] text-white" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"}`}
+                                title="View bookings"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingVenue(v);
+                                  setEditVenueForm({
+                                    name:               v.name,
+                                    capacity:           v.capacity != null ? String(v.capacity) : "",
+                                    location:           v.location || "",
+                                    is_approval_needed: v.is_approval_needed,
+                                    is_active:          v.is_active,
+                                  });
+                                }}
+                                className="text-slate-500 hover:text-[#154CB3] p-1.5 rounded hover:bg-blue-50 transition-colors"
+                                title="Edit venue"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteVenueId(v.id)}
+                                className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
+                                title="Delete venue"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Venue table pagination */}
+                  {venues.length > VENUE_PAGE_SIZE && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                      <p className="text-xs text-gray-500">
+                        {(venuePage - 1) * VENUE_PAGE_SIZE + 1}–{Math.min(venuePage * VENUE_PAGE_SIZE, venues.length)} of {venues.length} venues
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          disabled={venuePage === 1}
+                          onClick={() => setVenuePage(p => Math.max(1, p - 1))}
+                          className="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >← Prev</button>
+                        <span className="px-3 text-xs text-gray-600">Page {venuePage} / {Math.ceil(venues.length / VENUE_PAGE_SIZE)}</span>
+                        <button
+                          disabled={venuePage >= Math.ceil(venues.length / VENUE_PAGE_SIZE)}
+                          onClick={() => setVenuePage(p => p + 1)}
+                          className="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >Next →</button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {selectedVenueForBookings && (
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div
+                ref={venueBookingsPanelRef}
+                className={`rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${
+                  venueBookingsHighlight
+                    ? "border-2 border-[#154CB3] bg-blue-50 ring-4 ring-blue-100"
+                    : "border border-gray-200 bg-white"
+                }`}
+              >
                 <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800">Bookings for {selectedVenueForBookings.name}</h3>
@@ -1757,6 +1743,25 @@ export default function MasterAdminPage() {
                         ))}
                       </tbody>
                     </table>
+                    {venueBookingsTotalPages > 1 && (
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                        <p className="text-xs text-gray-500">
+                          {venueBookingsTotal} booking{venueBookingsTotal !== 1 ? "s" : ""} total · Page {venueBookingsPage} of {venueBookingsTotalPages}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            disabled={venueBookingsPage <= 1}
+                            onClick={() => selectedVenueForBookings && handleViewVenueBookings(selectedVenueForBookings, venueBookingsPage - 1)}
+                            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >← Prev</button>
+                          <button
+                            disabled={venueBookingsPage >= venueBookingsTotalPages}
+                            onClick={() => selectedVenueForBookings && handleViewVenueBookings(selectedVenueForBookings, venueBookingsPage + 1)}
+                            className="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >Next →</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3151,6 +3156,95 @@ export default function MasterAdminPage() {
                 >
                   Delete Organization
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit venue modal */}
+        {editingVenue && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">Edit Venue</h2>
+                <button onClick={() => setEditingVenue(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Venue Name</label>
+                  <input
+                    type="text"
+                    value={editVenueForm.name}
+                    onChange={e => setEditVenueForm(f => ({ ...f, name: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Capacity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editVenueForm.capacity}
+                      onChange={e => setEditVenueForm(f => ({ ...f, capacity: e.target.value }))}
+                      placeholder="Max occupancy"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Location / Block</label>
+                    <input
+                      type="text"
+                      value={editVenueForm.location}
+                      onChange={e => setEditVenueForm(f => ({ ...f, location: e.target.value }))}
+                      placeholder="e.g. Block A, GF"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                  <span className="text-sm text-gray-700">Active</span>
+                  <div className="inline-flex rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setEditVenueForm(f => ({ ...f, is_active: true }))}
+                      className={`px-4 py-1.5 text-xs font-semibold transition-colors ${editVenueForm.is_active ? "bg-[#154CB3] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                    >Yes</button>
+                    <button
+                      type="button"
+                      onClick={() => setEditVenueForm(f => ({ ...f, is_active: false }))}
+                      className={`px-4 py-1.5 text-xs font-semibold transition-colors ${!editVenueForm.is_active ? "bg-red-500 text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                    >No</button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                  <span className="text-sm text-gray-700">Needs Approval</span>
+                  <div className="inline-flex rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setEditVenueForm(f => ({ ...f, is_approval_needed: true }))}
+                      className={`px-4 py-1.5 text-xs font-semibold transition-colors ${editVenueForm.is_approval_needed ? "bg-[#154CB3] text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                    >Yes</button>
+                    <button
+                      type="button"
+                      onClick={() => setEditVenueForm(f => ({ ...f, is_approval_needed: false }))}
+                      className={`px-4 py-1.5 text-xs font-semibold transition-colors ${!editVenueForm.is_approval_needed ? "bg-red-500 text-white" : "bg-white text-gray-400 hover:bg-gray-50"}`}
+                    >No</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  onClick={() => setEditingVenue(null)}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >Cancel</button>
+                <button
+                  onClick={handleSaveVenueEdit}
+                  disabled={editVenueSaving}
+                  className="px-4 py-2 text-sm bg-[#154CB3] text-white rounded-lg hover:bg-[#0f3a7a] disabled:opacity-50"
+                >{editVenueSaving ? "Saving…" : "Save Changes"}</button>
               </div>
             </div>
           </div>
