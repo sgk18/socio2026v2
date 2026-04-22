@@ -41,8 +41,8 @@ function timeOverlaps(aStart, aEnd, bStart, bEnd) {
 async function getVenueById(venueId) {
   const { data } = await supabase
     .from("venues")
-    .select("id, campus, name")
-    .eq("id", venueId)
+    .select("venue_id, campus, name")
+    .eq("venue_id", venueId)
     .limit(1);
   return data?.[0] || null;
 }
@@ -111,9 +111,9 @@ router.get(
       if (venueIds.size > 0) {
         const { data: vs } = await supabase
           .from("venues")
-          .select("id, campus")
-          .in("id", Array.from(venueIds));
-        (vs || []).forEach((v) => venueCampusMap.set(v.id, v.campus));
+          .select("venue_id, campus")
+          .in("venue_id", Array.from(venueIds));
+        (vs || []).forEach((v) => venueCampusMap.set(v.venue_id, v.campus));
       }
 
       const inScope = (row) => {

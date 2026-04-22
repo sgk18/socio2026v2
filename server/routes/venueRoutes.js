@@ -33,7 +33,7 @@ router.get(
 
       const { data, error } = await supabase
         .from("venues")
-        .select("id, name, capacity, location")
+        .select("id:venue_id, name, capacity, location, is_approval_needed")
         .eq("campus", campus)
         .eq("is_active", true)
         .order("name", { ascending: true });
@@ -120,17 +120,35 @@ router.post(
   requireMasterAdmin,
   async (req, res) => {
     try {
-      const { campus, name, capacity, location } = req.body;
+      const { campus, name, capacity, location, is_approval_needed } = req.body;
       if (!campus || !name) {
         return res.status(400).json({ error: "campus and name are required" });
+      }
+
+      let venue_id = name
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      if (!venue_id) {
+        return res.status(400).json({ error: "name must contain alphanumeric characters" });
+      }
+
+      const existingVenueId = await queryOne("venues", { where: { venue_id } });
+      if (existingVenueId) {
+        return res.status(409).json({ error: `A venue with venue_id "${venue_id}" already exists` });
       }
 
       const venue = await insert("venues", {
         campus,
         name,
+        venue_id,
         capacity: capacity ?? null,
         location: location ?? null,
         is_active: true,
+        is_approval_needed: Boolean(is_approval_needed),
       });
 
       return res.status(201).json({ venue });
@@ -161,19 +179,20 @@ router.put(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, capacity, location, is_active } = req.body;
+      const { name, capacity, location, is_active, is_approval_needed } = req.body;
 
       const updates = {};
       if (name !== undefined) updates.name = name;
       if (capacity !== undefined) updates.capacity = capacity;
       if (location !== undefined) updates.location = location;
       if (is_active !== undefined) updates.is_active = is_active;
+      if (is_approval_needed !== undefined) updates.is_approval_needed = is_approval_needed;
 
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No fields to update" });
       }
 
-      const venue = await update("venues", updates, { id });
+      const venue = await update("venues", updates, { venue_id: id });
       return res.json({ venue });
     } catch (err) {
       console.error("[Venues] PUT /venues/:id error:", err);
@@ -195,7 +214,7 @@ router.delete(
     try {
       const { id } = req.params;
 
-      const { error } = await supabase.from("venues").delete().eq("id", id);
+      const { error } = await supabase.from("venues").delete().eq("venue_id", id);
       if (error) throw error;
 
       return res.json({ success: true });
@@ -219,7 +238,7 @@ router.get(
     try {
       const { data, error } = await supabase
         .from("venues")
-        .select("*")
+        .select("id:venue_id, campus, name, capacity, location, is_active, is_approval_needed")
         .order("campus", { ascending: true })
         .order("name", { ascending: true });
 

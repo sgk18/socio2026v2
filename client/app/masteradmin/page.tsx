@@ -263,10 +263,10 @@ export default function MasterAdminPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
 
   // Venue management state
-  type VenueRow = { id: string; campus: string; name: string; capacity: number | null; location: string | null; is_active: boolean };
+  type VenueRow = { id: string; campus: string; name: string; capacity: number | null; location: string | null; is_active: boolean; is_approval_needed: boolean };
   const [venues,           setVenues]           = useState<VenueRow[]>([]);
   const [venuesLoading,    setVenuesLoading]    = useState(false);
-  const [venueForm,        setVenueForm]        = useState({ campus: "", name: "", capacity: "", location: "" });
+  const [venueForm,        setVenueForm]        = useState({ campus: "", name: "", capacity: "", location: "", is_approval_needed: false });
   const [venueFormError,   setVenueFormError]   = useState<string | null>(null);
   const [venueSubmitting,  setVenueSubmitting]  = useState(false);
   const [deleteVenueId,    setDeleteVenueId]    = useState<string | null>(null);
@@ -296,6 +296,7 @@ export default function MasterAdminPage() {
           name: venueForm.name,
           capacity: venueForm.capacity ? Number(venueForm.capacity) : null,
           location: venueForm.location || null,
+          is_approval_needed: venueForm.is_approval_needed,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -308,7 +309,7 @@ export default function MasterAdminPage() {
         return;
       }
       toast.success("Venue created");
-      setVenueForm({ campus: "", name: "", capacity: "", location: "" });
+      setVenueForm({ campus: "", name: "", capacity: "", location: "", is_approval_needed: false });
       fetchAllVenues();
     } catch { setVenueFormError("Network error"); } finally { setVenueSubmitting(false); }
   }
@@ -332,6 +333,18 @@ export default function MasterAdminPage() {
         method: "PUT",
         headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ is_active: !v.is_active }),
+      });
+      if (!res.ok) { toast.error("Failed to update venue"); return; }
+      fetchAllVenues();
+    } catch { toast.error("Network error"); }
+  }
+
+  async function handleToggleVenueApproval(v: VenueRow) {
+    try {
+      const res = await fetch(`${API_URL}/api/venues/${v.id}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ is_approval_needed: !v.is_approval_needed }),
       });
       if (!res.ok) { toast.error("Failed to update venue"); return; }
       fetchAllVenues();
