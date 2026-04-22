@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useRef, useState } from "react";
+import React, { Suspense, useMemo, useRef, useState } from "react";
 import EventForm, { WorkflowStage, STANDALONE_EVENT_STAGES, OperationalConfig, BudgetItem } from "@/app/_components/Admin/ManageEvent";
 import { EventFormData } from "@/app/lib/eventFormSchema";
 import { SubmitHandler } from "react-hook-form";
@@ -262,21 +262,23 @@ export default function CreateEventPage() {
   const handleSaveDraft: SubmitHandler<EventFormData> = async (data) => submitEvent(data, true);
 
   return (
-    <EventForm
-      onSubmit={handleCreateEvent}
-      onSubmitDraft={handleSaveDraft}
-      isSubmittingProp={isSubmitting}
-      isEditMode={false}
-      existingImageFileUrl={null}
-      existingBannerFileUrl={null}
-      existingPdfFileUrl={null}
-      onApprovalConfigChange={(enabled, stages, budgetItems) => {
-        approvalConfigRef.current = { enabled, stages, budgetItems };
-      }}
-      onOperationalConfigChange={(config) => {
-        operationalConfigRef.current = config;
-      }}
-    />
+    <Suspense fallback={<div className="p-6 text-sm text-gray-600">Loading event form...</div>}>
+      <EventForm
+        onSubmit={handleCreateEvent}
+        onSubmitDraft={handleSaveDraft}
+        isSubmittingProp={isSubmitting}
+        isEditMode={false}
+        existingImageFileUrl={null}
+        existingBannerFileUrl={null}
+        existingPdfFileUrl={null}
+        onApprovalConfigChange={(enabled, stages, budgetItems) => {
+          approvalConfigRef.current = { enabled, stages, budgetItems };
+        }}
+        onOperationalConfigChange={(config) => {
+          operationalConfigRef.current = config;
+        }}
+      />
+    </Suspense>
   );
 }
 
