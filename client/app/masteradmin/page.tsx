@@ -1036,7 +1036,7 @@ export default function MasterAdminPage() {
       if (!res.ok) return;
       const data = await res.json();
       const all: User[] = data.users || data || [];
-      setRoleHolders(all.filter(u => u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
+      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
     } catch { /* non-critical */ }
     finally { setRoleHoldersLoading(false); }
   };
@@ -1046,6 +1046,7 @@ export default function MasterAdminPage() {
     try {
       const token = await getFreshToken();
       const fieldMap: Record<string, string> = {
+        organiser: "is_organiser", support: "is_support", masteradmin: "is_masteradmin",
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
         director: "is_campus_director", accounts: "is_accounts_office",
       };
@@ -1060,7 +1061,7 @@ export default function MasterAdminPage() {
         if (u.email !== user.email) return u;
         const updated = { ...u, [fieldMap[roleKey]]: false };
         return updated;
-      }).filter(u => u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
+      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
       toast.success("Role removed");
     } catch { toast.error("Failed to remove role"); }
     finally { setRoleRemoving(null); }
@@ -1097,12 +1098,12 @@ export default function MasterAdminPage() {
     setRoleSaving(true);
     try {
       const token = await getFreshToken();
+      const fieldMap: Record<string, string> = {
+        hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
+        director: "is_campus_director", accounts: "is_accounts_office",
+      };
       const body: Record<string, unknown> = {
-        is_hod:           roleSelectedRole === "hod",
-        is_dean:          roleSelectedRole === "dean",
-        is_cfo:           roleSelectedRole === "cfo",
-        is_campus_director: roleSelectedRole === "director",
-        is_accounts_office: roleSelectedRole === "accounts",
+        [fieldMap[roleSelectedRole]]: true,
       };
       if (roleCampus) body.campus = roleCampus;
       if (roleSchool) body.school = roleSchool;
@@ -1118,6 +1119,7 @@ export default function MasterAdminPage() {
         throw new Error(err.error || "Failed to assign role");
       }
       toast.success(`${roleSelectedRole.toUpperCase()} role assigned to ${roleSelectedEmail}`);
+      fetchRoleHolders();
       // reset
       setRoleEmailInput(""); setRoleSelectedEmail(""); setRoleSelectedRole("");
       setRoleSchool(""); setRoleDept(""); setRoleCampus("");
@@ -3281,25 +3283,31 @@ export default function MasterAdminPage() {
 
         {/* Roles Tab */}
         {activeTab === "roles" && (() => {
-          const ROLE_DEFS = [
+          const ASSIGN_ROLE_DEFS = [
             { key: "hod",      label: "HOD",             flag: "is_hod" as const },
             { key: "dean",     label: "Dean",            flag: "is_dean" as const },
             { key: "cfo",      label: "CFO",             flag: "is_cfo" as const },
             { key: "director", label: "Campus Dir",      flag: "is_campus_director" as const },
             { key: "accounts", label: "Finance Officer", flag: "is_accounts_office" as const },
           ] as const;
+          const ROLE_DEFS = [
+            { key: "organiser",  label: "Organiser",       flag: "is_organiser" as const },
+            { key: "support",    label: "Support",         flag: "is_support" as const },
+            { key: "masteradmin",label: "Master Admin",    flag: "is_masteradmin" as const },
+            ...ASSIGN_ROLE_DEFS,
+          ] as const;
 
-          // Flatten role holders into one row per user-role
-          type RoleRow = { user: User; roleKey: string; roleLabel: string };
-          const allRoleRows: RoleRow[] = [];
-          roleHolders.forEach(u => {
-            ROLE_DEFS.forEach(({ key, label, flag }) => {
-              if (u[flag]) allRoleRows.push({ user: u, roleKey: key, roleLabel: label });
-            });
-          });
+          // Group role holders by user — one row per user, multiple role badges
+          type UserRoleRow = { user: User; roles: Array<{ roleKey: string; roleLabel: string }> };
+          const allUserRows: UserRoleRow[] = roleHolders
+            .map(u => ({
+              user: u,
+              roles: ROLE_DEFS.filter(({ flag }) => u[flag]).map(({ key, label }) => ({ roleKey: key, roleLabel: label })),
+            }))
+            .filter(row => row.roles.length > 0);
 
-          const filteredRows = allRoleRows.filter(({ user, roleKey }) => {
-            if (roleListRoleFilter !== "all" && roleKey !== roleListRoleFilter) return false;
+          const filteredRows = allUserRows.filter(({ user, roles }) => {
+            if (roleListRoleFilter !== "all" && !roles.some(r => r.roleKey === roleListRoleFilter)) return false;
             if (roleListDeptFilter && (user.department || "") !== roleListDeptFilter) return false;
             if (roleListSchoolFilter && (user.school || "") !== roleListSchoolFilter) return false;
             if (roleListCampusFilter && (user.campus || "") !== roleListCampusFilter) return false;
@@ -3348,7 +3356,7 @@ export default function MasterAdminPage() {
 
                   {/* Role pills */}
                   <div className="flex gap-1.5 flex-wrap">
-                    {ROLE_DEFS.map(r => (
+                    {ASSIGN_ROLE_DEFS.map(r => (
                       <button key={r.key} type="button"
                         onClick={() => { setRoleSelectedRole(r.key as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${roleSelectedRole === r.key ? "bg-[#154cb3] text-white border-[#154cb3]" : "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"}`}
@@ -3428,8 +3436,8 @@ export default function MasterAdminPage() {
                   <input value={roleListSearch} onChange={e => setRoleListSearch(e.target.value)}
                     placeholder="Search name / email…"
                     className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 min-w-[150px]" />
-                  <span className="ml-auto text-xs text-gray-400">{filteredRows.length} result{filteredRows.length !== 1 ? "s" : ""}</span>
-                  <button onClick={() => exportRolesToCSV(filteredRows.map(r => ({ user: r.user, role: r.roleKey, roleLabel: r.roleLabel })))}
+                  <span className="ml-auto text-xs text-gray-400">{filteredRows.length} user{filteredRows.length !== 1 ? "s" : ""}</span>
+                  <button onClick={() => exportRolesToCSV(filteredRows.flatMap(r => r.roles.map(role => ({ user: r.user, role: role.roleKey, roleLabel: role.roleLabel }))))}
                     className="ml-1 flex items-center gap-1.5 px-3 py-1 rounded-lg border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     Export CSV
@@ -3451,47 +3459,55 @@ export default function MasterAdminPage() {
                       <tr className="border-b border-gray-100 text-left">
                         <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
                         <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
-                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Roles</th>
                         <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dept / School</th>
                         <th className="px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Campus</th>
-                        <th className="px-5 py-2.5 w-10" />
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRows.map(({ user, roleKey, roleLabel }, i) => {
-                        const removingThis = roleRemoving === `${user.email}:${roleKey}`;
+                      {(() => {
                         const ROLE_COLORS: Record<string, string> = {
-                          hod: "bg-purple-100 text-purple-700",
-                          dean: "bg-blue-100 text-blue-700",
-                          cfo: "bg-amber-100 text-amber-700",
-                          director: "bg-cyan-100 text-cyan-700",
-                          accounts: "bg-green-100 text-green-700",
+                          organiser:   "bg-indigo-100 text-indigo-700",
+                          support:     "bg-teal-100 text-teal-700",
+                          masteradmin: "bg-rose-100 text-rose-700",
+                          hod:         "bg-purple-100 text-purple-700",
+                          dean:        "bg-blue-100 text-blue-700",
+                          cfo:         "bg-amber-100 text-amber-700",
+                          director:    "bg-cyan-100 text-cyan-700",
+                          accounts:    "bg-green-100 text-green-700",
                         };
-                        return (
-                          <tr key={`${user.email}:${roleKey}`} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}>
+                        return filteredRows.map(({ user, roles }, i) => (
+                          <tr key={user.email} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}>
                             <td className="px-5 py-2.5 font-medium text-gray-900 truncate max-w-[140px]">{user.name || "—"}</td>
                             <td className="px-5 py-2.5 text-gray-500 text-xs truncate max-w-[180px]">{user.email}</td>
                             <td className="px-5 py-2.5">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${ROLE_COLORS[roleKey] || "bg-gray-100 text-gray-600"}`}>{roleLabel}</span>
+                              <div className="flex flex-wrap gap-1">
+                                {roles.map(({ roleKey, roleLabel }) => {
+                                  const removingThis = roleRemoving === `${user.email}:${roleKey}`;
+                                  return (
+                                    <span key={roleKey} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${ROLE_COLORS[roleKey] || "bg-gray-100 text-gray-600"}`}>
+                                      {roleLabel}
+                                      <button
+                                        onClick={() => removeApprovalRole(user, roleKey)}
+                                        disabled={!!roleRemoving}
+                                        title={`Remove ${roleLabel} role`}
+                                        className="opacity-50 hover:opacity-100 disabled:opacity-20 transition-opacity leading-none"
+                                      >
+                                        {removingThis
+                                          ? <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                          : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        }
+                                      </button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </td>
                             <td className="px-5 py-2.5 text-gray-600 text-xs truncate max-w-[200px]">{user.department || user.school || "—"}</td>
                             <td className="px-5 py-2.5 text-gray-500 text-xs truncate max-w-[160px]">{user.campus || "—"}</td>
-                            <td className="px-3 py-2.5">
-                              <button
-                                onClick={() => removeApprovalRole(user, roleKey)}
-                                disabled={!!roleRemoving}
-                                title={`Remove ${roleLabel} role`}
-                                className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
-                              >
-                                {removingThis
-                                  ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                }
-                              </button>
-                            </td>
                           </tr>
-                        );
-                      })}
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 )}

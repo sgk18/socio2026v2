@@ -72,6 +72,8 @@ function NavigationBar() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [avatarLoadError, setAvatarLoadError] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showDashboardsDropdown, setShowDashboardsDropdown] = useState(false);
+  const dashboardsDropdownRef = useRef<HTMLDivElement | null>(null);
   const [isDesktopCompact, setIsDesktopCompact] = useState(false);
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
   const [expandedDesktopSection, setExpandedDesktopSection] = useState<string | null>(null);
@@ -107,7 +109,7 @@ function NavigationBar() {
         isHod ? { label: "HOD", href: "/hod", variant: "default" as const } : null,
         isOrganiser ? { label: "Organiser", href: "/manage", variant: "default" as const } : null,
         isSupport ? { label: "Support", href: "/support", variant: "default" as const } : null,
-        isVenueManager ? { label: "Venue", href: "/venue", variant: "default" as const } : null,
+        isVenueManager ? { label: "Venue Dashboard", href: "/venue", variant: "default" as const } : null,
       ].filter((action): action is { label: string; href: string; variant: "admin" | "default" } => Boolean(action));
   const hasRoleActions = roleActions.length > 0;
   const shouldCollapseRoleActions = roleActions.length > 3;
@@ -188,6 +190,16 @@ function NavigationBar() {
   useEffect(() => {
     closeDesktopMenu();
   }, [pathname, closeDesktopMenu]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dashboardsDropdownRef.current && !dashboardsDropdownRef.current.contains(event.target as Node)) {
+        setShowDashboardsDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -386,24 +398,40 @@ function NavigationBar() {
                         </Link>
                       ))}
                       {shouldCollapseRoleActions && (
-                        <select
-                          defaultValue=""
-                          onChange={(event) => {
-                            const href = event.target.value;
-                            if (!href) return;
-                            router.push(href);
-                            event.target.value = "";
-                          }}
-                          className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out hover:bg-[#f3f3f3]"
-                          aria-label="Choose role action"
-                        >
-                          <option value="">More Roles</option>
-                          {roleActions.map((roleAction) => (
-                            <option key={`desktop-role-option-${roleAction.href}`} value={roleAction.href}>
-                              {roleAction.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative" ref={dashboardsDropdownRef}>
+                          <button
+                            type="button"
+                            onClick={() => setShowDashboardsDropdown((prev) => !prev)}
+                            className="cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out hover:bg-[#f3f3f3] flex items-center gap-1.5"
+                            aria-haspopup="true"
+                            aria-expanded={showDashboardsDropdown}
+                          >
+                            Dashboards
+                            <svg
+                              className={`w-3 h-3 transition-transform duration-200 ${showDashboardsDropdown ? "rotate-180" : ""}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {showDashboardsDropdown && (
+                            <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
+                              {roleActions.map((roleAction) => (
+                                <Link
+                                  key={`dashboard-dropdown-${roleAction.href}`}
+                                  href={roleAction.href}
+                                  onClick={() => setShowDashboardsDropdown(false)}
+                                  className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
+                                >
+                                  {roleAction.label}
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </>
                   )}
@@ -660,25 +688,40 @@ function NavigationBar() {
                     </Link>
                   ))}
                   {shouldCollapseRoleActions && (
-                    <select
-                      defaultValue=""
-                      onChange={(event) => {
-                        const href = event.target.value;
-                        if (!href) return;
-                        closeDesktopMenu();
-                        router.push(href);
-                        event.target.value = "";
-                      }}
-                      className="w-full rounded-lg border border-[#154CB3]/30 px-3 py-2 text-sm font-semibold text-[#154CB3] bg-white focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30"
-                      aria-label="Choose role action"
-                    >
-                      <option value="">More Roles</option>
-                      {roleActions.map((roleAction) => (
-                        <option key={`compact-role-option-${roleAction.href}`} value={roleAction.href}>
-                          {roleAction.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowDashboardsDropdown((prev) => !prev)}
+                        className="w-full flex items-center justify-between rounded-lg border border-[#154CB3]/30 px-3 py-2 text-sm font-semibold text-[#154CB3] bg-white"
+                        aria-haspopup="true"
+                        aria-expanded={showDashboardsDropdown}
+                      >
+                        Dashboards
+                        <svg
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${showDashboardsDropdown ? "rotate-180" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showDashboardsDropdown && (
+                        <div className="mt-1 w-full bg-white border border-gray-200 rounded-lg shadow py-1">
+                          {roleActions.map((roleAction) => (
+                            <Link
+                              key={`compact-dashboard-dropdown-${roleAction.href}`}
+                              href={roleAction.href}
+                              onClick={() => { setShowDashboardsDropdown(false); closeDesktopMenu(); }}
+                              className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
+                            >
+                              {roleAction.label}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -729,24 +772,40 @@ function NavigationBar() {
             ))}
 
             {shouldCollapseRoleActions && (
-              <select
-                defaultValue=""
-                onChange={(event) => {
-                  const href = event.target.value;
-                  if (!href) return;
-                  router.push(href);
-                  event.target.value = "";
-                }}
-                className="col-span-2 rounded-full border border-[#154CB3]/30 bg-white px-3 py-2 text-sm font-semibold text-[#154CB3] focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30"
-                aria-label="Choose role action"
-              >
-                <option value="">More Roles</option>
-                {roleActions.map((roleAction) => (
-                  <option key={`mobile-role-option-${roleAction.href}`} value={roleAction.href}>
-                    {roleAction.label}
-                  </option>
-                ))}
-              </select>
+              <div className="col-span-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDashboardsDropdown((prev) => !prev)}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-full border border-[#154CB3]/30 bg-white px-3 py-2 text-sm font-semibold text-[#154CB3]"
+                  aria-haspopup="true"
+                  aria-expanded={showDashboardsDropdown}
+                >
+                  Dashboards
+                  <svg
+                    className={`w-3 h-3 transition-transform duration-200 ${showDashboardsDropdown ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showDashboardsDropdown && (
+                  <div className="mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                    {roleActions.map((roleAction) => (
+                      <Link
+                        key={`mobile-dashboard-dropdown-${roleAction.href}`}
+                        href={roleAction.href}
+                        onClick={() => setShowDashboardsDropdown(false)}
+                        className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
+                      >
+                        {roleAction.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
