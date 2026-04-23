@@ -400,18 +400,7 @@ const SupportPage = () => {
               >
                 Contact Support
               </Link>
-              <Link
-                href="mailto:thesocio.blr@gmail.com"
-                className="border border-white text-white px-6 py-3 rounded-lg font-medium hover:bg-white/10 transition-all"
-              >
-                Email Us
-              </Link>
-              <Link
-                href="tel:+918861330665"
-                className="border border-white text-white px-6 py-3 rounded-lg font-medium hover:bg-white/10 transition-all"
-              >
-                Call Us
-              </Link>
+
             </div>
           </div>
         </div>

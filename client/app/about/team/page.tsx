@@ -27,7 +27,7 @@ export default function TeamPage() {
       skills: ["Product Strategy", "User Research", "Project Management", "Growth"],
       email: "thesocio.blr@gmail.com",
       linkedin: "https://www.linkedin.com/in/suryaavamshi/",
-      github: "https://github.com/thesachinyyadav",
+      github: "https://github.com/ayrus15",
       quote: "Great products solve real problems. We just happened to find ours on campus.",
       image: suryaImg,
     },
