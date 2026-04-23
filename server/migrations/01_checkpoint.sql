@@ -1540,7 +1540,7 @@ alter table if exists public.users
   add column if not exists is_campus_director boolean not null default false,
   add column if not exists is_accounts_office boolean not null default false,
   add column if not exists is_it_support      boolean not null default false,
-  add column if not exists is_vendor_manager  boolean not null default false,
+  add column if not exists is_venue_manager  boolean not null default false,
   add column if not exists is_stalls          boolean not null default false,
   add column if not exists school             text;
 

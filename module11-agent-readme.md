@@ -262,7 +262,7 @@ Add boolean role flags:
 4. isAccountsOffice
 5. isStalls
 6. isItSupport
-7. isVendorManager
+7. isVenueManager
 
 Recommended addition for image parity:
 1. isCampusDirector

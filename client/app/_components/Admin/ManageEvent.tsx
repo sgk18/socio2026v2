@@ -13,6 +13,7 @@ import {
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
 
 import {
   EventFormData,
@@ -824,10 +825,10 @@ interface BlockingStageConfig {
 }
 
 const DEFAULT_BLOCKING_STAGES: BlockingStageConfig[] = [
-  { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         enabled: true },
-  { role: 'dean',     label: 'Dean',            desc: 'Dean of the School',         enabled: true },
-  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', enabled: true },
-  { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance',        enabled: true },
+  { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         enabled: true  },
+  { role: 'dean',     label: 'Dean',            desc: 'Dean of the School',         enabled: true  },
+  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', enabled: false },
+  { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance',        enabled: false },
 ];
 
 interface EventFormProps {
@@ -1487,6 +1488,12 @@ export default function EventForm({
       setActiveTab("approvals");
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab === 'approvals') {
+      setTimeout(() => window.scrollTo(0, 0), 0);
+    }
+  }, [activeTab]);
   const {
     register,
     handleSubmit,
@@ -1613,6 +1620,20 @@ export default function EventForm({
   const handleInvalidSubmit = React.useCallback(
     (formErrors: FieldErrors<EventFormData>) => {
       console.warn("EventForm: Validation errors present:", formErrors);
+
+      const entries = Object.values(formErrors).filter(Boolean);
+      const firstMsg =
+        (entries[0] as FieldError | undefined)?.message ||
+        "Please fill in all required fields";
+      const extra = entries.length - 1;
+
+      toast.error(
+        extra > 0
+          ? `${firstMsg} (+${extra} more issue${extra > 1 ? "s" : ""})`
+          : firstMsg,
+        { duration: 4500 }
+      );
+
       scrollToFirstValidationError(formErrors);
     },
     [scrollToFirstValidationError]
@@ -2155,7 +2176,7 @@ export default function EventForm({
   return (
     <div className="min-h-screen bg-white relative">
       <PublishingOverlay
-        isVisible={isSubmittingProp || rhfIsSubmitting || isDeleting}
+        isVisible={isSubmittingProp || isDeleting}
         mode={isDeleting ? "deleting" : isEditMode ? "updating" : "publishing"}
         onComplete={handleOverlayComplete}
       />

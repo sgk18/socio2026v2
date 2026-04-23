@@ -14,7 +14,7 @@ export default function TeamPage() {
       role: "Co-Founder & Lead Developer",
       bio: "Full-stack developer who co-founded SOCIO after identifying a gap in campus connectivity during his time at university. Previously conducted Python workshops for BBA students -- an experience that directly shaped the vision for SOCIO. Now leads the entire technical architecture, building scalable systems that power campus engagement across multiple universities.",
       skills: ["React/Next.js", "Node.js", "Database Design", "System Architecture"],
-      email: "sachinyadavparasf@gmail.com",
+      email: "thesocio.blr@gmail.com",
       linkedin: "https://www.linkedin.com/in/thesachinyyadav/",
       github: "https://github.com/thesachinyyadav",
       quote: "The best products come from understanding real problems firsthand.",
@@ -25,11 +25,22 @@ export default function TeamPage() {
       role: "Co-Founder & Product Manager",
       bio: "Product strategist who brings a sharp eye for user experience. Co-founded SOCIO alongside Sachin after recognising the disconnect between students and campus opportunities during their university years. Leads the product roadmap, user research, and go-to-market strategy that keeps SOCIO aligned with what students actually need.",
       skills: ["Product Strategy", "User Research", "Project Management", "Growth"],
-      email: "surya.s@bcah.christuniversity.in",
+      email: "thesocio.blr@gmail.com",
       linkedin: "https://www.linkedin.com/in/suryaavamshi/",
-      github: "https://github.com/thesachinyyadav",
+      github: "https://github.com/ayrus15",
       quote: "Great products solve real problems. We just happened to find ours on campus.",
       image: suryaImg,
+    },
+    {
+      name: "Meeth Shah",
+      role: "Co-Founder & Design Lead",
+      bio: "Experience design expert who co-founded SOCIO to bridge the gap between students and campus opportunities. With a focus on intuitive interfaces and seamless user journeys, Meeth leads the design vision, ensuring the platform remains accessible and engaging for all university students. His background in creative strategy drives SOCIO's unique visual identity.",
+      skills: ["UI/UX Design", "Creative Strategy", "User Experience", "Brand Identity"],
+      email: "thesocio.blr@gmail.com",
+      linkedin: "https://www.linkedin.com/in/meeth-shah/",
+      github: "https://github.com/thesachinyyadav",
+      quote: "Design is not just what it looks like, it's how it works for the community.",
+      image: null,
     },
   ];
 
@@ -312,7 +323,7 @@ export default function TeamPage() {
                   </div>
                   <h4 className="font-bold text-gray-800">Technical Team</h4>
                 </div>
-                <p className="text-sm text-[#154CB3] font-semibold mb-3">4 Technical Interns</p>
+                <p className="text-sm text-[#154CB3] font-semibold mb-3">8 Technical Interns</p>
                 <ul className="text-xs text-gray-600 space-y-2">
                   <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Frontend Development & UI/UX</li>
                   <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Backend Development & Database</li>
@@ -479,15 +490,15 @@ export default function TeamPage() {
             to hear from you.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/contact"
+            <a
+              href="mailto:thesocio.blr@gmail.com"
               className="inline-flex items-center justify-center gap-2 bg-[#154CB3] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-[#063168] transition-all duration-300"
             >
               Get In Touch
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
-            </Link>
+            </a>
             <a
               href="mailto:thesocio.blr@gmail.com"
               className="inline-flex items-center justify-center gap-2 border-2 border-[#154CB3] text-[#154CB3] px-8 py-3.5 rounded-xl font-semibold hover:bg-[#154CB3] hover:text-white transition-all duration-300"

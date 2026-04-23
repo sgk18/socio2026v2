@@ -526,7 +526,7 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
       is_campus_director,
       is_accounts_office,
       is_it_support,
-      is_vendor_manager,
+      is_venue_manager,
       is_stalls,
       school,
       dept,
@@ -576,7 +576,7 @@ router.put("/:email/roles", authenticateUser, getUserInfo(), checkRoleExpiration
     if (typeof is_campus_director === 'boolean') updates.is_campus_director = is_campus_director;
     if (typeof is_accounts_office === 'boolean') updates.is_accounts_office = is_accounts_office;
     if (typeof is_it_support === 'boolean') updates.is_it_support = is_it_support;
-    if (typeof is_vendor_manager === 'boolean') updates.is_vendor_manager = is_vendor_manager;
+    if (typeof is_venue_manager === 'boolean') updates.is_venue_manager = is_venue_manager;
     if (typeof is_stalls === 'boolean') updates.is_stalls = is_stalls;
     if (typeof school === 'string') updates.school      = school || null;
     if (typeof dept   === 'string') updates.department  = dept   || null;

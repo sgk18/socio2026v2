@@ -20,22 +20,28 @@ export default function Footer() {
               Connecting campus through events, & activities.
             </p>
             <div className="flex items-center mb-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#154CB3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-              <a href="tel:+918861330665" className="hover:text-[#154CB3]">+91 88613 30665</a>
+              <a href="tel:+918861330665" className="flex items-center hover:text-[#154CB3]">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#154CB3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                +91 88613 30665
+              </a>
             </div>
             <div className="flex items-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#154CB3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <a href="mailto:thesocio.blr@gmail.com" className="hover:text-[#154CB3]">thesocio.blr@gmail.com</a>
+              <a href="mailto:thesocio.blr@gmail.com" className="flex items-center hover:text-[#154CB3]">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#154CB3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                thesocio.blr@gmail.com
+              </a>
             </div>
             <div className="flex items-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#FFCC00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <a href="mailto:hr.socio.blr@gmail.com" className="hover:text-[#154CB3]">hr.socio.blr@gmail.com</a>
+              <a href="mailto:hr.socio.blr@gmail.com" className="flex items-center hover:text-[#154CB3]">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#FFCC00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                hr.socio.blr@gmail.com
+              </a>
             </div>
             <div className="flex space-x-4">
               <a href="https://www.instagram.com/the.socio.official" target="_blank" rel="noopener noreferrer" className="bg-gradient-to-br from-purple-600 to-orange-500 p-2 rounded-full">
@@ -101,14 +107,8 @@ export default function Footer() {
         </div>
         
         {/* Copyright */}
-        <div className="mt-8 pt-4 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center">
-          <p className="text-sm text-gray-600 mb-2 sm:mb-0">© {currentYear} SOCIO. All rights reserved.</p>
-          <div className="flex space-x-4">
-            <Link href="/about" className="text-sm text-gray-600 hover:text-[#154CB3]">About</Link>
-            <Link href="/terms" className="text-sm text-gray-600 hover:text-[#154CB3]">Terms</Link>
-            <Link href="/privacy" className="text-sm text-gray-600 hover:text-[#154CB3]">Privacy</Link>
-            <Link href="/about#feedback" className="text-sm text-gray-600 hover:text-[#154CB3]">Contact</Link>
-          </div>
+        <div className="mt-8 pt-4 border-t border-gray-200 flex justify-center items-center">
+          <p className="text-sm text-gray-600">© {currentYear} SOCIO. All rights reserved.</p>
         </div>
       </div>
     </footer>

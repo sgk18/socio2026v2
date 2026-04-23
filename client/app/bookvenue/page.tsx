@@ -186,7 +186,7 @@ export default function BookVenuePage() {
         userData.is_organiser || userData.is_masteradmin || userData.is_support ||
         userData.is_hod || userData.is_dean || userData.is_cfo ||
         userData.is_campus_director || userData.is_accounts_office ||
-        userData.is_it_support || userData.is_vendor_manager || userData.is_stalls;
+        userData.is_it_support || userData.is_venue_manager || userData.is_stalls;
       if (!hasAnyRole) router.replace("/error");
     }
   }, [authLoading, session, userData, router]);

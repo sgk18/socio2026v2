@@ -65,10 +65,10 @@ const ROLE_TO_USER_FLAG = {
   cfo:           "is_cfo",
   accounts:      "is_accounts_office",
   it:            "is_it_support",
-  venue:         "is_vendor_manager",
-  catering:      "is_vendor_manager",
+  venue:         "is_venue_manager",
+  catering:      "is_venue_manager",
   stalls:        "is_stalls",
-  miscellaneous: "is_vendor_manager",
+  miscellaneous: "is_venue_manager",
 };
 
 // Build stage object — no pre-assignment; access is determined at queue time by role+dept/school/campus

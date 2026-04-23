@@ -230,8 +230,7 @@ router.get(
         .from("venue_bookings")
         .select("*")
         .eq("requested_by", user.email)
-        .order("date", { ascending: false })
-        .order("start_time", { ascending: false });
+        .order("created_at", { ascending: false });
       if (error) throw error;
 
       // Attach venue info via explicit lookup (no FK join needed)
@@ -245,7 +244,6 @@ router.get(
         if (row.date >= today) upcoming.push(row);
         else past.push(row);
       });
-      upcoming.reverse(); // sort upcoming ASC
 
       return res.json({ upcoming, past });
     } catch (err) {
@@ -269,7 +267,7 @@ router.get(
   async (req, res) => {
     try {
       const user = req.userInfo;
-      if (!user.is_vendor_manager && !user.is_masteradmin) {
+      if (!user.is_venue_manager && !user.is_masteradmin) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -310,7 +308,7 @@ router.get(
       const requiresApproval = (row) => Boolean(row.venue?.is_approval_needed);
 
       const pendingFiltered  = pendingWithVenue.filter(inScope).filter(requiresApproval);
-      const reviewedFiltered = reviewedWithVenue.filter(inScope);
+      const reviewedFiltered = reviewedWithVenue.filter(inScope).filter(requiresApproval);
 
       // Detect overlapping pending bookings for same venue + date + time
       const overlappingIds = new Set();
@@ -389,9 +387,9 @@ router.post(
       // Fetch venue separately
       const venue = await getVenue(booking.venue_id);
 
-      // Authorization: vendor_manager must match campus
+      // Authorization: venue_manager must match campus
       let authorized = Boolean(user.is_masteradmin);
-      if (!authorized && user.is_vendor_manager) {
+      if (!authorized && user.is_venue_manager) {
         authorized = venue?.campus === user.campus;
       }
       if (!authorized) {

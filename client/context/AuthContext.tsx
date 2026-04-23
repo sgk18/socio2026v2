@@ -29,7 +29,7 @@ type UserData = {
   is_cfo?: boolean;
   is_campus_director?: boolean;
   is_accounts_office?: boolean;
-  is_vendor_manager?: boolean;
+  is_venue_manager?: boolean;
   organiser_expires_at?: string | null;
   support_expires_at?: string | null;
   masteradmin_expires_at?: string | null;

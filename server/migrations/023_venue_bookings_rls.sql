@@ -35,7 +35,7 @@ CREATE POLICY "vb_select_approved_public"
   USING ( status = 'approved' );
 
 -- 3. Vendor managers see all bookings for venues on their campus.
-CREATE POLICY "vb_select_vendor_manager"
+CREATE POLICY "vb_select_venue_manager"
   ON public.venue_bookings
   FOR SELECT
   USING (
@@ -44,7 +44,7 @@ CREATE POLICY "vb_select_vendor_manager"
       FROM   public.users u
       JOIN   public.venues v ON v.venue_id = venue_bookings.venue_id
       WHERE  u.email              = auth.email()
-        AND  u.is_vendor_manager  = TRUE
+        AND  u.is_venue_manager  = TRUE
         AND  v.campus             = u.campus
     )
   );
@@ -85,7 +85,7 @@ CREATE POLICY "vb_insert_organiser"
 -- 6. Vendor managers can update (approve/reject) bookings for their campus venues.
 --    They cannot change venue_id or requested_by — that's enforced by the
 --    application layer (Express route only updates status + decision_notes).
-CREATE POLICY "vb_update_vendor_manager"
+CREATE POLICY "vb_update_venue_manager"
   ON public.venue_bookings
   FOR UPDATE
   USING (
@@ -94,7 +94,7 @@ CREATE POLICY "vb_update_vendor_manager"
       FROM   public.users u
       JOIN   public.venues v ON v.venue_id = venue_bookings.venue_id
       WHERE  u.email             = auth.email()
-        AND  u.is_vendor_manager = TRUE
+        AND  u.is_venue_manager = TRUE
         AND  v.campus            = u.campus
     )
   );
