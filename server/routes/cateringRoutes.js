@@ -31,80 +31,139 @@ function normalizeEmails(emails) {
   return [...new Set((emails || []).map(e => (e || "").trim().toLowerCase()).filter(Boolean))];
 }
 
+// Escape LIKE wildcards so emails containing `_` or `%` don't match anything unintended.
+function escapeLike(s) {
+  return String(s).replace(/[\\%_]/g, c => "\\" + c);
+}
+
 // Find-then-update by primary key. For each email we first SELECT the matching
 // user row (case-insensitive), then UPDATE by register_number. This isolates
 // every update so ambiguous filters or JSONB quirks cannot drop rows.
+// Returns a diagnostic result so callers can surface partial failures.
 async function assignCateringRole(emails, catering_id) {
   const unique = normalizeEmails(emails);
+  const result = { requested: unique.length, updated: [], notFound: [], errors: [] };
   console.log(`[Caterers] assign → ${unique.length} email(s) for "${catering_id}":`, unique);
-  let assigned = 0;
+
   for (const email of unique) {
-    const { data: matches, error: findErr } = await supabase
-      .from("users")
-      .select("register_number, email")
-      .ilike("email", email);
-
-    if (findErr) {
-      console.error(`[Caterers]  ✗ lookup ${email}:`, findErr.message);
-      continue;
-    }
-    if (!matches?.length) {
-      console.warn(`[Caterers]  · ${email}: no user row exists (skipped)`);
-      continue;
-    }
-
-    for (const match of matches) {
-      const { error: updErr } = await supabase
+    try {
+      const { data: matches, error: findErr } = await supabase
         .from("users")
-        .update({ caters: { is_catering: true, catering_id } })
-        .eq("register_number", match.register_number);
+        .select("register_number, email")
+        .ilike("email", escapeLike(email));
 
-      if (updErr) {
-        console.error(`[Caterers]  ✗ update ${match.email}:`, updErr.message);
-      } else {
-        assigned++;
-        console.log(`[Caterers]  ✓ ${match.email} (reg ${match.register_number}) → caters set to "${catering_id}"`);
+      if (findErr) {
+        console.error(`[Caterers]  ✗ lookup ${email}:`, findErr.message, findErr.code || "");
+        result.errors.push({ email, stage: "lookup", message: findErr.message, code: findErr.code });
+        continue;
       }
+      if (!matches?.length) {
+        console.warn(`[Caterers]  · ${email}: no user row exists (skipped)`);
+        result.notFound.push(email);
+        continue;
+      }
+
+      for (const match of matches) {
+        const { data: updated, error: updErr } = await supabase
+          .from("users")
+          .update({ caters: { is_catering: true, catering_id } })
+          .eq("register_number", match.register_number)
+          .select("register_number, email, caters");
+
+        if (updErr) {
+          console.error(`[Caterers]  ✗ update ${match.email}:`, updErr.message, updErr.code || "", updErr.details || "");
+          result.errors.push({
+            email: match.email,
+            register_number: match.register_number,
+            stage: "update",
+            message: updErr.message,
+            code: updErr.code,
+            details: updErr.details,
+          });
+        } else if (!updated?.length) {
+          console.warn(`[Caterers]  ! update ${match.email} (reg ${match.register_number}) returned 0 rows — RLS or filter mismatch?`);
+          result.errors.push({
+            email: match.email,
+            register_number: match.register_number,
+            stage: "update",
+            message: "update returned 0 rows (possible RLS block)",
+          });
+        } else {
+          result.updated.push({ email: match.email, register_number: match.register_number });
+          console.log(`[Caterers]  ✓ ${match.email} (reg ${match.register_number}) → caters set to "${catering_id}"`);
+        }
+      }
+    } catch (e) {
+      console.error(`[Caterers]  ✗ exception ${email}:`, e?.message || e);
+      result.errors.push({ email, stage: "exception", message: e?.message || String(e) });
     }
   }
-  console.log(`[Caterers] assign summary: ${assigned} user(s) updated`);
+  console.log(`[Caterers] assign summary: ${result.updated.length}/${result.requested} updated, ${result.notFound.length} notFound, ${result.errors.length} errors`);
+  return result;
 }
 
 async function revokeCateringRole(emails, catering_id) {
   const unique = normalizeEmails(emails);
-  if (!unique.length) return;
+  const result = { requested: unique.length, revoked: [], notFound: [], errors: [] };
+  if (!unique.length) return result;
   console.log(`[Caterers] revoke ← ${unique.length} email(s) for "${catering_id}":`, unique);
-  let revoked = 0;
+
   for (const email of unique) {
-    const { data: matches, error: findErr } = await supabase
-      .from("users")
-      .select("register_number, email, caters")
-      .ilike("email", email);
-
-    if (findErr) {
-      console.error(`[Caterers]  ✗ lookup ${email}:`, findErr.message);
-      continue;
-    }
-    if (!matches?.length) continue;
-
-    for (const match of matches) {
-      // Only clear if this user still belongs to THIS vendor
-      if (match.caters?.catering_id !== catering_id) continue;
-
-      const { error: updErr } = await supabase
+    try {
+      const { data: matches, error: findErr } = await supabase
         .from("users")
-        .update({ caters: null })
-        .eq("register_number", match.register_number);
+        .select("register_number, email, caters")
+        .ilike("email", escapeLike(email));
 
-      if (updErr) {
-        console.error(`[Caterers]  ✗ revoke ${match.email}:`, updErr.message);
-      } else {
-        revoked++;
-        console.log(`[Caterers]  ✓ revoke ${match.email} (reg ${match.register_number})`);
+      if (findErr) {
+        console.error(`[Caterers]  ✗ lookup ${email}:`, findErr.message, findErr.code || "");
+        result.errors.push({ email, stage: "lookup", message: findErr.message, code: findErr.code });
+        continue;
       }
+      if (!matches?.length) {
+        result.notFound.push(email);
+        continue;
+      }
+
+      for (const match of matches) {
+        // Only clear if this user still belongs to THIS vendor
+        if (match.caters?.catering_id !== catering_id) continue;
+
+        const { data: updated, error: updErr } = await supabase
+          .from("users")
+          .update({ caters: null })
+          .eq("register_number", match.register_number)
+          .select("register_number");
+
+        if (updErr) {
+          console.error(`[Caterers]  ✗ revoke ${match.email}:`, updErr.message, updErr.code || "");
+          result.errors.push({
+            email: match.email,
+            register_number: match.register_number,
+            stage: "update",
+            message: updErr.message,
+            code: updErr.code,
+          });
+        } else if (!updated?.length) {
+          console.warn(`[Caterers]  ! revoke ${match.email} (reg ${match.register_number}) returned 0 rows`);
+          result.errors.push({
+            email: match.email,
+            register_number: match.register_number,
+            stage: "update",
+            message: "revoke returned 0 rows (possible RLS block)",
+          });
+        } else {
+          result.revoked.push({ email: match.email, register_number: match.register_number });
+          console.log(`[Caterers]  ✓ revoke ${match.email} (reg ${match.register_number})`);
+        }
+      }
+    } catch (e) {
+      console.error(`[Caterers]  ✗ exception ${email}:`, e?.message || e);
+      result.errors.push({ email, stage: "exception", message: e?.message || String(e) });
     }
   }
-  console.log(`[Caterers] revoke summary: ${revoked} user(s) cleared`);
+  console.log(`[Caterers] revoke summary: ${result.revoked.length}/${result.requested} revoked, ${result.errors.length} errors`);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,9 +236,9 @@ router.post(
       if (error) throw error;
 
       // Await role assignment so failures surface in logs close to the request
-      await assignCateringRole(extractEmails(contact_details), catering_id);
+      const role_assignment = await assignCateringRole(extractEmails(contact_details), catering_id);
 
-      return res.status(201).json({ caterer: data });
+      return res.status(201).json({ caterer: data, role_assignment });
     } catch (err) {
       if (err?.code === "23505") {
         return res.status(409).json({ error: "A caterer with that name already exists" });
@@ -236,17 +295,19 @@ router.put(
 
       // Sync roles based on contact email diff (case-insensitive) — revoke
       // first, then assign, so emails moving between vendors behave correctly.
+      let role_assignment = null;
+      let role_revocation = null;
       if (contact_details !== undefined) {
         const oldNorm = normalizeEmails(oldEmails);
         const newNorm = normalizeEmails(extractEmails(contact_details));
         const removed = oldNorm.filter(e => !newNorm.includes(e));
         const added   = newNorm.filter(e => !oldNorm.includes(e));
         console.log(`[Caterers] PUT ${id} diff: old=${JSON.stringify(oldNorm)} new=${JSON.stringify(newNorm)} removed=${JSON.stringify(removed)} added=${JSON.stringify(added)}`);
-        await revokeCateringRole(removed, id);
-        await assignCateringRole(added, id);
+        role_revocation = await revokeCateringRole(removed, id);
+        role_assignment = await assignCateringRole(added, id);
       }
 
-      return res.json({ caterer: data });
+      return res.json({ caterer: data, role_assignment, role_revocation });
     } catch (err) {
       console.error("[Caterers] PUT /caterers/:id error:", err);
       return res.status(500).json({ error: err?.message || "Internal server error" });
@@ -401,11 +462,10 @@ router.delete(
       if (error) throw error;
 
       // Revoke roles after successful delete (best-effort)
-      revokeCateringRole(extractEmails(caterer?.contact_details), id).catch(e =>
-        console.error("[Caterers] DELETE role revoke failed:", e)
-      );
+      const role_revocation = await revokeCateringRole(extractEmails(caterer?.contact_details), id)
+        .catch(e => { console.error("[Caterers] DELETE role revoke failed:", e); return null; });
 
-      return res.json({ success: true });
+      return res.json({ success: true, role_revocation });
     } catch (err) {
       console.error("[Caterers] DELETE /caterers/:id error:", err);
       return res.status(500).json({ error: err?.message || "Internal server error" });

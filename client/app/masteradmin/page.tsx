@@ -364,7 +364,17 @@ export default function MasterAdminPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setCatererFormError(body.error || "Failed to create caterer"); return; }
-      toast.success("Caterer added");
+      const ra = body.role_assignment;
+      if (ra && (ra.notFound?.length || ra.errors?.length)) {
+        const parts: string[] = [];
+        if (ra.updated?.length) parts.push(`${ra.updated.length} of ${ra.requested} contacts assigned`);
+        if (ra.notFound?.length) parts.push(`${ra.notFound.length} email(s) have no Socio account: ${ra.notFound.join(", ")}`);
+        if (ra.errors?.length) parts.push(`${ra.errors.length} update error(s) — check server logs`);
+        toast(`Caterer added, but: ${parts.join("; ")}`, { icon: "⚠️", duration: 6000 });
+        console.warn("[Caterer] role_assignment partial:", ra);
+      } else {
+        toast.success("Caterer added");
+      }
       setCatererForm({ catering_name: "", campuses: [], location: "", contacts: [{ name: "", email: "", mobile: "" }] });
       fetchAllCaterers();
     } catch { setCatererFormError("Network error"); } finally { setCatererSubmitting(false); }
@@ -401,7 +411,21 @@ export default function MasterAdminPage() {
         body: JSON.stringify({ catering_name: editCatererForm.catering_name, contact_details, campuses: editCatererForm.campuses, location: editCatererForm.location || null }),
       });
       if (!res.ok) { toast.error("Failed to save changes"); return; }
-      toast.success("Caterer updated");
+      const body = await res.json().catch(() => ({}));
+      const ra = body.role_assignment;
+      const rr = body.role_revocation;
+      const warnings: string[] = [];
+      if (ra && (ra.notFound?.length || ra.errors?.length)) {
+        if (ra.notFound?.length) warnings.push(`${ra.notFound.length} new email(s) have no Socio account: ${ra.notFound.join(", ")}`);
+        if (ra.errors?.length) warnings.push(`${ra.errors.length} assign error(s)`);
+      }
+      if (rr?.errors?.length) warnings.push(`${rr.errors.length} revoke error(s)`);
+      if (warnings.length) {
+        toast(`Caterer updated, but: ${warnings.join("; ")} — check server logs`, { icon: "⚠️", duration: 6000 });
+        console.warn("[Caterer] role diagnostics:", { role_assignment: ra, role_revocation: rr });
+      } else {
+        toast.success("Caterer updated");
+      }
       setEditingCaterer(null);
       fetchAllCaterers();
     } catch { toast.error("Network error"); } finally { setEditCatererSaving(false); }
