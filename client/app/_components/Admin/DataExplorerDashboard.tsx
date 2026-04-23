@@ -16,16 +16,21 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertTriangle,
+  BadgeCheck,
+  Building2,
   CalendarRange,
   Download,
   FileSpreadsheet,
   Filter,
+  GraduationCap,
   Loader2,
   RefreshCw,
   Search,
   SlidersHorizontal,
   Table2,
   TrendingUp,
+  UsersRound,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import {
@@ -79,6 +84,9 @@ type ExplorerRow = {
   attendedParticipants: number;
   registrantEmail: string;
   registrantRole: string;
+  registrantCampus: string;
+  registrantDepartment: string;
+  registrantCourse: string;
 };
 
 type MultiSelectFilterProps = {
@@ -526,6 +534,10 @@ function getRoleLabel(user: AnalyticsUser | undefined): string {
   return "Student";
 }
 
+function toPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
 const DETAILED_EXPORT_COLUMNS: DetailedExportColumn[] = [
   { header: "Registered At", width: 24, kind: "text", value: (row) => formatDateTime(row.registeredAt) },
   { header: "Event Date", width: 16, kind: "text", value: (row) => formatDate(row.eventDate) },
@@ -659,6 +671,9 @@ export default function DataExplorerDashboard() {
 
       const campus = event?.campus_hosted_at ?? fest?.campus_hosted_at ?? user?.campus ?? "Unknown";
       const department = event?.organizing_dept ?? fest?.organizing_dept ?? user?.department ?? "Unknown";
+      const registrantCampus = user?.campus ?? "Unknown";
+      const registrantDepartment = user?.department ?? "Unknown";
+      const registrantCourse = user?.course ?? "Unknown";
       const eventType = event?.event_type ?? event?.category ?? "Uncategorized";
       const registrationType = registration.registration_type ?? "unknown";
       const participantOrganization = registration.participant_organization ?? "christ_member";
@@ -700,6 +715,9 @@ export default function DataExplorerDashboard() {
         attendedParticipants,
         registrantEmail,
         registrantRole: getRoleLabel(user),
+        registrantCampus,
+        registrantDepartment,
+        registrantCourse,
       };
     });
   }, [dataset, eventById, festById, festByTitle, userByEmail, attendanceByRegistrationId]);
@@ -760,6 +778,7 @@ export default function DataExplorerDashboard() {
   }, [rows, dateStart, dateEnd, campusFilter, departmentFilter, eventTypeFilter, searchQuery]);
 
   const totalRegistrations = filteredRows.length;
+  const uniqueEventCount = useMemo(() => new Set(filteredRows.map((row) => row.eventId)).size, [filteredRows]);
 
   const totalParticipants = useMemo(() => {
     return filteredRows.reduce((sum, row) => sum + row.participantCount, 0);
@@ -774,6 +793,156 @@ export default function DataExplorerDashboard() {
   }, [filteredRows]);
 
   const conversionRate = totalParticipants > 0 ? (totalAttendance / totalParticipants) * 100 : 0;
+
+  const accreditationSnapshot = useMemo(() => {
+    const knownRegistrants = filteredRows.filter((row) => row.registrantEmail !== "Unknown");
+    const uniqueRegistrants = new Set(knownRegistrants.map((row) => row.registrantEmail.toLowerCase())).size;
+
+    const academicDepartments = new Set(
+      knownRegistrants.map((row) => row.registrantDepartment).filter((value) => value !== "Unknown")
+    ).size;
+    const academicCourses = new Set(
+      knownRegistrants.map((row) => row.registrantCourse).filter((value) => value !== "Unknown")
+    ).size;
+    const participantCampuses = new Set(
+      knownRegistrants.map((row) => row.registrantCampus).filter((value) => value !== "Unknown")
+    ).size;
+    const hostCampuses = new Set(filteredRows.map((row) => row.campus).filter((value) => value !== "Unknown")).size;
+
+    const markedRegistrations = filteredRows.filter((row) => row.attendanceStatus !== "unmarked").length;
+    const pendingRegistrations = filteredRows.filter((row) => row.attendanceStatus === "pending").length;
+    const absentRegistrations = filteredRows.filter((row) => row.attendanceStatus === "absent").length;
+    const outsiderRegistrations = filteredRows.filter((row) => row.ticketType === "Outsider").length;
+    const teamRegistrations = filteredRows.filter((row) => row.registrationType === "team").length;
+
+    const attendanceMarkedRate = totalRegistrations > 0 ? (markedRegistrations / totalRegistrations) * 100 : 0;
+    const pendingRate = totalRegistrations > 0 ? (pendingRegistrations / totalRegistrations) * 100 : 0;
+    const absenceRate = totalRegistrations > 0 ? (absentRegistrations / totalRegistrations) * 100 : 0;
+    const outsiderShare = totalRegistrations > 0 ? (outsiderRegistrations / totalRegistrations) * 100 : 0;
+    const teamShare = totalRegistrations > 0 ? (teamRegistrations / totalRegistrations) * 100 : 0;
+
+    return {
+      uniqueRegistrants,
+      academicDepartments,
+      academicCourses,
+      participantCampuses,
+      hostCampuses,
+      markedRegistrations,
+      attendanceMarkedRate,
+      pendingRate,
+      absenceRate,
+      outsiderShare,
+      teamShare,
+    };
+  }, [filteredRows, totalRegistrations]);
+
+  const departmentPerformance = useMemo(() => {
+    const bucket = new Map<
+      string,
+      { registrations: number; participants: number; attendance: number; revenue: number; events: Set<string>; outsider: number }
+    >();
+
+    filteredRows.forEach((row) => {
+      const key = row.department;
+      const entry = bucket.get(key) ?? {
+        registrations: 0,
+        participants: 0,
+        attendance: 0,
+        revenue: 0,
+        events: new Set<string>(),
+        outsider: 0,
+      };
+
+      entry.registrations += 1;
+      entry.participants += row.participantCount;
+      entry.attendance += row.attendedParticipants;
+      entry.revenue += row.estimatedRevenue;
+      entry.events.add(row.eventId);
+      if (row.ticketType === "Outsider") entry.outsider += 1;
+      bucket.set(key, entry);
+    });
+
+    return Array.from(bucket.entries())
+      .map(([name, value]) => ({
+        name,
+        registrations: value.registrations,
+        events: value.events.size,
+        attendanceRate: value.participants > 0 ? (value.attendance / value.participants) * 100 : 0,
+        outsiderShare: value.registrations > 0 ? (value.outsider / value.registrations) * 100 : 0,
+        revenue: value.revenue,
+      }))
+      .sort((a, b) => b.registrations - a.registrations);
+  }, [filteredRows]);
+
+  const campusPerformance = useMemo(() => {
+    const bucket = new Map<string, { registrations: number; participants: number; attendance: number; revenue: number }>();
+
+    filteredRows.forEach((row) => {
+      const entry = bucket.get(row.campus) ?? { registrations: 0, participants: 0, attendance: 0, revenue: 0 };
+      entry.registrations += 1;
+      entry.participants += row.participantCount;
+      entry.attendance += row.attendedParticipants;
+      entry.revenue += row.estimatedRevenue;
+      bucket.set(row.campus, entry);
+    });
+
+    return Array.from(bucket.entries())
+      .map(([name, value]) => ({
+        name,
+        registrations: value.registrations,
+        attendanceRate: value.participants > 0 ? (value.attendance / value.participants) * 100 : 0,
+        revenue: value.revenue,
+      }))
+      .sort((a, b) => b.registrations - a.registrations);
+  }, [filteredRows]);
+
+  const riskSignals = useMemo(() => {
+    const signals: Array<{ title: string; message: string; tone: "warning" | "success" }> = [];
+
+    if (accreditationSnapshot.attendanceMarkedRate < 85) {
+      signals.push({
+        title: "Attendance governance gap",
+        message: `${toPercent(accreditationSnapshot.attendanceMarkedRate)} records are marked; target should be >= 85% for stronger audit readiness.`,
+        tone: "warning",
+      });
+    } else {
+      signals.push({
+        title: "Attendance governance healthy",
+        message: `${toPercent(accreditationSnapshot.attendanceMarkedRate)} attendance records are marked across current filters.`,
+        tone: "success",
+      });
+    }
+
+    if (accreditationSnapshot.academicDepartments < 5) {
+      signals.push({
+        title: "Department participation concentration",
+        message: `Only ${accreditationSnapshot.academicDepartments} departments are represented. Expand department outreach for broader accreditation evidence.`,
+        tone: "warning",
+      });
+    } else {
+      signals.push({
+        title: "Academic breadth evidence",
+        message: `${accreditationSnapshot.academicDepartments} departments and ${accreditationSnapshot.academicCourses} courses are represented.`,
+        tone: "success",
+      });
+    }
+
+    if (accreditationSnapshot.outsiderShare < 10) {
+      signals.push({
+        title: "External engagement opportunity",
+        message: `Outsider share is ${toPercent(accreditationSnapshot.outsiderShare)}. Increase external participation to strengthen industry/community engagement metrics.`,
+        tone: "warning",
+      });
+    } else {
+      signals.push({
+        title: "External engagement visible",
+        message: `Outsider share is ${toPercent(accreditationSnapshot.outsiderShare)}, supporting external outreach indicators.`,
+        tone: "success",
+      });
+    }
+
+    return signals;
+  }, [accreditationSnapshot]);
 
   const topFest = useMemo(() => {
     const festMap = new Map<string, { registrations: number; revenue: number }>();
@@ -1008,9 +1177,16 @@ export default function DataExplorerDashboard() {
             title: "KPI Snapshot",
             rows: [
               { label: "Registrations In Scope", value: totalRegistrations.toLocaleString() },
+              { label: "Unique Events In Scope", value: uniqueEventCount.toLocaleString() },
               { label: "Participants In Scope", value: totalParticipants.toLocaleString() },
               { label: "Attendance In Scope", value: totalAttendance.toLocaleString() },
               { label: "Conversion Rate", value: `${conversionRate.toFixed(1)}%` },
+              { label: "Attendance Marked Rate", value: toPercent(accreditationSnapshot.attendanceMarkedRate) },
+              { label: "Outsider Participation Share", value: toPercent(accreditationSnapshot.outsiderShare) },
+              {
+                label: "Academic Breadth (Departments / Courses)",
+                value: `${accreditationSnapshot.academicDepartments} / ${accreditationSnapshot.academicCourses}`,
+              },
               { label: "Estimated Revenue", value: toCurrency(totalRevenue) },
             ],
           },
@@ -1024,6 +1200,10 @@ export default function DataExplorerDashboard() {
       setIsExportingXlsx(false);
     }
   }, [
+    accreditationSnapshot.academicCourses,
+    accreditationSnapshot.academicDepartments,
+    accreditationSnapshot.attendanceMarkedRate,
+    accreditationSnapshot.outsiderShare,
     campusFilter,
     conversionRate,
     customEndDate,
@@ -1045,6 +1225,7 @@ export default function DataExplorerDashboard() {
     totalParticipants,
     totalRegistrations,
     totalRevenue,
+    uniqueEventCount,
   ]);
 
   if (isLoading) {
@@ -1231,7 +1412,7 @@ export default function DataExplorerDashboard() {
         <KpiCard
           label="Total Registrations"
           value={totalRegistrations.toLocaleString()}
-          subLabel={`${new Set(filteredRows.map((row) => row.eventId)).size.toLocaleString()} unique events`}
+          subLabel={`${uniqueEventCount.toLocaleString()} unique events`}
           accent="text-slate-900"
         />
         <KpiCard
@@ -1240,6 +1421,169 @@ export default function DataExplorerDashboard() {
           subLabel="Calculated from registration fee and ticket mix"
           accent="text-rose-600"
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <UsersRound className="h-4 w-4 text-[#0f4c81]" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Learner Reach</p>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{accreditationSnapshot.uniqueRegistrants.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-slate-500">Unique students with measurable participation in current scope.</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <GraduationCap className="h-4 w-4 text-[#0f4c81]" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Academic Breadth</p>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{accreditationSnapshot.academicDepartments}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Departments represented; {accreditationSnapshot.academicCourses} courses contribute evidence.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-[#0f4c81]" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Campus Coverage</p>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{accreditationSnapshot.hostCampuses}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Host campuses active; {accreditationSnapshot.participantCampuses} participant campuses represented.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <BadgeCheck className="h-4 w-4 text-[#0f4c81]" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Attendance Compliance</p>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{toPercent(accreditationSnapshot.attendanceMarkedRate)}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {accreditationSnapshot.markedRegistrations.toLocaleString()} marked records; pending {toPercent(accreditationSnapshot.pendingRate)}.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Department Performance Matrix</h3>
+              <p className="text-xs text-slate-500">Participation, attendance quality, and external engagement by department.</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="px-2 py-2 text-left font-semibold uppercase tracking-wider">Department</th>
+                  <th className="px-2 py-2 text-right font-semibold uppercase tracking-wider">Registrations</th>
+                  <th className="px-2 py-2 text-right font-semibold uppercase tracking-wider">Events</th>
+                  <th className="px-2 py-2 text-right font-semibold uppercase tracking-wider">Attendance</th>
+                  <th className="px-2 py-2 text-right font-semibold uppercase tracking-wider">Outsider Mix</th>
+                  <th className="px-2 py-2 text-right font-semibold uppercase tracking-wider">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departmentPerformance.slice(0, 8).map((item) => (
+                  <tr key={item.name} className="border-b border-slate-100">
+                    <td className="px-2 py-2 font-medium text-slate-800">{item.name}</td>
+                    <td className="px-2 py-2 text-right text-slate-700">{item.registrations.toLocaleString()}</td>
+                    <td className="px-2 py-2 text-right text-slate-700">{item.events.toLocaleString()}</td>
+                    <td className="px-2 py-2 text-right text-slate-700">{toPercent(item.attendanceRate)}</td>
+                    <td className="px-2 py-2 text-right text-slate-700">{toPercent(item.outsiderShare)}</td>
+                    <td className="px-2 py-2 text-right text-slate-700">{toCurrency(item.revenue)}</td>
+                  </tr>
+                ))}
+                {departmentPerformance.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-2 py-10 text-center text-slate-400">
+                      No department performance data for current filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-sm font-bold text-slate-900">Accreditation Signals</h3>
+            <p className="text-xs text-slate-500">Actionable indicators for compliance reviews and institutional reporting.</p>
+          </div>
+
+          <div className="space-y-3">
+            {riskSignals.map((signal) => (
+              <div
+                key={signal.title}
+                className={classNames(
+                  "rounded-lg border p-3",
+                  signal.tone === "warning" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"
+                )}
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <AlertTriangle
+                    className={classNames("h-3.5 w-3.5", signal.tone === "warning" ? "text-amber-600" : "text-emerald-600")}
+                  />
+                  <p className="text-xs font-semibold text-slate-800">{signal.title}</p>
+                </div>
+                <p className="text-xs text-slate-600">{signal.message}</p>
+              </div>
+            ))}
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold text-slate-700">Participation Mix Snapshot</p>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md bg-white p-2">
+                  <p className="text-slate-500">Outsider Share</p>
+                  <p className="font-bold text-slate-900">{toPercent(accreditationSnapshot.outsiderShare)}</p>
+                </div>
+                <div className="rounded-md bg-white p-2">
+                  <p className="text-slate-500">Team Registrations</p>
+                  <p className="font-bold text-slate-900">{toPercent(accreditationSnapshot.teamShare)}</p>
+                </div>
+                <div className="rounded-md bg-white p-2">
+                  <p className="text-slate-500">Absence Rate</p>
+                  <p className="font-bold text-slate-900">{toPercent(accreditationSnapshot.absenceRate)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-slate-900">Campus Benchmark</h3>
+          <p className="text-xs text-slate-500">Top campuses by registrations with attendance-rate comparison.</p>
+        </div>
+
+        {campusPerformance.length === 0 ? (
+          <p className="py-12 text-center text-sm text-slate-400">No campus benchmark data for current filters.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={campusPerformance.slice(0, 10)} margin={{ top: 10, right: 12, left: -18, bottom: 22 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#64748b" }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#64748b" }} />
+              <Tooltip
+                formatter={(value: number, name: string) => {
+                  if (name === "Attendance Rate %") return [`${value.toFixed(1)}%`, name];
+                  return [value.toLocaleString(), name];
+                }}
+                contentStyle={{ borderRadius: 10, borderColor: "#cbd5e1" }}
+              />
+              <Bar yAxisId="left" dataKey="registrations" fill="#0f4c81" radius={[4, 4, 0, 0]} name="Registrations" />
+              <Bar yAxisId="right" dataKey="attendanceRate" fill="#0ea5a4" radius={[4, 4, 0, 0]} name="Attendance Rate %" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
