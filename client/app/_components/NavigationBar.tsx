@@ -63,7 +63,7 @@ type RoleAction = {
   key: string;
   label: string;
   href: string;
-  variant: "admin" | "default";
+  variant: "admin" | "cfo" | "dean" | "hod" | "accounts" | "organiser" | "venue" | "support";
 };
 
 function NavigationBar() {
@@ -80,8 +80,6 @@ function NavigationBar() {
   const [avatarLoadError, setAvatarLoadError] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-  const [showDrawerOverflowRoles, setShowDrawerOverflowRoles] = useState(false);
-  const [showMobileOverflowRoles, setShowMobileOverflowRoles] = useState(false);
   const [isDesktopCompact, setIsDesktopCompact] = useState(false);
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
   const [expandedDesktopSection, setExpandedDesktopSection] = useState<string | null>(null);
@@ -106,30 +104,46 @@ function NavigationBar() {
   const isHod = Boolean((userData as any)?.is_hod);
   const isOrganiser = Boolean(userData?.is_organiser);
   const isSupport = Boolean(userData?.is_support);
-  const isVenueManager = Boolean((userData as any)?.is_vendor_manager);
+  const isVenueManager = Boolean((userData as any)?.is_venue_manager);
 
   const roleActions: RoleAction[] = [];
   if (isMasterAdmin) roleActions.push({ key: "admin", label: "Admin", href: "/masteradmin", variant: "admin" });
-  if (isAccountsOffice) roleActions.push({ key: "accounts", label: "Accounts", href: "/accounts", variant: "default" });
-  if (isCfo) roleActions.push({ key: "cfo", label: "CFO", href: "/cfo", variant: "default" });
-  if (isDean) roleActions.push({ key: "dean", label: "Dean", href: "/dean", variant: "default" });
-  if (isHod) roleActions.push({ key: "hod", label: "HOD", href: "/hod", variant: "default" });
-  if (isOrganiser) roleActions.push({ key: "organiser", label: "Organiser", href: "/manage", variant: "default" });
-  if (isVenueManager) roleActions.push({ key: "venue", label: "Venue", href: "/venue", variant: "default" });
+  if (isAccountsOffice) roleActions.push({ key: "accounts", label: "Accounts", href: "/accounts", variant: "accounts" });
+  if (isCfo) roleActions.push({ key: "cfo", label: "CFO", href: "/cfo", variant: "cfo" });
+  if (isDean) roleActions.push({ key: "dean", label: "Dean", href: "/dean", variant: "dean" });
+  if (isHod) roleActions.push({ key: "hod", label: "HOD", href: "/hod", variant: "hod" });
+  if (isOrganiser) roleActions.push({ key: "organiser", label: "Organiser", href: "/manage", variant: "organiser" });
+  if (isVenueManager) roleActions.push({ key: "venue", label: "Venue", href: "/venue", variant: "venue" });
 
-  const visibleRoleActions = roleActions.slice(0, 2);
-  const overflowRoleActions = roleActions.slice(2);
+  const visibleRoleActions = roleActions.length > 2 ? roleActions.slice(0, 1) : roleActions;
+  const dashboardDropdownRoles = roleActions.length > 2 ? roleActions.slice(1) : [];
+  const showDashboardDropdown = roleActions.length > 2;
   const hasRoleActions = roleActions.length > 0;
 
-  const getRolePillClasses = (variant: RoleAction["variant"]) =>
-    variant === "admin"
-      ? "border-red-600 text-red-600 hover:bg-red-50"
-      : "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]";
+  const rolePillMap: Record<RoleAction["variant"], string> = {
+    admin:     "border-red-600 text-red-600 hover:bg-red-50",
+    cfo:       "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    dean:      "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    hod:       "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    accounts:  "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    organiser: "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    venue:     "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    support:   "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+  };
 
-  const getRoleQuickActionClasses = (variant: RoleAction["variant"]) =>
-    variant === "admin"
-      ? "border-red-200 text-red-600 hover:bg-red-50"
-      : "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10";
+  const roleQuickActionMap: Record<RoleAction["variant"], string> = {
+    admin:     "border-red-200 text-red-600 hover:bg-red-50",
+    cfo:       "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    dean:      "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    hod:       "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    accounts:  "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    organiser: "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    venue:     "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    support:   "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+  };
+
+  const getRolePillClasses = (variant: RoleAction["variant"]) => rolePillMap[variant];
+  const getRoleQuickActionClasses = (variant: RoleAction["variant"]) => roleQuickActionMap[variant];
 
   useEffect(() => {
     setAvatarLoadError(false);
@@ -149,7 +163,6 @@ function NavigationBar() {
     setExpandedDesktopSection(null);
     setExpandedDesktopSubSection(null);
     setShowRoleDropdown(false);
-    setShowDrawerOverflowRoles(false);
   }, []);
 
   const measureDesktopOverlap = useCallback(() => {
@@ -207,7 +220,6 @@ function NavigationBar() {
 
   useEffect(() => {
     closeDesktopMenu();
-    setShowMobileOverflowRoles(false);
   }, [pathname, closeDesktopMenu]);
 
   useEffect(() => {
@@ -226,12 +238,10 @@ function NavigationBar() {
   }, []);
 
   useEffect(() => {
-    if (overflowRoleActions.length === 0) {
+    if (!showDashboardDropdown) {
       setShowRoleDropdown(false);
-      setShowDrawerOverflowRoles(false);
-      setShowMobileOverflowRoles(false);
     }
-  }, [overflowRoleActions.length]);
+  }, [showDashboardDropdown]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -426,16 +436,16 @@ function NavigationBar() {
                         </Link>
                       ))}
 
-                      {overflowRoleActions.length > 0 && (
+                      {showDashboardDropdown && (
                         <div ref={roleDropdownRef} className="relative">
                           <button
                             type="button"
                             onClick={() => setShowRoleDropdown((prev) => !prev)}
                             aria-expanded={showRoleDropdown}
-                            aria-label="Show more role actions"
-                            className="inline-flex items-center gap-1.5 cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 border-[#154CB3]/45 rounded-full text-xs sm:text-sm text-[#154CB3] hover:bg-[#f3f3f3] transition-all duration-200 ease-in-out"
+                            aria-label="Open dashboard menu"
+                            className="inline-flex items-center gap-1.5 cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 border-[#154CB3] rounded-full text-xs sm:text-sm text-[#154CB3] hover:bg-[#f3f3f3] transition-all duration-200 ease-in-out"
                           >
-                            More
+                            Dashboard
                             <svg
                               className={`w-3.5 h-3.5 transition-transform duration-200 ${showRoleDropdown ? "rotate-180" : ""}`}
                               fill="none"
@@ -449,16 +459,12 @@ function NavigationBar() {
 
                           {showRoleDropdown && (
                             <div className="absolute right-0 top-full mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-40 py-1">
-                              {overflowRoleActions.map((roleAction) => (
+                              {dashboardDropdownRoles.map((roleAction) => (
                                 <Link
-                                  key={`desktop-overflow-${roleAction.key}`}
+                                  key={`desktop-dashboard-${roleAction.key}`}
                                   href={roleAction.href}
                                   onClick={() => setShowRoleDropdown(false)}
-                                  className={`block px-4 py-2.5 text-sm font-medium transition-colors duration-200 ${
-                                    roleAction.variant === "admin"
-                                      ? "text-red-600 hover:bg-red-50"
-                                      : "text-[#154CB3] hover:bg-[#154CB3]/10"
-                                  }`}
+                                  className={`block px-4 py-2.5 text-sm font-medium transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
                                 >
                                   {roleAction.label}
                                 </Link>
@@ -707,7 +713,7 @@ function NavigationBar() {
                 </p>
 
                 <div className="mt-2 space-y-2">
-                  {visibleRoleActions.map((roleAction) => (
+                  {roleActions.map((roleAction) => (
                     <Link
                       key={`drawer-role-${roleAction.key}`}
                       href={roleAction.href}
@@ -717,43 +723,6 @@ function NavigationBar() {
                       {roleAction.label}
                     </Link>
                   ))}
-
-                  {overflowRoleActions.length > 0 && (
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowDrawerOverflowRoles((prev) => !prev)}
-                        aria-expanded={showDrawerOverflowRoles}
-                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#154CB3]/30 px-3 py-2 text-sm font-semibold text-[#154CB3] hover:bg-[#154CB3]/10 transition-colors duration-200"
-                      >
-                        More roles
-                        <svg
-                          className={`w-3.5 h-3.5 transition-transform duration-200 ${showDrawerOverflowRoles ? "rotate-180" : ""}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      {showDrawerOverflowRoles && (
-                        <div className="space-y-2">
-                          {overflowRoleActions.map((roleAction) => (
-                            <Link
-                              key={`drawer-overflow-${roleAction.key}`}
-                              href={roleAction.href}
-                              onClick={closeDesktopMenu}
-                              className={`block rounded-lg border px-3 py-2 text-sm font-semibold transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
-                            >
-                              {roleAction.label}
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -788,7 +757,7 @@ function NavigationBar() {
               Fests
             </Link>
 
-            {visibleRoleActions.map((roleAction) => (
+            {roleActions.map((roleAction) => (
               <Link
                 key={`mobile-role-${roleAction.key}`}
                 href={roleAction.href}
@@ -797,43 +766,6 @@ function NavigationBar() {
                 {roleAction.label}
               </Link>
             ))}
-
-            {overflowRoleActions.length > 0 && (
-              <div className="col-span-2">
-                <button
-                  type="button"
-                  onClick={() => setShowMobileOverflowRoles((prev) => !prev)}
-                  aria-expanded={showMobileOverflowRoles}
-                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-full border border-[#154CB3]/30 bg-white px-3 py-2 text-sm font-semibold text-[#154CB3] hover:bg-[#154CB3]/10 transition-colors duration-200"
-                >
-                  More roles
-                  <svg
-                    className={`w-3.5 h-3.5 transition-transform duration-200 ${showMobileOverflowRoles ? "rotate-180" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {showMobileOverflowRoles && (
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {overflowRoleActions.map((roleAction) => (
-                      <Link
-                        key={`mobile-overflow-${roleAction.key}`}
-                        href={roleAction.href}
-                        onClick={() => setShowMobileOverflowRoles(false)}
-                        className={`inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm font-semibold transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
-                      >
-                        {roleAction.label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 

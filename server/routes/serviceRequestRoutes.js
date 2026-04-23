@@ -81,7 +81,7 @@ router.get(
   async (req, res) => {
     try {
       const user = req.userInfo;
-      if (!user.is_vendor_manager && !user.is_masteradmin) {
+      if (!user.is_venue_manager && !user.is_masteradmin) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -346,7 +346,7 @@ router.post(
       const bookingVenue = venueRows?.[0] || null;
 
       let authorized = Boolean(user.is_masteradmin);
-      if (!authorized && user.is_vendor_manager) {
+      if (!authorized && user.is_venue_manager) {
         authorized = bookingVenue?.campus === user.campus;
       }
       if (!authorized) {

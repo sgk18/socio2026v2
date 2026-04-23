@@ -90,7 +90,7 @@ export async function middleware(req: NextRequest) {
 
     const { data: userData, error } = await supabase
       .from("users")
-      .select("is_organiser, is_masteradmin, is_hod, is_dean, is_cfo, is_accounts_office, is_vendor_manager")
+      .select("is_organiser, is_masteradmin, is_hod, is_dean, is_cfo, is_accounts_office, is_venue_manager")
       .eq("email", user.email)
       .single();
 
@@ -159,7 +159,7 @@ export async function middleware(req: NextRequest) {
       return redirect("/error");
     }
 
-    if (isVenueRoute && !userData?.is_vendor_manager && !userData?.is_masteradmin) {
+    if (isVenueRoute && !userData?.is_venue_manager && !userData?.is_masteradmin) {
       return redirect("/error");
     }
   }

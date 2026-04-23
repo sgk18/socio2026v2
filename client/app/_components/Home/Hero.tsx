@@ -84,7 +84,7 @@ const Hero = () => {
 
   const isMasterAdmin = Boolean((userData as any)?.is_masteradmin);
   const isOrganiser = Boolean(userData?.is_organiser);
-  const isVenueManager = Boolean((userData as any)?.is_vendor_manager);
+  const isVenueManager = Boolean((userData as any)?.is_venue_manager);
 
   return (
     <div
@@ -158,14 +158,14 @@ const Hero = () => {
               <button
                 onClick={() => router.push("/bookvenue")}
                 disabled={buttonsDisabled}
-                className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#154CB3] text-sm sm:text-base rounded-full text-[#154CB3] bg-white hover:bg-[#154CB3]/10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
+                className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#154CB3] text-sm sm:text-base rounded-md text-[#154CB3] bg-white hover:bg-[#154CB3]/10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
               >
                 Book Venue
               </button>
               <button
                 onClick={() => router.push("/manage")}
                 disabled={buttonsDisabled}
-                className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#154CB3] text-sm sm:text-base rounded-full text-white bg-[#154CB3] hover:bg-[#0d3a8a] hover:border-[#0d3a8a] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
+                className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#154CB3] text-sm sm:text-base rounded-md text-white bg-[#154CB3] hover:bg-[#0d3a8a] hover:border-[#0d3a8a] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
               >
                 Create Event &amp; Fest
               </button>
@@ -176,7 +176,7 @@ const Hero = () => {
               disabled={buttonsDisabled}
               className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#3D75BD] text-sm sm:text-base rounded-md text-[#063168] bg-white hover:bg-[#3D75BD]/10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
             >
-              Venue Dashboard
+              Venue Approvals
             </button>
           ) : (
             <button

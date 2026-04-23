@@ -224,7 +224,7 @@ export default function VenueDashboard() {
     if (authLoading) return;
     if (!session) { router.replace("/auth"); return; }
     const u = userData as any;
-    if (u && !u.is_vendor_manager && !u.is_masteradmin) { router.replace("/error"); return; }
+    if (u && !u.is_venue_manager && !u.is_masteradmin) { router.replace("/error"); return; }
     fetchQueue();
   }, [authLoading, session, userData]); // eslint-disable-line react-hooks/exhaustive-deps
 
