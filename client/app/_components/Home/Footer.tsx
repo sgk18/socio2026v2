@@ -107,14 +107,8 @@ export default function Footer() {
         </div>
         
         {/* Copyright */}
-        <div className="mt-8 pt-4 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center">
-          <p className="text-sm text-gray-600 mb-2 sm:mb-0">© {currentYear} SOCIO. All rights reserved.</p>
-          <div className="flex space-x-4">
-            <Link href="/about" className="text-sm text-gray-600 hover:text-[#154CB3]">About</Link>
-            <Link href="/terms" className="text-sm text-gray-600 hover:text-[#154CB3]">Terms</Link>
-            <Link href="/privacy" className="text-sm text-gray-600 hover:text-[#154CB3]">Privacy</Link>
-            <Link href="/about#feedback" className="text-sm text-gray-600 hover:text-[#154CB3]">Contact</Link>
-          </div>
+        <div className="mt-8 pt-4 border-t border-gray-200 flex justify-center items-center">
+          <p className="text-sm text-gray-600">© {currentYear} SOCIO. All rights reserved.</p>
         </div>
       </div>
     </footer>
