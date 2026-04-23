@@ -191,6 +191,172 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/caterers — any authenticated user with an organising-style role
+// Returns vendor list so organisers can pick a caterer to book.
+// Optional ?campus=<name> filters to vendors serving that campus.
+// ---------------------------------------------------------------------------
+router.get(
+  "/caterers",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const u = req.userInfo || {};
+      const hasRole =
+        u.is_organiser || u.is_masteradmin || u.is_hod || u.is_dean ||
+        u.is_cfo || u.is_accounts_office || u.is_venue_manager ||
+        u.is_it_support || u.is_campus_director || u.is_stalls || u.is_support;
+      if (!hasRole) {
+        return res.status(403).json({ error: "Insufficient role to view caterers" });
+      }
+
+      const { data, error } = await supabase
+        .from("catering_vendors")
+        .select("catering_id, catering_name, contact_details, campuses, location")
+        .order("catering_name", { ascending: true });
+      if (error) throw error;
+
+      let vendors = data || [];
+      const campus = (req.query.campus || "").trim();
+      if (campus) {
+        vendors = vendors.filter(v => {
+          const list = Array.isArray(v.campuses) ? v.campuses : [];
+          return list.length === 0 || list.includes(campus);
+        });
+      }
+
+      return res.json(vendors);
+    } catch (err) {
+      console.error("[Caterers] GET /caterers error:", err);
+      return res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/catering-bookings/mine — bookings the current user has submitted
+// ---------------------------------------------------------------------------
+router.get(
+  "/catering-bookings/mine",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const u = req.userInfo || {};
+      if (!u.email) return res.status(401).json({ error: "Unauthenticated" });
+
+      const { data: bookings, error } = await supabase
+        .from("catering_booking")
+        .select("*")
+        .eq("booked_by", u.email)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const vendorIds = Array.from(new Set((bookings || []).map(b => b.catering_id).filter(Boolean)));
+      const eventIds  = Array.from(new Set((bookings || []).map(b => b.event_id).filter(Boolean)));
+
+      const [vendorsResult, eventsResult] = await Promise.all([
+        vendorIds.length
+          ? supabase.from("catering_vendors").select("catering_id, catering_name, location").in("catering_id", vendorIds)
+          : Promise.resolve({ data: [] }),
+        eventIds.length
+          ? supabase.from("events").select("event_id, title, event_date").in("event_id", eventIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const vendorsById = new Map((vendorsResult.data || []).map(v => [v.catering_id, v]));
+      const eventsById  = new Map((eventsResult.data  || []).map(e => [e.event_id, e]));
+
+      const enriched = (bookings || []).map(b => ({
+        ...b,
+        catering_name:    b.catering_id ? vendorsById.get(b.catering_id)?.catering_name  || null : null,
+        catering_location:b.catering_id ? vendorsById.get(b.catering_id)?.location       || null : null,
+        event_title:      b.event_id    ? eventsById.get(b.event_id)?.title              || null : null,
+        event_date:       b.event_id    ? eventsById.get(b.event_id)?.event_date         || null : null,
+      }));
+
+      return res.json({ bookings: enriched });
+    } catch (err) {
+      console.error("[Caterers] GET /catering-bookings/mine error:", err);
+      return res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/catering-bookings — organiser creates a booking for a vendor
+// Body: { catering_id, event_id?, description?, contact_details? }
+// ---------------------------------------------------------------------------
+router.post(
+  "/catering-bookings",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const u = req.userInfo || {};
+      const hasRole =
+        u.is_organiser || u.is_masteradmin || u.is_hod || u.is_dean ||
+        u.is_cfo || u.is_accounts_office || u.is_venue_manager ||
+        u.is_it_support || u.is_campus_director || u.is_stalls || u.is_support;
+      if (!hasRole) {
+        return res.status(403).json({ error: "Insufficient role to create a catering booking" });
+      }
+
+      const { catering_id, event_id, description, contact_details } = req.body || {};
+      if (!catering_id || typeof catering_id !== "string") {
+        return res.status(400).json({ error: "catering_id is required" });
+      }
+
+      const { data: vendor, error: vendorErr } = await supabase
+        .from("catering_vendors")
+        .select("catering_id")
+        .eq("catering_id", catering_id)
+        .maybeSingle();
+      if (vendorErr) throw vendorErr;
+      if (!vendor) {
+        return res.status(404).json({ error: "Caterer not found" });
+      }
+
+      if (event_id) {
+        const { data: ev } = await supabase
+          .from("events")
+          .select("event_id")
+          .eq("event_id", event_id)
+          .maybeSingle();
+        if (!ev) {
+          return res.status(400).json({ error: "Selected event does not exist" });
+        }
+      }
+
+      const booking_id = `cb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+      const { data, error } = await supabase
+        .from("catering_booking")
+        .insert({
+          booking_id,
+          booked_by: u.email,
+          description: description?.trim() || null,
+          status: "pending",
+          event_id: event_id || null,
+          catering_id,
+          contact_details: contact_details || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return res.status(201).json({ booking: data });
+    } catch (err) {
+      console.error("[Caterers] POST /catering-bookings error:", err);
+      return res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/caterers — masteradmin only
 // ---------------------------------------------------------------------------
 router.post(
