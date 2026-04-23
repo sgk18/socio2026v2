@@ -31,6 +31,8 @@ interface EventData {
   organizers?: Array<{ name: string; email: string; phone: string }>;
   whatsappLink?: string;
   registrationDeadlineISO?: string | null;
+  eventDateISO?: string | null;
+  eventTimeRaw?: string | null;
   on_spot?: boolean;
   allow_outsiders?: boolean;
   custom_fields?: any[]; // Custom fields created by organizer
@@ -79,12 +81,23 @@ export default function Page() {
   const [userRegisteredEventIds, setUserRegisteredEventIds] = useState<
     string[]
   >([]);
+  const [userRegistrationIdMap, setUserRegistrationIdMap] = useState<Record<string, string>>({});
   const [loadingUserRegistrations, setLoadingUserRegistrations] =
     useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const isUserRegisteredForThisEvent = eventData
     ? userRegisteredEventIds.includes(eventData.id)
     : false;
+
+  const userRegistrationId = eventData ? (userRegistrationIdMap[eventData.id] ?? null) : null;
+
+  const isEventWithin24Hours = (() => {
+    if (!eventData?.eventDateISO) return false;
+    const timeStr = eventData.eventTimeRaw ? String(eventData.eventTimeRaw).slice(0, 5) : "00:00";
+    const eventStart = new Date(`${eventData.eventDateISO}T${timeStr}:00`);
+    return (eventStart.getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+  })();
   
   // Check if registration deadline has passed
   // null daysLeft means no deadline (open registration)
@@ -250,6 +263,8 @@ export default function Page() {
         transformedOrganizers.length > 0 ? transformedOrganizers : undefined,
       whatsappLink: foundEvent.whatsapp_invite_link || undefined,
       registrationDeadlineISO: foundEvent.registration_deadline,
+      eventDateISO: foundEvent.event_date || null,
+      eventTimeRaw: (foundEvent as any).event_time || null,
       on_spot:
         (foundEvent as any).on_spot === true ||
         (foundEvent as any).on_spot === 1 ||
@@ -409,10 +424,14 @@ export default function Page() {
           res.ok ? res.json() : Promise.resolve({ events: [] })
         )
         .then((data) => {
-          // Extract event_ids from events array
           const eventIds = (data.events || []).map((e: any) => e.event_id || e.id).filter(Boolean);
-          console.log('User registered event IDs:', eventIds);
           setUserRegisteredEventIds(eventIds);
+          const idMap: Record<string, string> = {};
+          (data.events || []).forEach((e: any) => {
+            const eid = e.event_id || e.id;
+            if (eid && e.registration_id) idMap[eid] = e.registration_id;
+          });
+          setUserRegistrationIdMap(idMap);
         })
         .catch((err) => {
           console.error('Error fetching user registrations:', err);
@@ -529,8 +548,11 @@ export default function Page() {
           body: JSON.stringify(payload),
         });
         if (response.ok) {
+          const regData = await response.json().catch(() => ({}));
           setShowSuccessModal(true);
           setUserRegisteredEventIds((prev) => [...prev, eventData.id]);
+          const regId = regData?.registration?.registration_id;
+          if (regId) setUserRegistrationIdMap(prev => ({ ...prev, [eventData.id]: regId }));
         } else {
           const errorData = await response.json();
           setRegistrationApiError(
@@ -556,6 +578,28 @@ export default function Page() {
         return;
       }
       router.push(`/event/${eventData.id}/register`);
+    }
+  };
+
+  const handleCancelRegistration = async () => {
+    if (!userRegistrationId || !session?.access_token || isCancelling) return;
+    setIsCancelling(true);
+    try {
+      const res = await fetch(`${API_URL}/api/registrations/self/${userRegistrationId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(body.error || "Failed to cancel registration.");
+        return;
+      }
+      setUserRegisteredEventIds(prev => prev.filter(id => id !== eventData?.id));
+      setUserRegistrationIdMap(prev => { const n = { ...prev }; if (eventData?.id) delete n[eventData.id]; return n; });
+    } catch {
+      alert("Network error. Please try again.");
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -789,14 +833,14 @@ export default function Page() {
               </p>
             </div>
           )}
-          {/* Show "Open Registration" for events without deadline */}
+          {/* Show "Registrations Open" for events without deadline */}
           {eventData.daysLeft === null && !isDeadlineOverForThisEvent && (
-            <div className="flex flex-col items-center bg-gradient-to-b from-[#22C55E] to-[#86EFAC] rounded-xl border-2 border-[#22C55E80] py-3 px-3 sm:px-4 sm:py-5 mb-4 sm:mb-0">
+            <div className="flex flex-col items-center bg-gradient-to-b from-[#15803D] to-[#22C55E] rounded-xl border-2 border-[#15803D80] py-3 px-3 sm:px-4 sm:py-5 mb-4 sm:mb-0">
               <p className="text-lg sm:text-xl font-bold m-0 text-black">
-                Open
+                Registrations
               </p>
               <p className="text-sm sm:text-base font-medium text-black">
-                Registration
+                Open
               </p>
             </div>
           )}
@@ -835,14 +879,28 @@ export default function Page() {
           </p>
         )}
         <div className="ml-auto flex flex-col items-end">
-          <button
-            onClick={handleRegistration}
-            disabled={buttonState.disabled}
-            className="bg-[#154CB3] cursor-pointer text-white py-2 sm:py-3 px-4 sm:px-6 rounded-full font-medium hover:bg-[#154cb3eb] transition-colors text-sm sm:text-base disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {buttonState.text}
-          </button>
-          {/* Error display removed from here - shown only at bottom of page for better visibility */}
+          {isUserRegisteredForThisEvent && userRegistrationId ? (
+            <button
+              onClick={isEventWithin24Hours ? undefined : handleCancelRegistration}
+              disabled={isCancelling || isEventWithin24Hours}
+              title={isEventWithin24Hours ? "Cannot cancel — event starts in less than 24 hours" : undefined}
+              className={`py-2 sm:py-3 px-4 sm:px-6 rounded-full font-medium transition-colors text-sm sm:text-base border ${
+                isEventWithin24Hours
+                  ? "border-gray-300 text-gray-400 bg-white cursor-not-allowed"
+                  : "border-red-400 text-red-500 bg-white hover:bg-red-50 cursor-pointer"
+              } disabled:opacity-60`}
+            >
+              {isCancelling ? "Cancelling…" : "Cancel Registration"}
+            </button>
+          ) : (
+            <button
+              onClick={handleRegistration}
+              disabled={buttonState.disabled}
+              className="bg-[#154CB3] cursor-pointer text-white py-2 sm:py-3 px-4 sm:px-6 rounded-full font-medium hover:bg-[#154cb3eb] transition-colors text-sm sm:text-base disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {buttonState.text}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1143,13 +1201,28 @@ export default function Page() {
                   </div>
                 )
               )}
-            <button
-              onClick={handleRegistration}
-              disabled={buttonState.disabled}
-              className="bg-[#154CB3] cursor-pointer text-white py-3 px-8 rounded-full font-semibold hover:bg-[#154cb3eb] transition-colors text-base disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {buttonState.text === "Register" ? "Register" : buttonState.text}
-            </button>
+            {isUserRegisteredForThisEvent && userRegistrationId ? (
+              <button
+                onClick={isEventWithin24Hours ? undefined : handleCancelRegistration}
+                disabled={isCancelling || isEventWithin24Hours}
+                title={isEventWithin24Hours ? "Cannot cancel — event starts in less than 24 hours" : undefined}
+                className={`py-3 px-8 rounded-full font-semibold transition-colors text-base border ${
+                  isEventWithin24Hours
+                    ? "border-gray-300 text-gray-400 bg-white cursor-not-allowed"
+                    : "border-red-400 text-red-500 bg-white hover:bg-red-50 cursor-pointer"
+                } disabled:opacity-60`}
+              >
+                {isCancelling ? "Cancelling…" : "Cancel Registration"}
+              </button>
+            ) : (
+              <button
+                onClick={handleRegistration}
+                disabled={buttonState.disabled}
+                className="bg-[#154CB3] cursor-pointer text-white py-3 px-8 rounded-full font-semibold hover:bg-[#154cb3eb] transition-colors text-base disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {buttonState.text === "Register" ? "Register" : buttonState.text}
+              </button>
+            )}
           </div>
         </div>
       </div>

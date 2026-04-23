@@ -142,9 +142,10 @@ interface MappedFestCardProps {
   baseUrl: string;
   isArchiveUpdating?: boolean;
   onArchiveToggle?: (festId: string, shouldArchive: boolean) => void;
+  isPendingApproval?: boolean;
 }
 
-const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveToggle }: MappedFestCardProps) => {
+const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveToggle, isPendingApproval = false }: MappedFestCardProps) => {
   const isPast = fest.closing_date ? new Date(fest.closing_date) < new Date() : false;
   const isArchived = fest.is_archived ?? false;
   const isDraft =
@@ -166,7 +167,7 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
         {(isDraft || isArchived) && (
           <div className="absolute inset-0 bg-white/65 flex items-center justify-center pointer-events-none">
             <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">
-              {isDraft ? "DRAFT" : "ARCHIVED"}
+              {isDraft ? (isPendingApproval ? "PENDING" : "DRAFT") : "ARCHIVED"}
             </span>
           </div>
         )}
@@ -174,7 +175,7 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
           <span
             className={`px-3 py-1.5 text-[10px] font-bold rounded-full tracking-wider shadow-sm flex items-center ${
               isDraft
-                ? "bg-slate-900 text-white"
+                ? isPendingApproval ? "bg-amber-500 text-white" : "bg-slate-900 text-white"
                 : isArchived
                   ? "bg-purple-600 text-white"
                   : isPast
@@ -182,7 +183,7 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
                     : "bg-white text-emerald-600"
             }`}
           >
-            {isDraft ? "DRAFT" : isArchived ? "ARCHIVED" : isPast ? "PAST" : "UPCOMING"}
+            {isDraft ? (isPendingApproval ? "PENDING APPROVALS" : "DRAFT") : isArchived ? "ARCHIVED" : isPast ? "PAST" : "UPCOMING"}
           </span>
         </div>
       </div>
@@ -278,6 +279,7 @@ const MappedEventCard = ({
   onToggleArchive,
   isArchiveActionLoading,
   authToken,
+  isPendingApproval,
 }: {
   event: ContextEvent;
   baseUrl: string;
@@ -287,11 +289,14 @@ const MappedEventCard = ({
   onToggleArchive: (eventId: string, shouldArchive: boolean) => void;
   isArchiveActionLoading: boolean;
   authToken?: string | null;
+  isPendingApproval?: boolean;
 }) => {
   const isPast = event.event_date ? new Date(event.event_date) < new Date() : false;
-  const statusLabel = isDraft ? "DRAFT" : isArchived ? "ARCHIVED" : isPast ? "PAST" : "UPCOMING";
+  const statusLabel = isDraft
+    ? (isPendingApproval ? "PENDING APPROVALS" : "DRAFT")
+    : isArchived ? "ARCHIVED" : isPast ? "PAST" : "UPCOMING";
   const statusClassName = isDraft
-    ? "bg-slate-900 text-white"
+    ? (isPendingApproval ? "bg-amber-500 text-white" : "bg-slate-900 text-white")
     : isArchived
       ? "bg-amber-100 text-amber-800"
       : isPast
@@ -311,7 +316,7 @@ const MappedEventCard = ({
         {(isDraft || isArchived) && (
           <div className="absolute inset-0 bg-white/65 flex items-center justify-center pointer-events-none">
             <span className="text-4xl sm:text-5xl font-black tracking-[0.25em] text-slate-800/70">
-              {isDraft ? "DRAFT" : "ARCHIVED"}
+              {isDraft ? (isPendingApproval ? "PENDING" : "DRAFT") : "ARCHIVED"}
             </span>
           </div>
         )}
@@ -431,6 +436,7 @@ export default function ManageDashboard() {
   const [festArchiveOverrides, setFestArchiveOverrides] = useState<Record<string, { is_archived: boolean; archived_at: string | null }>>({});
   const [festArchiveUpdatingIds, setFestArchiveUpdatingIds] = useState<Set<string>>(new Set());
   const [localFestArchivedIds, setLocalFestArchivedIds] = useState<Set<string>>(new Set());
+  const [approvalStatuses, setApprovalStatuses] = useState<Record<string, "pending_approvals" | "live">>({});
 
   const normalizeEmail = (value: string | null | undefined) =>
     String(value || "").trim().toLowerCase();
@@ -634,6 +640,22 @@ export default function ManageDashboard() {
     fetchLiveEvents();
   }, [authToken, contextAllEvents]);
 
+
+  // Fetch approval statuses for all draft fests and events
+  useEffect(() => {
+    if (!authToken) return;
+    const draftFestIds = fests.filter(f => f.is_draft).map(f => f.fest_id);
+    const draftEventIds = liveEvents.filter(e => (e as any).is_draft).map(e => e.event_id);
+    const allIds = [...draftFestIds, ...draftEventIds];
+    if (!allIds.length) return;
+
+    fetch(`${API_URL}/api/approvals/statuses?ids=${allIds.join(",")}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setApprovalStatuses(data))
+      .catch(() => {});
+  }, [authToken, fests, liveEvents]); // eslint-disable-line
 
   // Permissions & Campus logic for Events
   const getValidDate = (date: string | null | undefined) => {
@@ -1392,6 +1414,7 @@ export default function ManageDashboard() {
                           baseUrl="edit/fest"
                           isArchiveUpdating={festArchiveUpdatingIds.has(fest.fest_id)}
                           onArchiveToggle={handleToggleArchiveFest}
+                          isPendingApproval={approvalStatuses[fest.fest_id] === "pending_approvals"}
                         />
                       );
                     })}
@@ -1430,6 +1453,7 @@ export default function ManageDashboard() {
                             onToggleArchive={handleToggleArchive}
                             isArchiveActionLoading={archiveUpdatingIds.has(event.event_id)}
                             authToken={authToken}
+                            isPendingApproval={approvalStatuses[event.event_id] === "pending_approvals"}
                           />
                         );
                     })}

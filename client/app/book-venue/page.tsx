@@ -180,8 +180,14 @@ export default function BookVenuePage() {
 
   useEffect(() => {
     if (!authLoading && !session) router.replace("/auth");
-    if (!authLoading && session && userData && !userData.is_organiser && !userData.is_masteradmin) {
-      router.replace("/error");
+    if (!authLoading && session && userData) {
+      // Block only pure students — anyone with any role can access
+      const hasAnyRole =
+        userData.is_organiser || userData.is_masteradmin || userData.is_support ||
+        userData.is_hod || userData.is_dean || userData.is_cfo ||
+        userData.is_campus_director || userData.is_accounts_office ||
+        userData.is_it_support || userData.is_vendor_manager || userData.is_stalls;
+      if (!hasAnyRole) router.replace("/error");
     }
   }, [authLoading, session, userData, router]);
 
@@ -273,21 +279,25 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
   const [loadingCal,    setLoadingCal]    = useState(false);
   const [modal,         setModal]         = useState<{ date: string; start_time: string; end_time: string } | null>(null);
 
-  // Load campuses
+  // Load campuses from DB; pre-select profile campus; only masteradmin with multiple campuses can switch
   useEffect(() => {
-    if (!session?.access_token) return;
+    if (!session?.access_token || !userData) return;
     fetch(`${API_URL}/api/venues/campuses`, { headers: { Authorization: `Bearer ${session.access_token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setCampuses(d?.campuses?.length ? d.campuses : [...christCampuses].sort()))
-      .catch(() => setCampuses([...christCampuses].sort()));
-  }, [session?.access_token]);
+      .then(r => r.ok ? r.json() : { campuses: [] })
+      .then(d => {
+        const dbCampuses: string[] = d?.campuses || [];
+        setCampuses(dbCampuses);
+        const profileCampus = userData?.campus;
+        if (profileCampus && dbCampuses.includes(profileCampus)) {
+          setSelectedCampus(profileCampus);
+        } else if (dbCampuses.length === 1) {
+          setSelectedCampus(dbCampuses[0]);
+        }
+      })
+      .catch(() => {});
+  }, [session?.access_token, userData?.campus, userData?.is_masteradmin]);
 
-  // Prefill campus from profile
-  useEffect(() => {
-    if (userData?.campus && !selectedCampus && campuses.includes(userData.campus)) {
-      setSelectedCampus(userData.campus);
-    }
-  }, [userData?.campus, campuses]);
+  const canSwitchCampus = Boolean(userData?.is_masteradmin && campuses.length > 1);
 
   // Campus → Blocks
   useEffect(() => {
@@ -371,7 +381,8 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
             <select
               value={selectedCampus}
               onChange={e => setSelectedCampus(e.target.value)}
-              className={selectCls}
+              disabled={!canSwitchCampus}
+              className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
             >
               <option value="">Select campus…</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
@@ -706,10 +717,20 @@ function BookingModal({
   const [submitting, setSubmitting] = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
-  const hcNum = parseInt(headcount || "0", 10);
+  const headcountText = headcount.trim();
+  const hcNum = headcountText ? parseInt(headcountText, 10) : null;
+  const invalidHeadcount =
+    headcountText.length > 0 &&
+    (Number.isNaN(hcNum) || (hcNum ?? 0) <= 0);
   const validTimes = toMinutes(endTime) > toMinutes(startTime);
-  const overCapacity = venue.capacity != null && hcNum > 0 && hcNum > venue.capacity;
-  const canSubmit = !!date && validTimes && title.trim().length >= 3 && hcNum > 0 && !overCapacity && !submitting;
+  const overCapacity = venue.capacity != null && hcNum != null && hcNum > venue.capacity;
+  const canSubmit =
+    !!date &&
+    validTimes &&
+    title.trim().length >= 3 &&
+    !invalidHeadcount &&
+    !overCapacity &&
+    !submitting;
 
   async function submit() {
     if (!canSubmit) return;
@@ -724,7 +745,7 @@ function BookingModal({
           start_time: startTime,
           end_time: endTime,
           title: title.trim(),
-          headcount: hcNum || null,
+          headcount: hcNum,
           setup_notes: notes.trim() || null,
           entity_type: "standalone",
         }),
@@ -732,7 +753,8 @@ function BookingModal({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 409 && body.conflict) {
-          setError(`Conflicts with existing booking (${body.conflict.start_time}–${body.conflict.end_time}).`);
+          const conflictLabel = body.conflict.title || `${body.conflict.start_time}–${body.conflict.end_time}`;
+          setError(`This slot is already booked for "${conflictLabel}". Please choose a different time.`);
         } else {
           setError(body.error || "Failed to submit.");
         }
@@ -788,7 +810,7 @@ function BookingModal({
             </FormField>
           </div>
 
-          <FormField label={`Headcount${venue.capacity != null ? ` (max ${venue.capacity})` : ""}`}>
+          <FormField label={`Headcount${venue.capacity != null ? ` (max ${venue.capacity})` : ""} (optional)`}>
             <input
               type="number" min={1}
               value={headcount}
@@ -796,6 +818,9 @@ function BookingModal({
               className={inputCls}
               placeholder="Expected attendees"
             />
+            {invalidHeadcount && (
+              <p className="text-[11px] text-red-600 mt-1">Headcount must be greater than 0 if provided.</p>
+            )}
             {overCapacity && (
               <p className="text-[11px] text-red-600 mt-1">Exceeds venue capacity of {venue.capacity}</p>
             )}
@@ -981,16 +1006,23 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
   const [picked,   setPicked]   = useState<Venue | null>(null);
 
   useEffect(() => {
-    if (!session?.access_token) return;
+    if (!session?.access_token || !userData) return;
     fetch(`${API_URL}/api/venues/campuses`, { headers: { Authorization: `Bearer ${session.access_token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setCampuses(d?.campuses?.length ? d.campuses : [...christCampuses].sort()))
-      .catch(() => setCampuses([...christCampuses].sort()));
-  }, [session?.access_token]);
+      .then(r => r.ok ? r.json() : { campuses: [] })
+      .then(d => {
+        const dbCampuses: string[] = d?.campuses || [];
+        setCampuses(dbCampuses);
+        const profileCampus = userData?.campus;
+        if (profileCampus && dbCampuses.includes(profileCampus)) {
+          setCampus(profileCampus);
+        } else if (dbCampuses.length === 1) {
+          setCampus(dbCampuses[0]);
+        }
+      })
+      .catch(() => {});
+  }, [session?.access_token, userData?.campus, userData?.is_masteradmin]);
 
-  useEffect(() => {
-    if (userData?.campus && !campus && campuses.includes(userData.campus)) setCampus(userData.campus);
-  }, [userData?.campus, campuses]);
+  const canSwitchCampus = Boolean(userData?.is_masteradmin && campuses.length > 1);
 
   async function search() {
     if (!session?.access_token || !campus) return;
@@ -1050,7 +1082,12 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
         <div className="grid grid-cols-6 gap-3 items-end max-lg:grid-cols-3 max-md:grid-cols-2">
           <FormField label="Campus">
-            <select value={campus} onChange={e => setCampus(e.target.value)} className={selectCls}>
+            <select
+              value={campus}
+              onChange={e => setCampus(e.target.value)}
+              disabled={!canSwitchCampus}
+              className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
+            >
               <option value="">Select…</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>

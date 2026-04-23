@@ -225,6 +225,21 @@ const DiscoverPageContent = () => {
     });
   }, [filteredEvents, isLoadingEventsFromContext]);
 
+  const [approvalStatuses, setApprovalStatuses] = useState<Record<string, "pending_approvals" | "live">>({});
+  useEffect(() => {
+    if (!isAdminOrOrganizer || !session?.access_token) return;
+    const draftFestIds = allFests.filter(f => f.is_draft).map(f => f.fest_id);
+    const draftEventIds = (allEvents || []).filter((e: any) => e.is_draft).map((e: any) => e.event_id);
+    const allIds = [...draftFestIds, ...draftEventIds];
+    if (!allIds.length) return;
+    fetch(`${API_URL}/api/approvals/statuses?ids=${allIds.join(",")}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setApprovalStatuses(data))
+      .catch(() => {});
+  }, [isAdminOrOrganizer, session?.access_token, allFests, allEvents]); // eslint-disable-line
+
   // Use centres from centralized data, show first 3 on Discover page
   const displayCentres = allCentres.slice(0, 3).map(centre => ({
     id: centre.id,
@@ -463,6 +478,7 @@ const DiscoverPageContent = () => {
                   archivedVisualMode="muted"
                   onArchiveToggle={handleToggleArchive}
                   archiveLoadingIds={archiveUpdatingIds}
+                  approvalStatuses={approvalStatuses}
                 />
               ) : (
                 <div className="my-8 p-6 bg-gray-50 rounded-lg text-center text-gray-500">
@@ -513,6 +529,7 @@ const DiscoverPageContent = () => {
                   })}
                   showAll={true}
                   baseUrl="fest"
+                  approvalStatuses={approvalStatuses}
                 />
               ) : (
                 <div className="my-8 p-6 bg-gray-50 rounded-lg text-center text-gray-500">
@@ -551,6 +568,7 @@ const DiscoverPageContent = () => {
                 archivedVisualMode="muted"
                 onArchiveToggle={handleToggleArchive}
                 archiveLoadingIds={archiveUpdatingIds}
+                approvalStatuses={approvalStatuses}
               />
             ) : (
                 <div className="my-8 p-6 bg-gray-50 rounded-lg text-center text-gray-500">

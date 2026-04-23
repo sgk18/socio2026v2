@@ -21,6 +21,7 @@ interface FestsSectionProps {
   fests: Fest[];
   showAll?: boolean;
   baseUrl?: string;
+  approvalStatuses?: Record<string, "pending_approvals" | "live">;
 }
 
 export const FestsSection = ({
@@ -28,6 +29,7 @@ export const FestsSection = ({
   fests,
   showAll = false,
   baseUrl = "fest",
+  approvalStatuses = {},
 }: FestsSectionProps) => {
   return (
     <div className="min-w-0">
@@ -45,6 +47,7 @@ export const FestsSection = ({
               baseUrl={baseUrl}
               isArchived={Boolean(fest.is_archived)}
               isDraft={Boolean(fest.is_draft)}
+              isPendingApproval={approvalStatuses[String(fest.fest_id)] === "pending_approvals"}
             />
           </div>
         ))}

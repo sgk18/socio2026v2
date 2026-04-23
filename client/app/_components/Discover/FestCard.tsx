@@ -11,6 +11,7 @@ interface FestCardProps {
   baseUrl?: string;
   isArchived?: boolean;
   isDraft?: boolean;
+  isPendingApproval?: boolean;
 }
 
 export const FestCard = ({
@@ -23,6 +24,7 @@ export const FestCard = ({
   baseUrl = "fest",
   isArchived = false,
   isDraft = false,
+  isPendingApproval = false,
 }: FestCardProps) => {
   const formattedTitle = (title || "")
     .toLowerCase()
@@ -33,7 +35,7 @@ export const FestCard = ({
   // Use id if available, otherwise fallback to title slug
   const slug = id || formattedTitle;
 
-  const overlayLabel = isDraft ? "DRAFT" : isArchived ? "ARCHIVED" : null;
+  const overlayLabel = isDraft ? (isPendingApproval ? "PENDING" : "DRAFT") : isArchived ? "ARCHIVED" : null;
 
   return (
     <Link href={`/${baseUrl}/${slug}`} className="block w-full h-full min-w-0">

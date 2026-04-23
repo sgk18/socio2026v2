@@ -122,6 +122,7 @@ type Event = {
   registration_count?: number;
   fest?: string | null;
   is_archived?: boolean | null;
+  is_draft?: boolean | null;
   archived_at?: string | null;
   archived_by?: string | null;
   archived_effective?: boolean | null;
@@ -259,6 +260,8 @@ export default function MasterAdminPage() {
   const [festSortKey, setFestSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
   const [festSortDir, setFestSortDir] = useState<"asc" | "desc">("desc");
 
+  const [approvalStatuses, setApprovalStatuses] = useState<Record<string, "pending_approvals" | "live">>({});
+
   // Club management state
   const [clubs, setClubs] = useState<ClubRecord[]>([]);
   const [clubPagination, setClubPagination] = useState<PaginationState>(createDefaultPagination());
@@ -288,6 +291,7 @@ export default function MasterAdminPage() {
   const [venues,           setVenues]           = useState<VenueRow[]>([]);
   const [venuesLoading,    setVenuesLoading]    = useState(false);
   const [venueForm,        setVenueForm]        = useState({ campus: "", name: "", capacity: "", location: "", is_approval_needed: false });
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [venueFormError,   setVenueFormError]   = useState<string | null>(null);
   const [venueSubmitting,  setVenueSubmitting]  = useState(false);
   const [deleteVenueId,    setDeleteVenueId]    = useState<string | null>(null);
@@ -510,6 +514,19 @@ export default function MasterAdminPage() {
     }
   }, [activeTab, isMasterAdmin, authToken]);
 
+  // Fetch existing location suggestions when campus changes (add form) or edit modal opens
+  const fetchLocationSuggestions = (campus: string) => {
+    if (!campus || !authToken) { setLocationSuggestions([]); return; }
+    fetch(`${API_URL}/api/venues/blocks?campus=${encodeURIComponent(campus)}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : { blocks: [] })
+      .then(d => setLocationSuggestions(Array.isArray(d.blocks) ? d.blocks : []))
+      .catch(() => setLocationSuggestions([]));
+  };
+  useEffect(() => { fetchLocationSuggestions(venueForm.campus); }, [venueForm.campus, authToken]);
+  useEffect(() => { if (editingVenue?.campus) fetchLocationSuggestions(editingVenue.campus); }, [editingVenue?.campus]);
+
   useEffect(() => {
     if (activeTab !== "venues") {
       setSelectedVenueForBookings(null);
@@ -536,6 +553,14 @@ export default function MasterAdminPage() {
     const isArchived = event.archived_effective === true || event.is_archived === true;
     if (isArchived) {
       return { label: "Archived", color: "bg-amber-100 text-amber-700" };
+    }
+
+    const isDraft = Boolean(event.is_draft);
+    if (isDraft) {
+      if (approvalStatuses[event.event_id] === "pending_approvals") {
+        return { label: "Pending Approvals", color: "bg-amber-100 text-amber-700" };
+      }
+      return { label: "Draft", color: "bg-slate-100 text-slate-700" };
     }
 
     const now = new Date();
@@ -598,6 +623,20 @@ export default function MasterAdminPage() {
     if (!isMasterAdmin || !authToken || activeTab !== "clubs") return;
     fetchClubs();
   }, [activeTab, isMasterAdmin, authToken, clubPage, debouncedClubSearch, clubStatusFilter, clubSortKey, clubSortDir]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    const draftEventIds = events.filter(e => e.is_draft).map(e => e.event_id);
+    const draftFestIds = fests.filter((f: any) => f.is_draft).map((f: any) => f.fest_id);
+    const allIds = [...draftEventIds, ...draftFestIds];
+    if (!allIds.length) return;
+    fetch(`${API_URL}/api/approvals/statuses?ids=${allIds.join(",")}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setApprovalStatuses(prev => ({ ...prev, ...data })))
+      .catch(() => {});
+  }, [authToken, events, fests]); // eslint-disable-line
 
   useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "roles") return;
@@ -1465,8 +1504,19 @@ export default function MasterAdminPage() {
         {activeTab === "venues" && (
           <div className="space-y-6">
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-1">Venue Management</h2>
-              <p className="text-sm text-gray-500">Add, edit, or remove campus venues. Organisers see these when booking after approval.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-1">Venue Management</h2>
+                  <p className="text-sm text-gray-500">Add, edit, or remove campus venues. Organisers see these when booking after approval.</p>
+                </div>
+                <Link
+                  href="/book-venue"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#154cb3] text-white font-semibold rounded-full hover:bg-[#124099] transition-colors shadow-sm border-2 border-[#154cb3] text-sm self-start sm:self-auto"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Book Venue
+                </Link>
+              </div>
             </div>
 
             {/* Add venue form */}
@@ -1513,11 +1563,20 @@ export default function MasterAdminPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Location / Block</label>
                   <input
                     type="text"
+                    list="venue-location-suggestions"
                     value={venueForm.location}
                     onChange={e => setVenueForm(f => ({ ...f, location: e.target.value }))}
                     placeholder="e.g. Block A, Ground Floor"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
+                  <datalist id="venue-location-suggestions">
+                    {locationSuggestions.map(l => <option key={l} value={l} />)}
+                  </datalist>
+                  {locationSuggestions.length > 0 && (
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Existing: {locationSuggestions.join(" · ")}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 sm:py-3.5">
@@ -3198,11 +3257,17 @@ export default function MasterAdminPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Location / Block</label>
                     <input
                       type="text"
+                      list="venue-location-suggestions"
                       value={editVenueForm.location}
                       onChange={e => setEditVenueForm(f => ({ ...f, location: e.target.value }))}
                       placeholder="e.g. Block A, GF"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                     />
+                    {locationSuggestions.length > 0 && (
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Existing: {locationSuggestions.join(" · ")}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">

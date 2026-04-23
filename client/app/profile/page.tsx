@@ -13,6 +13,7 @@ interface DisplayableEvent {
   event_id: string;
   name: string;
   date: string;
+  rawDate: string;
   department: string;
   status: "upcoming" | "completed";
 }
@@ -88,6 +89,38 @@ const StudentProfile = () => {
     useState(true);
   const [showCampusDetect, setShowCampusDetect] = useState(false);
   const [activeQR, setActiveQR] = useState<ActiveQR | null>(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
+
+  const isEventSoon = (rawDate: string) => {
+    if (!rawDate) return false;
+    const eventStart = new Date(rawDate + "T00:00:00");
+    return (eventStart.getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+  };
+
+  const handleCancelRegistration = async (event: DisplayableEvent) => {
+    setCancellingId(event.registration_id);
+    setCancelConfirmId(null);
+    try {
+      const res = await fetch(`${API_URL}/api/registrations/self/${event.registration_id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(body.error || "Failed to cancel registration.");
+        return;
+      }
+      setRegisteredEventsList(prev => prev.filter(e => e.registration_id !== event.registration_id));
+      setStudent(prev => ({ ...prev, registeredEvents: Math.max(0, prev.registeredEvents - 1) }));
+    } catch {
+      alert("Network error. Please try again.");
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   useEffect(() => {
     if (userData) {
@@ -160,9 +193,10 @@ const StudentProfile = () => {
               return {
                 id: event.id,
                 registration_id: event.registration_id || event.id,
-                event_id: event.event_id || event.id, // fallback to id if event_id not available
+                event_id: event.event_id || event.id,
                 name: event.name,
                 date: formattedDate,
+                rawDate: event.date,
                 department: event.department,
                 status: eventStatus,
               };
@@ -248,32 +282,71 @@ const StudentProfile = () => {
     }
   };
 
-  if (!userData) {
-    if (isLoading) {
-      return (
-        <div className="min-h-screen bg-white flex items-center justify-center">
-          <LoadingIndicator label="Loading profile" />
+  // Show skeleton while auth is loading OR session exists but userData hasn't arrived yet
+  if (isLoading || (session && !userData)) {
+    return (
+      <div className="min-h-screen bg-white animate-pulse">
+        {/* Header */}
+        <div className="bg-[#063168]">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+            <div className="h-4 w-32 bg-white/20 rounded mb-6" />
+            <div className="h-8 w-48 bg-white/20 rounded" />
+          </div>
         </div>
-      );
-    }
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-4 py-6 sm:py-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+            {/* Left card */}
+            <div className="md:col-span-1">
+              <div className="bg-white rounded-xl border-2 border-gray-100 overflow-hidden">
+                <div className="bg-[#063168]/10 p-8 flex flex-col items-center gap-3">
+                  <div className="w-28 h-28 rounded-full bg-gray-200" />
+                  <div className="h-5 w-36 bg-gray-200 rounded" />
+                  <div className="h-4 w-24 bg-gray-200 rounded" />
+                </div>
+                <div className="p-6 space-y-4">
+                  {[120, 100, 140, 110, 90].map((w, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded bg-gray-200 flex-shrink-0" />
+                      <div className="h-4 bg-gray-200 rounded" style={{ width: w }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Right panel */}
+            <div className="md:col-span-2 space-y-4">
+              <div className="bg-white rounded-xl border-2 border-gray-100 p-6">
+                <div className="h-5 w-48 bg-gray-200 rounded mb-6" />
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-gray-200 flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-100 rounded w-1/2" />
+                    </div>
+                    <div className="h-6 w-16 bg-gray-200 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Truly unauthenticated — middleware should have redirected, but just in case
+  if (!userData) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-gray-600 text-lg">Unable to load your profile.</p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => router.refresh()}
-              className="px-5 py-2 bg-[#063168] text-white rounded-lg hover:bg-[#063168]/90 transition"
-            >
-              Try Again
-            </button>
-            <Link
-              href="/Discover"
-              className="px-5 py-2 border border-[#063168] text-[#063168] rounded-lg hover:bg-gray-50 transition"
-            >
-              Back to Discover
-            </Link>
-          </div>
+          <p className="text-gray-500 text-base">Session expired. Please sign in again.</p>
+          <Link
+            href="/auth"
+            className="inline-block px-5 py-2 bg-[#063168] text-white rounded-lg hover:bg-[#063168]/90 transition"
+          >
+            Sign In
+          </Link>
         </div>
       </div>
     );
@@ -628,6 +701,39 @@ const StudentProfile = () => {
                             {event.status.charAt(0).toUpperCase() +
                               event.status.slice(1)}
                           </span>
+                          {event.status === "upcoming" && (
+                            cancelConfirmId === event.registration_id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleCancelRegistration(event)}
+                                  disabled={cancellingId === event.registration_id}
+                                  className="text-xs px-2 py-0.5 rounded-full bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
+                                >
+                                  {cancellingId === event.registration_id ? "…" : "Yes"}
+                                </button>
+                                <button
+                                  onClick={() => setCancelConfirmId(null)}
+                                  className="text-xs px-2 py-0.5 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-50"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                title={isEventSoon(event.rawDate) ? "Cannot cancel — event starts in less than 24 hours" : "Cancel registration"}
+                                disabled={isEventSoon(event.rawDate) || cancellingId === event.registration_id}
+                                onClick={() => !isEventSoon(event.rawDate) && setCancelConfirmId(event.registration_id)}
+                                className={`w-6 h-6 rounded-full flex items-center justify-center text-sm transition-colors text-red-400 ${
+                                  isEventSoon(event.rawDate)
+                                    ? "opacity-40 cursor-not-allowed"
+                                    : "hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                                }`}
+                              >
+                                ✕
+                              </button>
+                            )
+                          )}
                         </div>
                       </div>
                     ))
