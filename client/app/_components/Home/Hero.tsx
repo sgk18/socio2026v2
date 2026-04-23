@@ -156,7 +156,7 @@ const Hero = () => {
           ) : session && isOrganiser ? (
             <>
               <button
-                onClick={() => router.push("/book-venue")}
+                onClick={() => router.push("/bookvenue")}
                 disabled={buttonsDisabled}
                 className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#154CB3] text-sm sm:text-base rounded-full text-[#154CB3] bg-white hover:bg-[#154CB3]/10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
               >
