@@ -195,7 +195,7 @@ export default function BookCateringPage() {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then(r => r.ok ? r.json() : {})
-      .then(d => {
+      .then((d: any) => {
         const all: MyFest[] = Array.isArray(d.fests) ? d.fests : (Array.isArray(d) ? d : []);
         setMyFests(all.filter((f: any) =>
           (f.created_by || "").toLowerCase() === userEmail ||
