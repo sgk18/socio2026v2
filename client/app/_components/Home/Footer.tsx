@@ -112,9 +112,8 @@ export default function Footer() {
         </div>
 
         {/* Copyright */}
-        <div className="mt-14 pt-6 border-t border-white/15 flex flex-col sm:flex-row justify-between items-center gap-2">
+        <div className="mt-14 pt-6 border-t border-white/15 flex justify-center items-center">
           <p className="text-sm text-white/50">© {currentYear} SOCIO. All rights reserved.</p>
-          <p className="text-sm text-white/50">Made on campus, in Bangalore.</p>
         </div>
       </div>
     </footer>
