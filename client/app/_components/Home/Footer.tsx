@@ -8,7 +8,7 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="w-full bg-[#063168] pt-12 pb-6 px-4">
+    <footer className="w-full bg-gradient-to-b from-[#063168] to-[#3D75BD] pt-12 pb-6 px-4">
       <div className="max-w-7xl mx-auto">
 
         {/* Main 4-column grid */}
