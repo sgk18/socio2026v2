@@ -1321,7 +1321,7 @@ export default function ManageDashboard() {
               </button>
             </Link>
             <Link href="/bookstall">
-              <button className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#154cb3] font-semibold border-2 border-[#154cb3] rounded-full hover:bg-blue-50 transition-colors shadow-sm text-sm">
+              <button className="flex items-center gap-2 px-4 py-2.5 bg-[#154cb3] text-white font-semibold border-2 border-[#154cb3] rounded-full hover:bg-[#1240a0] transition-colors shadow-sm text-sm">
                 <Store className="w-4 h-4" /> Book Stalls
               </button>
             </Link>

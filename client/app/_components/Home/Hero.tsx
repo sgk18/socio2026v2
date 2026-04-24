@@ -210,7 +210,7 @@ const Hero = () => {
             </button>
           ) : session && isItSupport ? (
             <button
-              onClick={() => router.push("/it-dashboard")}
+              onClick={() => router.push("/it")}
               disabled={buttonsDisabled}
               className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#3D75BD] text-sm sm:text-base rounded-md text-[#063168] bg-white hover:bg-[#3D75BD]/10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
             >

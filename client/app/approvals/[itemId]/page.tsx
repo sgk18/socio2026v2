@@ -494,10 +494,24 @@ export default function ApprovalsPage() {
                   {[...approval.action_log].reverse().map((entry, i) => (
                     <li key={i} className="ml-4">
                       <span className="absolute -left-3 mt-0.5 rounded-full bg-white p-0.5">
-                        <StatusIcon status={entry.action === "approve" ? "approved" : "rejected"} className="h-4 w-4" />
+                        <StatusIcon
+                          status={
+                            entry.action === "approve"
+                              ? "approved"
+                              : entry.action === "return_for_revision"
+                              ? "pending"
+                              : "rejected"
+                          }
+                          className="h-4 w-4"
+                        />
                       </span>
                       <p className="text-sm font-medium text-gray-900">
-                        {entry.step.toUpperCase()} — {entry.action === "approve" ? "Approved" : "Rejected"}
+                        {entry.step.toUpperCase()} —{" "}
+                        {entry.action === "approve"
+                          ? "Approved"
+                          : entry.action === "return_for_revision"
+                          ? "Returned for Revision"
+                          : "Declined"}
                         {entry.is_override && (
                           <span className="ml-2 text-xs bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Override</span>
                         )}

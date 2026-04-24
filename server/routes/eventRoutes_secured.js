@@ -457,7 +457,8 @@ router.get("/", optionalAuth, checkRoleExpiration, async (req, res) => {
 });
 
 // ─── IT REQUESTS DASHBOARD ────────────────────────────────────────────────────
-// Returns events that have an IT support request, filtered by the IT manager's campus.
+// Returns events that have an IT support request AND whose blocking approval
+// stages (Stage 1) are all approved/skipped — i.e. phase 1 is complete.
 
 router.get(
   "/it-requests",
@@ -471,24 +472,178 @@ router.get(
         return res.status(403).json({ error: "IT Support role required." });
       }
 
-      let query = supabase
+      // 1. Fetch events with an IT description
+      let eventsQuery = supabase
         .from("events")
-        .select("event_id, title, event_date, venue, campus_hosted_at, it_description, organizing_dept, organizing_school, created_by, created_at, is_draft")
-        .not("it_description", "is", null);
+        .select("event_id, title, event_date, venue, campus_hosted_at, it_info, organizing_dept, organizing_school, created_by, created_at, is_draft")
+        .not("it_info", "is", null);
 
       if (user.is_it_support && !user.is_masteradmin && user.campus) {
-        query = query.eq("campus_hosted_at", user.campus);
+        eventsQuery = eventsQuery.eq("campus_hosted_at", user.campus);
       }
 
-      query = query.order("created_at", { ascending: false });
+      eventsQuery = eventsQuery.order("created_at", { ascending: false });
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data: events, error: eventsError } = await eventsQuery;
+      if (eventsError) throw eventsError;
+      if (!events || events.length === 0) return res.json({ requests: [] });
 
-      return res.json({ requests: data || [] });
+      // 2. Fetch approval records for those events
+      const eventIds = events.map((e) => e.event_id);
+      const { data: approvals, error: approvalsError } = await supabase
+        .from("approvals")
+        .select("event_or_fest_id, stages")
+        .in("event_or_fest_id", eventIds)
+        .eq("type", "event");
+
+      if (approvalsError) throw approvalsError;
+
+      // Build a lookup: eventId → stages array
+      const approvalMap = {};
+      for (const a of approvals || []) {
+        approvalMap[a.event_or_fest_id] = a.stages || [];
+      }
+
+      // 3. Only surface events where all blocking stages are approved/skipped
+      const phase1Complete = (stages) =>
+        stages
+          .filter((s) => s.blocking)
+          .every((s) => s.status === "approved" || s.status === "skipped");
+
+      const ready = events.filter((e) => {
+        const stages = approvalMap[e.event_id];
+        // No approval record → no blocking gates, so allow through
+        if (!stages) return true;
+        return phase1Complete(stages);
+      });
+
+      return res.json({ requests: ready });
     } catch (error) {
       console.error("Error fetching IT requests:", error);
       return res.status(500).json({ error: "Failed to fetch IT requests." });
+    }
+  }
+);
+
+// ─── IT ACTION ────────────────────────────────────────────────────────────────
+// IT support person approves / rejects / returns for revision an IT request.
+// Updates events.it_info, patches the IT stage in approvals.stages, notifies organizer.
+router.patch(
+  "/:eventId/it-action",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const { action, note } = req.body;
+      const user = req.userInfo;
+
+      if (!user.is_it_support && !user.is_masteradmin) {
+        return res.status(403).json({ error: "IT Support role required." });
+      }
+
+      const VALID_ACTIONS = ["approve", "reject", "return_for_revision"];
+      if (!VALID_ACTIONS.includes(action)) {
+        return res.status(400).json({ error: "action must be 'approve', 'reject', or 'return_for_revision'" });
+      }
+
+      const { data: event, error: eventErr } = await supabase
+        .from("events")
+        .select("event_id, title, it_info, created_by")
+        .eq("event_id", eventId)
+        .single();
+
+      if (eventErr || !event) return res.status(404).json({ error: "Event not found." });
+      if (!event.it_info) return res.status(400).json({ error: "This event has no IT request." });
+
+      const statusMap = {
+        approve:              "approved",
+        reject:               "declined",
+        return_for_revision:  "returned_for_revision",
+      };
+
+      const updatedItInfo = {
+        ...event.it_info,
+        status:       statusMap[action],
+        note:         note || null,
+        actioned_by:  user.email,
+        actioned_at:  new Date().toISOString(),
+      };
+
+      const { error: updateErr } = await supabase
+        .from("events")
+        .update({ it_info: updatedItInfo })
+        .eq("event_id", eventId);
+
+      if (updateErr) throw updateErr;
+
+      // Patch the IT operational stage in the approvals record (if one exists)
+      const { data: approvalRecord } = await supabase
+        .from("approvals")
+        .select("*")
+        .eq("event_or_fest_id", eventId)
+        .eq("type", "event")
+        .maybeSingle();
+
+      if (approvalRecord) {
+        const stages = approvalRecord.stages || [];
+        const itStageIdx = stages.findIndex(s => s.role === "it");
+
+        // return_for_revision keeps the approval stage "pending"; approve/reject update it
+        const approvalStageStatus = action === "approve" ? "approved" : action === "reject" ? "rejected" : "pending";
+        const approvedBy = action !== "return_for_revision" ? (user.name || user.email) : null;
+
+        const newStages = itStageIdx >= 0
+          ? stages.map((s, idx) =>
+              idx === itStageIdx ? { ...s, status: approvalStageStatus, approved_by: approvedBy } : s
+            )
+          : stages;
+
+        const logEntry = {
+          step_index: itStageIdx,
+          step:       "it",
+          action,
+          by:         user.name || user.email,
+          byEmail:    user.email,
+          note:       note || null,
+          at:         new Date().toISOString(),
+        };
+
+        await supabase
+          .from("approvals")
+          .update({
+            stages:      newStages,
+            action_log:  [...(approvalRecord.action_log || []), logEntry],
+            updated_at:  new Date().toISOString(),
+          })
+          .eq("id", approvalRecord.id);
+      }
+
+      // Notify the event organizer
+      if (event.created_by) {
+        const actionLabels = {
+          approve:             "approved",
+          reject:              "declined",
+          return_for_revision: "returned for revision",
+        };
+        await supabase.from("notifications").insert({
+          user_email:  event.created_by,
+          title:       `IT Support — ${action === "approve" ? "Approved" : action === "reject" ? "Declined" : "Returned for Revision"}`,
+          message:     `Your IT support request for "${event.title}" has been ${actionLabels[action]}${note ? `: "${note}"` : "."}`,
+          type:        "info",
+          event_id:    eventId,
+          event_title: event.title,
+          action_url:  `/approvals/${eventId}?type=event`,
+          is_broadcast: false,
+          read:        false,
+        });
+      }
+
+      return res.json({ success: true, it_info: updatedItInfo });
+    } catch (error) {
+      console.error("Error processing IT action:", error);
+      return res.status(500).json({ error: "Failed to process IT action." });
     }
   }
 );
@@ -782,8 +937,8 @@ router.post(
         campus_hosted_at: campusHostedAt,
         allowed_campuses: parsedAllowedCampuses,
         min_participants: parseOptionalInt(req.body.min_participants || req.body.minParticipants, 1),
-        it_description: (req.body.it_enabled === "true" || req.body.it_enabled === true)
-          ? (req.body.it_description || null)
+        it_info: (req.body.it_enabled === "true" || req.body.it_enabled === true) && req.body.it_description
+          ? { description: req.body.it_description, status: "pending" }
           : null,
       }]);
 

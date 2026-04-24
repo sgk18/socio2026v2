@@ -3806,7 +3806,7 @@ function MasterAdminPageInner() {
               {/* ── Assign form (compact) ── */}
               <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
-                <div className="flex gap-3 items-start flex-wrap">
+                <div className="flex gap-3 items-end flex-wrap">
                   {/* Email */}
                   <div className="relative min-w-[220px] flex-1">
                     <input
@@ -3834,14 +3834,19 @@ function MasterAdminPageInner() {
                     {roleSelectedEmail && <p className="mt-0.5 text-[11px] text-green-600 font-medium">✓ selected</p>}
                   </div>
 
-                  {/* Role pills */}
-                  <div className="flex gap-1.5 flex-wrap">
-                    {ASSIGN_ROLE_DEFS.map(r => (
-                      <button key={r.key} type="button"
-                        onClick={() => { setRoleSelectedRole(r.key as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${roleSelectedRole === r.key ? "bg-[#154cb3] text-white border-[#154cb3]" : "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"}`}
-                      >{r.label}</button>
-                    ))}
+                  {/* Role dropdown */}
+                  <div className="min-w-[180px]">
+                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Role</label>
+                    <select
+                      value={roleSelectedRole}
+                      onChange={e => { setRoleSelectedRole(e.target.value as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
+                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      <option value="">Select role…</option>
+                      {ASSIGN_ROLE_DEFS.map(r => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

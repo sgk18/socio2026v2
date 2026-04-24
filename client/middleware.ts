@@ -84,7 +84,7 @@ export async function middleware(req: NextRequest) {
   const isAccountsRoute = pathname.startsWith("/accounts");
   const isVenueRoute    = pathname.startsWith("/venue");
   const isCateringRoute = pathname.startsWith("/catering");
-  const isItRoute       = pathname.startsWith("/it-dashboard");
+  const isItRoute       = pathname.startsWith("/it");
 
   if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute)) {
     if (!user.email) {

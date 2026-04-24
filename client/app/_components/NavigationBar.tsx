@@ -123,7 +123,7 @@ function NavigationBar() {
   if (isVenueManager) roleActions.push({ key: "venue", label: "Venue", href: "/venue", variant: "venue" });
   if (isCaterer) roleActions.push({ key: "catering", label: "Catering", href: "/catering", variant: "catering" });
   if (isStalls) roleActions.push({ key: "stalls", label: "Stalls", href: "/stalls", variant: "stalls" });
-  if (isItSupport) roleActions.push({ key: "it", label: "IT Role", href: "/it-dashboard", variant: "it" });
+  if (isItSupport) roleActions.push({ key: "it", label: "IT Role", href: "/it", variant: "it" });
 
   const visibleRoleActions = roleActions.length > 2 ? roleActions.slice(0, 1) : roleActions;
   const dashboardDropdownRoles = roleActions.length > 2 ? roleActions.slice(1) : [];
