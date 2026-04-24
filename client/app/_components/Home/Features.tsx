@@ -80,18 +80,18 @@ const Features = () => {
   }, []);
 
   return (
-    <div ref={featuresRef} className="bg-[#F6F6F6] px-6 py-12 sm:py-16">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div ref={featuresRef} className="bg-[#F6F6F6] w-full px-4 sm:px-8 md:px-16 lg:px-24 xl:px-36 py-12 sm:py-16">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {features.map((f) => (
           <div
             key={f.label}
-            className="feature-item bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-4"
+            className="feature-item bg-white rounded-2xl border border-gray-200 p-6 flex flex-col gap-5 h-full"
           >
-            <div className="bg-[#DBEAFE] w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+            <div className="bg-[#DBEAFE] w-11 h-11 rounded-xl flex items-center justify-center shrink-0">
               {f.icon}
             </div>
             <div>
-              <p className="font-bold text-[#0f2557] text-base mb-1">{f.label}</p>
+              <p className="font-bold text-[#0f2557] text-base mb-2">{f.label}</p>
               <p className="text-sm text-gray-500 leading-relaxed">{f.description}</p>
             </div>
           </div>

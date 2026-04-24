@@ -1,4 +1,5 @@
 # SOCIO — Font Reference for Claude Design
+# SOCIO — Font Reference for Claude Design
 
 Give this file to Claude when asking for any UI/design work on the SOCIO application.
 
