@@ -363,16 +363,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const redirectOrigin = typeof window !== "undefined" ? window.location.origin : APP_URL;
-      const { error } = await supabase.auth.signInWithOAuth({
+
+      // Get the OAuth URL without navigating the main window
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${redirectOrigin}/auth/callback`,
+          redirectTo: `${redirectOrigin}/auth/callback?popup=true`,
+          skipBrowserRedirect: true,
         },
       });
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+      if (!data?.url) throw new Error("No OAuth URL returned");
+
+      // Open a centered popup window
+      const w = 480, h = 600;
+      const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+      const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+      const popup = window.open(
+        data.url,
+        "google-oauth-popup",
+        `width=${w},height=${h},left=${left},top=${top},scrollbars=yes,resizable=yes`
+      );
+
+      if (!popup) {
+        // Popup blocked — fall back to full-page redirect
+        const { error: redirectError } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: `${redirectOrigin}/auth/callback` },
+        });
+        if (redirectError) throw redirectError;
+        return;
       }
+
+      let pollTimer: ReturnType<typeof setInterval>;
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type === "GOOGLE_AUTH_SUCCESS") {
+          window.removeEventListener("message", handleMessage);
+          clearInterval(pollTimer);
+          if (!popup.closed) popup.close();
+          // Re-read session from cookies set by the popup's callback route
+          void supabase.auth.getSession();
+        } else if (event.data?.type === "GOOGLE_AUTH_ERROR") {
+          window.removeEventListener("message", handleMessage);
+          clearInterval(pollTimer);
+          if (!popup.closed) popup.close();
+          setIsLoading(false);
+        }
+      };
+
+      window.addEventListener("message", handleMessage);
+
+      // Detect if the user manually closed the popup
+      pollTimer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(pollTimer);
+          window.removeEventListener("message", handleMessage);
+          setIsLoading(false);
+        }
+      }, 500);
+
     } catch (error) {
       console.error("Google authentication error:", error);
       setIsLoading(false);

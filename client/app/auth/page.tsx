@@ -8,9 +8,11 @@ export default function Page() {
   const { session, isLoading, signInWithGoogle } = useAuth();
   const router = useRouter();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [hasTriggered, setHasTriggered] = useState(false);
 
   const triggerGoogleSignIn = useCallback(async () => {
     setAuthError(null);
+    setHasTriggered(true);
     try {
       await signInWithGoogle();
     } catch {
@@ -19,23 +21,23 @@ export default function Page() {
   }, [signInWithGoogle]);
 
   useEffect(() => {
-    if (isLoading) {
-      return;
-    }
+    if (isLoading) return;
 
     if (session) {
       router.replace("/Discover");
-    } else {
+    } else if (!hasTriggered) {
       void triggerGoogleSignIn();
     }
-  }, [session, isLoading, triggerGoogleSignIn, router]);
+  }, [session, isLoading, hasTriggered, triggerGoogleSignIn, router]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center space-y-3">
           <div className="mx-auto h-12 w-12 rounded-full border-4 border-[#154CB3]/25 border-t-[#154CB3] animate-spin" />
-          <p className="text-slate-600">Checking your session...</p>
+          <p className="text-slate-600">
+            {hasTriggered ? "Sign-in window opened — complete sign-in there." : "Checking your session..."}
+          </p>
         </div>
       </div>
     );

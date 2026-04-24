@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
   const origin = APP_URL || headerOrigin || requestUrl.origin;
 
   const code = requestUrl.searchParams.get("code");
+  const isPopup = requestUrl.searchParams.get("popup") === "true";
 
   if (!code) {
     console.warn("Auth callback invoked without a 'code' parameter.");
@@ -162,7 +163,7 @@ export async function GET(request: NextRequest) {
 
     // Allow all Gmail users (both Christ members and outsiders)
     console.log(`Auth callback successful for: ${session.user.email}`);
-    return NextResponse.redirect(`${origin}/auth/verify`);
+    return NextResponse.redirect(`${origin}${isPopup ? "/auth/popup-success" : "/auth/verify"}`);
   } catch (error) {
     console.error("Unexpected error in auth callback:", error);
     const cookieStore = await cookies();
