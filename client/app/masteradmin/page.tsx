@@ -106,6 +106,8 @@ type User = {
   is_cfo?: boolean;
   is_campus_director?: boolean;
   is_accounts_office?: boolean;
+  is_it_support?: boolean;
+  is_stalls?: boolean;
   school?: string | null;
   department?: string | null;
   campus?: string | null;
@@ -223,7 +225,7 @@ function MasterAdminPageInner() {
   const [roleEmailInput, setRoleEmailInput] = useState("");
   const [roleEmailSuggestions, setRoleEmailSuggestions] = useState<{ email: string; name: string }[]>([]);
   const [roleSelectedEmail, setRoleSelectedEmail] = useState("");
-  const [roleSelectedRole, setRoleSelectedRole] = useState<"hod" | "dean" | "cfo" | "director" | "accounts" | "">("");
+  const [roleSelectedRole, setRoleSelectedRole] = useState<"hod" | "dean" | "cfo" | "director" | "accounts" | "it_support" | "stalls" | "">("");
   const [roleSchool, setRoleSchool] = useState("");
   const [roleDept, setRoleDept] = useState("");
   const [roleCampus, setRoleCampus] = useState("");
@@ -1197,7 +1199,7 @@ function MasterAdminPageInner() {
       if (!res.ok) return;
       const data = await res.json();
       const all: User[] = data.users || data || [];
-      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
+      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls));
     } catch { /* non-critical */ }
     finally { setRoleHoldersLoading(false); }
   };
@@ -1209,7 +1211,7 @@ function MasterAdminPageInner() {
       const fieldMap: Record<string, string> = {
         organiser: "is_organiser", support: "is_support", masteradmin: "is_masteradmin",
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
-        director: "is_campus_director", accounts: "is_accounts_office",
+        director: "is_campus_director", accounts: "is_accounts_office", it_support: "is_it_support", stalls: "is_stalls",
       };
       const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(user.email)}/roles`, {
         method: "PUT",
@@ -1222,7 +1224,7 @@ function MasterAdminPageInner() {
         if (u.email !== user.email) return u;
         const updated = { ...u, [fieldMap[roleKey]]: false };
         return updated;
-      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office));
+      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls));
       toast.success("Role removed");
     } catch { toast.error("Failed to remove role"); }
     finally { setRoleRemoving(null); }
@@ -1261,7 +1263,7 @@ function MasterAdminPageInner() {
       const token = await getFreshToken();
       const fieldMap: Record<string, string> = {
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
-        director: "is_campus_director", accounts: "is_accounts_office",
+        director: "is_campus_director", accounts: "is_accounts_office", it_support: "is_it_support", stalls: "is_stalls",
       };
       const body: Record<string, unknown> = {
         [fieldMap[roleSelectedRole]]: true,
@@ -3760,11 +3762,13 @@ function MasterAdminPageInner() {
         {/* Roles Tab */}
         {activeTab === "roles" && (() => {
           const ASSIGN_ROLE_DEFS = [
-            { key: "hod",      label: "HOD",             flag: "is_hod" as const },
-            { key: "dean",     label: "Dean",            flag: "is_dean" as const },
-            { key: "cfo",      label: "CFO",             flag: "is_cfo" as const },
-            { key: "director", label: "Campus Dir",      flag: "is_campus_director" as const },
-            { key: "accounts", label: "Finance Officer", flag: "is_accounts_office" as const },
+            { key: "hod",        label: "HOD",             flag: "is_hod" as const },
+            { key: "dean",       label: "Dean",            flag: "is_dean" as const },
+            { key: "cfo",        label: "CFO",             flag: "is_cfo" as const },
+            { key: "director",   label: "Campus Dir",      flag: "is_campus_director" as const },
+            { key: "accounts",   label: "Finance Officer", flag: "is_accounts_office" as const },
+            { key: "it_support", label: "IT Support",      flag: "is_it_support" as const },
+            { key: "stalls",     label: "Stalls",          flag: "is_stalls" as const },
           ] as const;
           const ROLE_DEFS = [
             { key: "organiser",  label: "Organiser",       flag: "is_organiser" as const },
@@ -3802,7 +3806,7 @@ function MasterAdminPageInner() {
               {/* ── Assign form (compact) ── */}
               <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
-                <div className="flex gap-3 items-start flex-wrap">
+                <div className="flex gap-3 items-end flex-wrap">
                   {/* Email */}
                   <div className="relative min-w-[220px] flex-1">
                     <input
@@ -3830,14 +3834,19 @@ function MasterAdminPageInner() {
                     {roleSelectedEmail && <p className="mt-0.5 text-[11px] text-green-600 font-medium">✓ selected</p>}
                   </div>
 
-                  {/* Role pills */}
-                  <div className="flex gap-1.5 flex-wrap">
-                    {ASSIGN_ROLE_DEFS.map(r => (
-                      <button key={r.key} type="button"
-                        onClick={() => { setRoleSelectedRole(r.key as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${roleSelectedRole === r.key ? "bg-[#154cb3] text-white border-[#154cb3]" : "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"}`}
-                      >{r.label}</button>
-                    ))}
+                  {/* Role dropdown */}
+                  <div className="min-w-[180px]">
+                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Role</label>
+                    <select
+                      value={roleSelectedRole}
+                      onChange={e => { setRoleSelectedRole(e.target.value as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
+                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      <option value="">Select role…</option>
+                      {ASSIGN_ROLE_DEFS.map(r => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -3951,6 +3960,7 @@ function MasterAdminPageInner() {
                           cfo:         "bg-amber-100 text-amber-700",
                           director:    "bg-cyan-100 text-cyan-700",
                           accounts:    "bg-green-100 text-green-700",
+                          stalls:      "bg-orange-100 text-orange-700",
                         };
                         return filteredRows.map(({ user, roles }, i) => (
                           <tr key={user.email} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}>
