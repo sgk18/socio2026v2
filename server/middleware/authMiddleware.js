@@ -184,6 +184,18 @@ export const requireMasterAdmin = (req, res, next) => {
   return next();
 };
 
+export const requireHOD = (req, res, next) => {
+  if (!req.userInfo) {
+    return res.status(401).json({ error: 'User info not available' });
+  }
+  if (!req.userInfo.is_hod && !req.userInfo.is_masteradmin) {
+    console.warn(`[HOD] Access denied for ${req.userInfo.email} - HOD privileges required`);
+    return res.status(403).json({ error: 'Access denied: HOD privileges required' });
+  }
+  console.log(`[HOD] Access granted to ${req.userInfo.email}`);
+  return next();
+};
+
 /**
  * Middleware to check if user owns the resource (for updates/deletes)
  * @param {string} table - Database table name (e.g., 'events', 'fest')

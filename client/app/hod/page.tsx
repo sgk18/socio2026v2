@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
 
 interface ApprovalStage {
   step: number;
@@ -28,6 +30,21 @@ interface QueueItem {
   _queue_role: string;
 }
 
+type HodView = "analytics" | "queue";
+
+const HodDataExplorer = dynamic(
+  () => import("../_components/Hod/HodDataExplorer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-14 text-center shadow-sm">
+        <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-[#154CB3]" />
+        <p className="text-sm font-semibold text-slate-700">Loading department analytics...</p>
+      </div>
+    ),
+  }
+);
+
 function timeAgo(dateStr: string) {
   const ms = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(ms / 86400000);
@@ -49,8 +66,9 @@ export default function HodDashboard() {
   const router = useRouter();
   const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
 
+  const [activeView, setActiveView] = useState<HodView>("analytics");
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [actionItemId, setActionItemId] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<{ itemId: string; type: string } | null>(null);
   const [rejectNote, setRejectNote] = useState("");
@@ -61,8 +79,14 @@ export default function HodDashboard() {
     if (userData && !(userData as any).is_hod && !(userData as any).is_masteradmin) {
       router.replace("/error"); return;
     }
-    fetchQueue();
   }, [isLoading, session, userData]);
+
+  // Only fetch queue when the queue tab is active
+  useEffect(() => {
+    if (activeView === "queue" && session) {
+      void fetchQueue();
+    }
+  }, [activeView, session]);
 
   async function fetchQueue() {
     setLoading(true);
@@ -103,7 +127,7 @@ export default function HodDashboard() {
         return;
       }
       toast.success(action === "approve" ? "Approved successfully" : "Returned to organiser");
-      fetchQueue();
+      void fetchQueue();
     } catch {
       toast.error("Network error");
     } finally {
@@ -153,7 +177,8 @@ export default function HodDashboard() {
           <p className="text-xs text-gray-400 mt-0.5">Submitted {timeAgo(item.created_at)}</p>
           {actedBy && (
             <p className="text-xs text-gray-400 mt-0.5">
-              {status === "approved" ? "Approved" : "Returned"} by <span className="font-medium text-gray-600">{actedBy}</span>
+              {status === "approved" ? "Approved" : "Returned"} by{" "}
+              <span className="font-medium text-gray-600">{actedBy}</span>
             </p>
           )}
         </div>
@@ -190,53 +215,86 @@ export default function HodDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">HOD Approval Queue</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Events and fests from your department awaiting or reviewed by you.
-          </p>
+      {/* Header — full width */}
+      <div className="max-w-full mx-auto mb-6 px-0">
+        <div className="flex flex-wrap items-start justify-between gap-4 max-w-3xl mx-auto xl:max-w-full">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">HOD Dashboard</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Manage department approvals and view analytics.
+            </p>
+          </div>
+
+          {/* Tab switcher */}
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+            {(["analytics", "queue"] as HodView[]).map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setActiveView(view)}
+                className={[
+                  "rounded-lg px-4 py-1.5 text-[11px] font-semibold transition-colors",
+                  activeView === view ? "bg-[#154CB3] text-white" : "text-slate-600 hover:bg-white",
+                ].join(" ")}
+              >
+                {view === "analytics" ? "Analytics" : "Approval Queue"}
+              </button>
+            ))}
+          </div>
         </div>
-
-        {loading ? (
-          <p className="text-gray-500 text-sm">Loading queue…</p>
-        ) : (
-          <>
-            {/* Pending */}
-            <section>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2">
-                Pending <span className="text-gray-400 font-normal">({pendingItems.length})</span>
-              </h2>
-              {pendingItems.length === 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
-                  <p className="text-gray-400 text-sm">No pending approvals.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingItems.map((item) => (
-                    <QueueCard key={item.id} item={item} showActions />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Reviewed */}
-            {reviewedItems.length > 0 && (
-              <section>
-                <h2 className="text-sm font-semibold text-gray-700 mb-2">
-                  Reviewed <span className="text-gray-400 font-normal">({reviewedItems.length})</span>
-                </h2>
-                <div className="space-y-3">
-                  {reviewedItems.map((item) => (
-                    <QueueCard key={item.id} item={item} showActions={false} />
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
       </div>
 
+      {/* Analytics view — full width */}
+      {activeView === "analytics" && (
+        <div className="max-w-full xl:px-2">
+          <HodDataExplorer />
+        </div>
+      )}
+
+      {/* Queue view — constrained width */}
+      {activeView === "queue" && (
+        <div className="max-w-3xl mx-auto space-y-6">
+          {loading ? (
+            <p className="text-gray-500 text-sm">Loading queue…</p>
+          ) : (
+            <>
+              <section>
+                <h2 className="text-sm font-semibold text-gray-700 mb-2">
+                  Pending{" "}
+                  <span className="text-gray-400 font-normal">({pendingItems.length})</span>
+                </h2>
+                {pendingItems.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
+                    <p className="text-gray-400 text-sm">No pending approvals.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingItems.map((item) => (
+                      <QueueCard key={item.id} item={item} showActions />
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {reviewedItems.length > 0 && (
+                <section>
+                  <h2 className="text-sm font-semibold text-gray-700 mb-2">
+                    Reviewed{" "}
+                    <span className="text-gray-400 font-normal">({reviewedItems.length})</span>
+                  </h2>
+                  <div className="space-y-3">
+                    {reviewedItems.map((item) => (
+                      <QueueCard key={item.id} item={item} showActions={false} />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Reject modal */}
       {rejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4">
@@ -259,7 +317,7 @@ export default function HodDashboard() {
                 Cancel
               </button>
               <button
-                onClick={confirmReject}
+                onClick={() => void confirmReject()}
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
               >
                 Return

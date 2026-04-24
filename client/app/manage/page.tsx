@@ -20,6 +20,7 @@ import {
 } from "@/lib/xlsxTheme";
 import AnimatedListDropdown from "@/app/_components/UI/AnimatedListDropdown";
 import EventReminderButton from "@/app/_components/EventReminderButton";
+import SendFeedbackButton from "@/app/_components/SendFeedbackButton";
 import BookVenueModal from "@/app/_components/BookVenueModal";
 import {
   Search,
@@ -301,6 +302,9 @@ const MappedEventCard = ({
   authToken?: string | null;
   isPendingApproval?: boolean;
 }) => {
+  const [feedbackSentAt, setFeedbackSentAt] = React.useState<string | null>(
+    (event as any).feedback_sent_at ?? null
+  );
   const isPast = event.event_date ? new Date(event.event_date) < new Date() : false;
   const statusLabel = isDraft
     ? (isPendingApproval ? "PENDING APPROVALS" : "DRAFT")
@@ -400,6 +404,24 @@ const MappedEventCard = ({
               eventTitle={event.title}
               authToken={authToken || ""}
             />
+          )}
+          {!isDraft && (
+            <SendFeedbackButton
+              eventId={event.event_id}
+              eventTitle={event.title}
+              endDate={(event as any).end_date ?? event.event_date ?? null}
+              feedbackSentAt={feedbackSentAt}
+              authToken={authToken || ""}
+              onSent={(sentAt) => setFeedbackSentAt(sentAt)}
+            />
+          )}
+          {!isDraft && (
+            <Link
+              href={`/feedbacks/${event.event_id}`}
+              className="inline-flex items-center gap-1 text-xs text-slate-500 font-semibold hover:text-slate-800 transition-colors"
+            >
+              Feedback
+            </Link>
           )}
         </div>
       </div>

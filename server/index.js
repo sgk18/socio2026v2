@@ -21,8 +21,10 @@ import serviceRequestRoutes from "./routes/serviceRequestRoutes.js";
 import venueRoutes from "./routes/venueRoutes.js";
 import venueBookingRoutes from "./routes/venueBookingRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
+import hodAnalyticsRoutes from "./routes/hodAnalyticsRoutes.js";
 import cateringRoutes from "./routes/cateringRoutes.js";
 import stallBookingRoutes from "./routes/stallBookingRoutes.js";
+import feedbackRoutes from "./routes/feedbackRoutes.js";
 
 dotenv.config();
 
@@ -170,8 +172,10 @@ app.use("/api", venueRoutes);
 app.use("/api", venueBookingRoutes);
 app.use("/api", cateringRoutes);
 app.use("/api", stallBookingRoutes);
+app.use("/api", feedbackRoutes);
 app.use("/api/statuscheck", statuscheckRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/hod-analytics", hodAnalyticsRoutes);
 
 // Global error handler - ensures CORS headers are always sent
 app.use((err, req, res, next) => {
