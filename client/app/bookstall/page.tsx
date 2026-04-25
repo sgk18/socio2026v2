@@ -79,7 +79,7 @@ const STATUS_STYLES: Record<string, string> = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BookStallPage() {
-  const { session, userData, isLoading } = useAuth();
+  const { session, userData, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   const [tab, setTab] = useState<Tab>("mine");

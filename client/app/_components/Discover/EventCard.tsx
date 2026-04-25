@@ -1,8 +1,14 @@
 import React from "react";
 import Link from "next/link";
-import { formatDate } from "@/lib/dateUtils";
+import { formatDate, formatTime } from "@/lib/dateUtils";
 import { useAuth } from "../../../context/AuthContext";
 import EventReminderButton from "../EventReminderButton";
+
+const toLowerSafe = (value: unknown): string =>
+  typeof value === "string" ? value.toLowerCase() : "";
+
+const toStringArray = (values: unknown): string[] =>
+  Array.isArray(values) ? values.filter((item): item is string => typeof item === "string") : [];
 
 interface EventCardProps {
   title: string;
@@ -59,21 +65,14 @@ export const EventCard = ({
   const showOutsiderBadge = !isLoading && isOutsiderUser && Boolean(allowOutsiders);
   const isAdminOrOrganizer = !isLoading && (userData?.is_organiser || userData?.is_masteradmin);
 
-  const normalizeEmail = (value?: string | null) =>
-    typeof value === "string" ? value.toLowerCase() : null;
+  const userEmailLower = toLowerSafe(userData?.email);
+  const createdByLower = toLowerSafe(createdBy);
+  const organizerEmailLower = toLowerSafe(organizerEmail);
 
-  const createdByRaw = typeof createdBy === "object" && createdBy !== null
-    ? (createdBy as { event_creator?: string }).event_creator ?? null
-    : createdBy as string | null;
-
-  const createdByEmail = normalizeEmail(createdByRaw);
-  const organizerEmailLower = normalizeEmail(organizerEmail);
-  const userEmail = normalizeEmail(userData?.email);
-
-  const isOwner = !isLoading && (
-    (session?.user?.id && createdByRaw && session.user.id === createdByRaw) ||
-    (userEmail && createdByEmail && userEmail === createdByEmail) ||
-    (userEmail && organizerEmailLower && userEmail === organizerEmailLower)
+  const isOwner = !authLoading && (
+    (session?.user?.id && createdBy && session.user.id === createdBy) ||
+    (userEmailLower && createdByLower && userEmailLower === createdByLower) ||
+    (userEmailLower && organizerEmailLower && userEmailLower === organizerEmailLower)
   );
 
   if (userData?.is_organiser && !isLoading) {
@@ -88,14 +87,16 @@ export const EventCard = ({
   const participantsPageUrl = `/event/${eventSlug}/participants`;
 
   const displayDate = formatDate(date, "Date TBD");
+  const displayTime = formatTime(time, "Time TBD");
 
   const showArchivedTag = isArchived && isAdminOrOrganizer && archivedVisualMode === "tag";
   const shouldMuteArchivedCard = (isArchived || isDraft) && archivedVisualMode === "muted";
   const overlayLabel = isDraft ? (isPendingApproval ? "PENDING" : "DRAFT") : isArchived ? "ARCHIVED" : null;
 
   // Separate Free/Paid from category tags — price shown in footer row instead
-  const isFree = tags.includes("Free") || tags.some(t => t.toLowerCase() === "free");
-  const displayTags = tags.filter(t => !["Free", "Paid"].includes(
+  const normalizedTags = toStringArray(tags);
+  const isFree = normalizedTags.includes("Free") || normalizedTags.some((t) => toLowerSafe(t) === "free");
+  const displayTags = normalizedTags.filter((t) => !["Free", "Paid"].includes(
     t.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
   ));
 
@@ -103,7 +104,7 @@ export const EventCard = ({
     ? `₹${registrationFee}`
     : isFree || registrationFee === 0
       ? "Free entry"
-      : tags.some(t => t.toLowerCase() === "paid") ? "Paid" : "Free entry";
+      : normalizedTags.some((t) => toLowerSafe(t) === "paid") ? "Paid" : "Free entry";
 
   const deptLabel = (festName && festName !== "none" ? festName : dept) || "";
 
@@ -198,6 +199,14 @@ export const EventCard = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             <span>{displayDate}</span>
+          </div>
+
+          {/* Time */}
+          <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{displayTime}</span>
           </div>
 
           {/* Location */}

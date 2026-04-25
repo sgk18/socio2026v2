@@ -327,7 +327,7 @@ async function getInitialEventsData() {
             : getUpcomingEventsFromDataset(allEvents);
 
         upcomingEvents = normalizedUpcoming
-          .slice(0, 3)
+          .slice(0, 4)
           .map(transformToEventCardData);
       } else {
         console.log("No events found from Supabase.");
