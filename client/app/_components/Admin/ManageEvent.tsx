@@ -103,8 +103,8 @@ const computeVolunteerExpiresAt = (
   endDate?: string,
   endTime?: string
 ): string | null => {
-  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(endDate || ""));
-  const timeMatch = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(endTime || ""));
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(endDate || "").trim());
+  const timeMatch = /^([0-1]?[0-9]|2[0-3]):([0-5]\d)(:\d{2})?$/.exec(String(endTime || "").trim());
   if (!dateMatch || !timeMatch) return null;
 
   const [, year, month, day] = dateMatch.map(Number);
@@ -147,12 +147,23 @@ function VolunteerAssignmentSection({
     onChange(volunteers.map((volunteer) => ({ ...volunteer, expires_at: expiresAt })));
   }, [expiresAt, onChange, volunteers]);
 
+  useEffect(() => {
+    if (expiresAt && error === "Select a valid event end date and end time first.") {
+      setError(null);
+    }
+  }, [expiresAt, error]);
+
   const addVolunteer = () => {
     const registerNumber = normalizeRegisterNumber(draftRegisterNumber);
     const assignedBy = String(assignedByEmail || "").trim();
 
     if (!registerNumber) {
       setError("Enter a volunteer register number.");
+      return;
+    }
+
+    if (!/^\d{7}$/.test(registerNumber)) {
+      setError("Register number must be exactly 7 digits.");
       return;
     }
 
@@ -238,9 +249,8 @@ function VolunteerAssignmentSection({
               key={volunteer.register_number}
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm"
             >
-              <span className="font-mono">{volunteer.register_number}</span>
-              <span title={`Added by: ${volunteer.assigned_by}`}>
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+              <span className="font-mono" title={`Added by: ${volunteer.assigned_by}`}>
+                {volunteer.register_number}
               </span>
               <button
                 type="button"

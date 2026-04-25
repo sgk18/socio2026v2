@@ -524,6 +524,12 @@ function NavigationBar() {
                         >
                           View Profile
                         </Link>
+                        <Link
+                          href="/volunteer"
+                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
+                        >
+                          Volunteer Dashboard
+                        </Link>
                         <button
                           onClick={handleSignOut}
                           className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
@@ -537,13 +543,15 @@ function NavigationBar() {
               ) : (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   {userData && <NotificationSystem />}
-                  <Link href="/profile">
-  <div className="flex items-center gap-2 lg:gap-4 min-w-0">
-    {/* CHANGED: USERNAME IS HIDDEN ON SMALLER WIDTHS, LONG NAMES DON’T PUSH AVATAR OUTSIDE, AVATAR ALWAYS STAYS VISIBLE */}
-    <span className="hidden lg:block font-medium truncate max-w-[140px]">
-      {displayName}
-    </span>
-    <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden relative flex-shrink-0">
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                      className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"
+                    >
+                      <span className="hidden lg:block font-medium truncate max-w-[140px]">
+                        {displayName}
+                      </span>
+                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden relative flex-shrink-0">
                         {displayAvatar && !avatarLoadError ? (
                           <img
                             src={displayAvatar}
@@ -558,8 +566,30 @@ function NavigationBar() {
                           </div>
                         )}
                       </div>
-                    </div>
-                  </Link>
+                    </button>
+                    {showProfileDropdown && (
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
+                        <Link
+                          href="/profile"
+                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
+                        >
+                          View Profile
+                        </Link>
+                        <Link
+                          href="/volunteer"
+                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
+                        >
+                          Volunteer Dashboard
+                        </Link>
+                        <button
+                          onClick={handleSignOut}
+                          className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             ) : (
