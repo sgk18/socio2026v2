@@ -103,13 +103,13 @@ export default function BookStallPage() {
 
   // ─── Auth Guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isLoading && !session) router.replace("/auth");
-    if (!isLoading && session && userData) {
+    if (!authLoading && !session) router.replace("/auth");
+    if (!authLoading && session && userData) {
       if (!userData.is_organiser && !(userData as any).is_masteradmin) {
         router.replace("/error");
       }
     }
-  }, [isLoading, session, userData, router]);
+  }, [authLoading, session, userData, router]);
 
   // ─── Fetch My Bookings ───────────────────────────────────────────────────────
   const fetchMyBookings = useCallback(async () => {
@@ -204,7 +204,7 @@ export default function BookStallPage() {
   };
 
   // ─── Loading State ───────────────────────────────────────────────────────────
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin" />

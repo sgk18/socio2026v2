@@ -69,14 +69,14 @@ export const EventCard = ({
   const createdByLower = toLowerSafe(createdBy);
   const organizerEmailLower = toLowerSafe(organizerEmail);
 
-  const isOwner = !authLoading && (
+  const isOwner = !isLoading && (
     (session?.user?.id && createdBy && session.user.id === createdBy) ||
     (userEmailLower && createdByLower && userEmailLower === createdByLower) ||
     (userEmailLower && organizerEmailLower && userEmailLower === organizerEmailLower)
   );
 
   if (userData?.is_organiser && !isLoading) {
-    console.log(`[EventCard Debug] title: ${title}, isOwner: ${isOwner}, createdBy: ${JSON.stringify(createdBy)}, createdByEmail: ${createdByEmail}, sessionUserId: ${session?.user?.id}, organizerEmail: ${organizerEmail}, userEmail: ${userData?.email}`);
+    console.log(`[EventCard Debug] title: ${title}, isOwner: ${isOwner}, createdBy: ${JSON.stringify(createdBy)}, createdByEmail: ${createdByLower}, sessionUserId: ${session?.user?.id}, organizerEmail: ${organizerEmail}, userEmail: ${userData?.email}`);
   }
 
   const canManage = !isLoading && (userData?.is_masteradmin || (userData?.is_organiser && isOwner));
