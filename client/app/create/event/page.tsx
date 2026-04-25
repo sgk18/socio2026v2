@@ -194,7 +194,7 @@ export default function CreateEventPage() {
     appendFile("pdfFile", dataFromHookForm.pdfFile);
 
     try {
-      const response = await fetch(`${API_URL}/api/events`, {
+      const response = await fetch(`/api/events`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token!}` },
         body: formData,

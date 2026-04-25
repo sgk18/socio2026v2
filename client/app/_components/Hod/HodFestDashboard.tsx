@@ -9,13 +9,7 @@ import {
   type HodFestEvent,
   type HodFestSummary,
 } from "@/lib/hodAnalyticsApi";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
   Calendar,
   Users,
@@ -64,11 +58,6 @@ const FB_QUESTIONS = [
 type SortKey = "date" | "rate-desc" | "rate-asc" | "regs" | "attend";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtINR(n: number) {
-  if (!n) return "₹0";
-  return "₹" + new Intl.NumberFormat("en-IN").format(Math.round(n));
-}
 
 function fbColor(v: number) {
   return v >= 4.3 ? SUCCESS : v >= 3.7 ? WARN : DANGER;
@@ -210,8 +199,6 @@ function EventRow({
   const sc = statusColor(e.rate);
   const sl = statusLabel(e.rate);
   const dropoff = e.regs - e.attend;
-  const budgetPct =
-    e.budget.allocated > 0 ? Math.round((e.budget.spent / e.budget.allocated) * 100) : 0;
 
   return (
     <div
@@ -238,14 +225,6 @@ function EventRow({
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
               <CatPill cat={e.cat} />
               <span className="tabular-nums">{e.date}</span>
-              {e.budget.allocated > 0 && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="tabular-nums">
-                    {fmtINR(e.budget.spent)} / {fmtINR(e.budget.allocated)}
-                  </span>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -288,7 +267,7 @@ function EventRow({
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="px-4 pb-4 pt-1 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="px-4 pb-4 pt-1 grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Description */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -298,54 +277,6 @@ function EventRow({
               <p className="text-[12.5px] leading-relaxed text-slate-700">{e.description}</p>
             ) : (
               <p className="text-[12px] text-slate-400 italic">No description added.</p>
-            )}
-          </div>
-
-          {/* Budget */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Budget</p>
-              {e.budget.allocated > 0 && (
-                <p
-                  className="text-[10px] font-semibold tabular-nums"
-                  style={{ color: budgetPct >= 95 ? DANGER : budgetPct >= 80 ? WARN : SUCCESS }}
-                >
-                  {budgetPct}% used
-                </p>
-              )}
-            </div>
-            {e.budget.allocated > 0 ? (
-              <>
-                <div className="mb-1 flex items-baseline gap-2">
-                  <p className="text-lg font-bold tabular-nums text-slate-900">
-                    {fmtINR(e.budget.spent)}
-                  </p>
-                  <p className="text-[11px] tabular-nums text-slate-500">
-                    / {fmtINR(e.budget.allocated)}
-                  </p>
-                </div>
-                <div className="mb-3">
-                  <ProgressBar
-                    value={e.budget.spent}
-                    max={e.budget.allocated}
-                    color={budgetPct >= 95 ? DANGER : budgetPct >= 80 ? WARN : PRIMARY}
-                  />
-                </div>
-                {e.budget.breakdown.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {e.budget.breakdown.map((b, i) => (
-                      <div key={i} className="flex items-center justify-between text-[11.5px]">
-                        <span className="text-slate-600">{b.item}</span>
-                        <span className="font-semibold tabular-nums text-slate-900">
-                          {fmtINR(b.cost)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className="text-[12px] text-slate-400 italic">No budget configured.</p>
             )}
           </div>
 

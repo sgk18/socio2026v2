@@ -265,12 +265,6 @@ export interface HodFest {
   dates: string;
 }
 
-export interface HodFestBudget {
-  allocated: number;
-  spent: number;
-  breakdown: { item: string; cost: number }[];
-}
-
 export interface HodFestFeedback {
   count: number;
   q1: number;
@@ -292,7 +286,6 @@ export interface HodFestEvent {
   insiders: number;
   outsiders: number;
   description: string;
-  budget: HodFestBudget;
   feedback: HodFestFeedback;
 }
 

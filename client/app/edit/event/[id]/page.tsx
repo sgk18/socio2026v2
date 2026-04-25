@@ -393,7 +393,7 @@ export default function EditEventPage() {
 
     setIsArchiveUpdating(true);
     try {
-      const response = await fetch(`${API_URL}/api/events/${eventIdSlug}/archive`, {
+      const response = await fetch(`/api/events/${eventIdSlug}/archive`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -645,7 +645,7 @@ export default function EditEventPage() {
       }
 
       response = await fetch(
-        `${API_URL}/api/events/${eventIdSlug}`,
+        `/api/events/${eventIdSlug}`,
         {
           method: "PUT",
           body: payload,

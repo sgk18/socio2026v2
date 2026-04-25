@@ -1321,7 +1321,7 @@ function MasterAdminPageInner() {
   const deleteEvent = async (eventId: string) => {
     try {
       const token = await getFreshToken();
-      const response = await fetch(`${API_URL}/api/events/${eventId}`, {
+      const response = await fetch(`/api/events/${eventId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1345,7 +1345,7 @@ function MasterAdminPageInner() {
   const deleteFest = async (festId: string) => {
     try {
       const token = await getFreshToken();
-      const response = await fetch(`${API_URL}/api/fests/${festId}`, {
+      const response = await fetch(`/api/fests/${festId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -1686,6 +1686,72 @@ router.put(
   }
 );
 
+// POST add a single volunteer - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
+router.post(
+  "/:eventId/volunteers",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  (req, res, next) => {
+    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) return next();
+    return res.status(403).json({ error: "Access denied: Organiser privileges required." });
+  },
+  requireOwnership("events", "eventId", "auth_uuid"),
+  async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const targetRegisterNumber = normalizeRegisterNumber(req.body.register_number);
+
+      if (!targetRegisterNumber) {
+        return res.status(400).json({ error: "Register number is required." });
+      }
+
+      const event = req.resource;
+      const existingVolunteers = normalizeVolunteerRecords(event.volunteers);
+
+      if (existingVolunteers.some((v) => v.register_number === targetRegisterNumber)) {
+        return res.status(409).json({ error: "Volunteer already assigned to this event." });
+      }
+
+      const parsedVolunteers = await buildVolunteerAssignments(
+        [
+          ...existingVolunteers.map((v) => ({ register_number: v.register_number })),
+          { register_number: targetRegisterNumber },
+        ],
+        {
+          endDate: event.end_date,
+          eventDate: event.event_date,
+          endTime: event.end_time,
+          assignedBy: req.userInfo?.email,
+          existingVolunteers: event.volunteers,
+        }
+      );
+
+      const updatedRows = await update(
+        "events",
+        { volunteers: parsedVolunteers, updated_at: new Date().toISOString() },
+        { event_id: eventId }
+      );
+
+      return res.status(200).json({
+        message: "Volunteer added successfully.",
+        event: updatedRows?.[0]
+          ? {
+              ...updatedRows[0],
+              volunteers: normalizeVolunteerRecords(updatedRows[0].volunteers),
+            }
+          : null,
+      });
+    } catch (error) {
+      console.error("Server error POST /api/events/:eventId/volunteers:", error);
+      if (error.statusCode === 400) {
+        return res.status(400).json({ error: error.message });
+      }
+      return res.status(500).json({ error: "Internal server error while adding volunteer." });
+    }
+  }
+);
+
 // DELETE volunteer access - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
 router.delete(
   "/:eventId/volunteers/:registerNumber",

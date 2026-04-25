@@ -1557,7 +1557,7 @@ function CreateFestForm(props?: CreateFestProps) {
     setErrors({});
     try {
       const response = await fetch(
-        `${API_URL}/api/fests/${festIdFromPath}`,
+        `/api/fests/${festIdFromPath}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${session?.access_token}` },
@@ -2214,7 +2214,7 @@ function CreateFestForm(props?: CreateFestProps) {
       let response;
       if (finalIsEditMode && festIdFromPath) {
         response = await fetch(
-          `${API_URL}/api/fests/${festIdFromPath}`,
+          `/api/fests/${festIdFromPath}`,
           {
             method: "PUT",
             headers: {
@@ -2225,7 +2225,7 @@ function CreateFestForm(props?: CreateFestProps) {
           }
         );
       } else {
-        response = await fetch(`${API_URL}/api/fests`, {
+        response = await fetch(`/api/fests`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

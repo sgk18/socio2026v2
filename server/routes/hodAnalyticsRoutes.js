@@ -115,9 +115,10 @@ router.get("/fests", async (req, res) => {
   try {
     const { data: fests, error } = await supabase
       .from("fests")
-      .select("fest_id, fest_title, opening_date, closing_date, is_archived")
+      .select("fest_id, fest_title, opening_date, closing_date")
       .ilike("organizing_dept", dept)
-      .eq("is_archived", false)
+      .neq("is_archived", true)
+      .eq("is_draft", false)
       .order("opening_date", { ascending: false });
 
     if (error) throw error;
@@ -175,12 +176,11 @@ router.get("/fest-summary", async (req, res) => {
     // 2. Fetch events for this fest in this dept
     const { data: events, error: evErr } = await supabase
       .from("events")
-      .select(
-        "event_id, title, category, event_date, description, budget_allocated, budget_breakdown"
-      )
+      .select("event_id, title, category, event_date, description")
       .eq("fest_id", festId)
       .ilike("organizing_dept", dept)
-      .eq("is_archived", false);
+      .eq("is_archived", false)
+      .eq("is_draft", false);
 
     if (evErr) throw evErr;
 
@@ -322,9 +322,6 @@ router.get("/fest-summary", async (req, res) => {
       const fbScore =
         fbCount > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
 
-      const breakdown = Array.isArray(ev.budget_breakdown) ? ev.budget_breakdown : [];
-      const budgetSpent = breakdown.reduce((s, b) => s + (b.cost || 0), 0);
-
       return {
         id: ev.event_id,
         name: ev.title,
@@ -336,11 +333,6 @@ router.get("/fest-summary", async (req, res) => {
         insiders,
         outsiders,
         description: ev.description || "",
-        budget: {
-          allocated: ev.budget_allocated || 0,
-          spent: budgetSpent,
-          breakdown,
-        },
         feedback: { count: fbCount, ...fbAvgs, score: fbScore },
       };
     });
