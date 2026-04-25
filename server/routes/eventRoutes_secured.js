@@ -905,7 +905,7 @@ router.post(
 
       const createdByValue = req.isSubHead
         ? { event_creator: req.userInfo.email, fest_creator: matchedSubHeadFest.created_by, fest_id: matchedSubHeadFest.fest_id }
-        : req.userInfo?.email;
+        : { event_creator: req.userInfo?.email };
 
       console.log("✅ JSON fields parsed successfully");
       console.log("About to insert event into database with:", {

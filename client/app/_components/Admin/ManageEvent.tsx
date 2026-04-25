@@ -1682,7 +1682,7 @@ export default function EventForm({
 
   useEffect(() => {
     if (activeTab === 'approvals') {
-      setTimeout(() => window.scrollTo(0, 0), 0);
+      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
     }
   }, [activeTab]);
   const {
@@ -1710,7 +1710,7 @@ export default function EventForm({
       category: "",
       organizingSchool: "",
       organizingDept: "",
-      festEvent: "none",
+      festEvent: "",
       registrationDeadline: "",
       location: "",
       registrationFee: "",
@@ -2733,9 +2733,10 @@ export default function EventForm({
                     name="festEvent"
                     control={control}
                     options={fetchedFests.length > 0 ? fetchedFests : [{ value: "none", label: "None" }]}
-                    placeholder="Select fest event (if any)"
-                    label="Is this event under any fest? (optional)"
+                    placeholder="Select fest"
+                    label="Is this event under any fest?"
                     error={errors.festEvent}
+                    required
                   />
                 </div>
 
@@ -3621,11 +3622,7 @@ export default function EventForm({
                     <button
                       type="button"
                       onClick={() => {
-                        if (onSubmitDraft) {
-                          handleSubmit(processDraftSubmit, handleInvalidSubmit)();
-                        } else {
-                          setActiveTab('approvals');
-                        }
+                        setActiveTab('approvals');
                       }}
                       disabled={
                         isSubmittingProp ||

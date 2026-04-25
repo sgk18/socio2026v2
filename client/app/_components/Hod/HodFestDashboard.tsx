@@ -594,6 +594,16 @@ export default function HodFestDashboard() {
 
       {!loadingSummary && summary && (
         <>
+          {summary.events.length === 0 ? (
+            <div className="mx-auto max-w-lg rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+              <Calendar className="mx-auto mb-3 h-8 w-8 text-slate-300" />
+              <p className="text-sm font-semibold text-slate-700">No events in this fest</p>
+              <p className="mt-1 text-xs text-slate-500">
+                No events are organized by your department under this fest.
+              </p>
+            </div>
+          ) : (
+          <>
           {/* ═══ 1. TOP SUMMARY ═══ */}
           <section>
             <SectionLabel num={1} title="Top Summary" sub="how the fest is doing at a glance" primary={PRIMARY} />
@@ -637,7 +647,7 @@ export default function HodFestDashboard() {
           </section>
 
           {/* ═══ 2. QUICK INSIGHTS ═══ */}
-          {summary.events.length >= 2 && topEvent && worstEvent && (
+          {showInsights && (
             <section>
               <SectionLabel num={2} title="Quick Insights" sub="headline takeaways from this fest" primary={PRIMARY} />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -665,7 +675,7 @@ export default function HodFestDashboard() {
 
           {/* ═══ 3. EVENT PERFORMANCE ═══ */}
           <section>
-            <SectionLabel num={3} title="Event Performance" sub="every event, how it did" primary={PRIMARY} />
+            <SectionLabel num={showInsights ? 3 : 2} title="Event Performance" sub="every event, how it did" primary={PRIMARY} />
             <div className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm">
               {/* Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-2 pb-3">
@@ -730,7 +740,7 @@ export default function HodFestDashboard() {
 
           {/* ═══ 4. PARTICIPATION BREAKDOWN ═══ */}
           <section>
-            <SectionLabel num={4} title="Participation Breakdown" sub="who showed up" primary={PRIMARY} />
+            <SectionLabel num={showInsights ? 4 : 3} title="Participation Breakdown" sub="who showed up" primary={PRIMARY} />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
               {/* Dept bars */}
               <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
@@ -830,7 +840,7 @@ export default function HodFestDashboard() {
 
           {/* ═══ 5. FEEDBACK ═══ */}
           <section>
-            <SectionLabel num={5} title="Feedback" sub="five fixed questions, rated 1 to 5" primary={PRIMARY} />
+            <SectionLabel num={showInsights ? 5 : 4} title="Feedback" sub="five fixed questions, rated 1 to 5" primary={PRIMARY} />
             {feedbackStats ? (
               <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
                 <div className="mb-1 flex items-start justify-between gap-4">
@@ -898,17 +908,9 @@ export default function HodFestDashboard() {
               minute: "2-digit",
             })}
           </p>
+          </>
+          )}
         </>
-      )}
-
-      {!loadingSummary && summary && summary.events.length === 0 && (
-        <div className="mx-auto max-w-lg rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-          <Calendar className="mx-auto mb-3 h-8 w-8 text-slate-300" />
-          <p className="text-sm font-semibold text-slate-700">No events in this fest</p>
-          <p className="mt-1 text-xs text-slate-500">
-            No events are organized by your department under this fest.
-          </p>
-        </div>
       )}
     </div>
   );

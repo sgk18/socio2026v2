@@ -84,24 +84,18 @@ export interface DrillFest {
   attendanceRate: number;
 }
 
+export interface BudgetItem {
+  id?: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export interface DrillEvent {
   id: string;
   name: string;
   cat: string;
   date: string;
-  regs: number;
-  attend: number;
-  rate: number;
-  avgFeedback: number;
-}
-
-export interface DrillEventDetail {
-  id: string;
-  name: string;
-  cat: string;
-  date: string;
-  festId: string | null;
-  department: string;
   description: string;
   regs: number;
   attend: number;
@@ -113,6 +107,21 @@ export interface DrillEventDetail {
     q1: number; q2: number; q3: number; q4: number; q5: number;
     score: number;
   };
+}
+
+export interface DrillFestDetail {
+  fest: { id: string; name: string; dates: string; description: string };
+  budgetItems: BudgetItem[];
+  budgetTotal: number;
+  summary: {
+    events: number;
+    registrations: number;
+    attendance: number;
+    attendanceRate: number;
+    insiders: number;
+    outsiders: number;
+  };
+  events: DrillEvent[];
 }
 
 // ── Fetch functions ───────────────────────────────────────────────────────────
@@ -139,14 +148,8 @@ export function fetchDrillFests(dept: string) {
   );
 }
 
-export function fetchDrillEvents(dept: string, festId: string) {
-  return getJson<{ events: DrillEvent[] }>(
-    `/api/dean-analytics/drill?dept=${encodeURIComponent(dept)}&festId=${encodeURIComponent(festId)}`
-  );
-}
-
-export function fetchDrillEventDetail(eventId: string) {
-  return getJson<{ event: DrillEventDetail }>(
-    `/api/dean-analytics/drill?eventId=${encodeURIComponent(eventId)}`
+export function fetchDrillFestDetail(festId: string) {
+  return getJson<DrillFestDetail>(
+    `/api/dean-analytics/fest-detail?festId=${encodeURIComponent(festId)}`
   );
 }

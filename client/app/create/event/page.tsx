@@ -201,12 +201,9 @@ export default function CreateEventPage() {
       });
 
       if (!response.ok) {
-        let errorData: any;
-        try { errorData = await response.json(); } catch {
-          const responseText = await response.text();
-          errorData = { error: `Status: ${response.status}. ${responseText}` };
-        }
-        const message = errorData.error || errorData.message || `Server error: ${response.status}`;
+        let errorData: any = {};
+        try { errorData = await response.json(); } catch { /* non-JSON body */ }
+        const message = errorData.details || errorData.message || errorData.error || `Server error: ${response.status}`;
         throw new Error(message);
       }
 

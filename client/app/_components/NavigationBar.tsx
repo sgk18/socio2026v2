@@ -124,7 +124,7 @@ function NavigationBar() {
   if (isVenueManager) roleActions.push({ key: "venue", label: "Venue", href: "/venue", variant: "venue" });
   if (isCaterer) roleActions.push({ key: "catering", label: "Catering", href: "/catering", variant: "catering" });
   if (isStalls) roleActions.push({ key: "stalls", label: "Stalls", href: "/stalls", variant: "stalls" });
-  if (isItSupport) roleActions.push({ key: "it", label: "IT Role", href: "/it", variant: "it" });
+  if (isItSupport) roleActions.push({ key: "it", label: "IT", href: "/it", variant: "it" });
 
   const visibleRoleActions = roleActions.length > 2 ? roleActions.slice(0, 1) : roleActions;
   const dashboardDropdownRoles = roleActions.length > 2 ? roleActions.slice(1) : [];
@@ -488,6 +488,13 @@ function NavigationBar() {
                                   {roleAction.label}
                                 </Link>
                               ))}
+                              <Link
+                                href="/volunteer"
+                                onClick={() => setShowRoleDropdown(false)}
+                                className="block px-4 py-2.5 text-sm font-medium text-[#154CB3] hover:bg-gray-50 transition-colors duration-200"
+                              >
+                                Volunteer
+                              </Link>
                             </div>
                           )}
                         </div>
@@ -523,12 +530,6 @@ function NavigationBar() {
                           className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
                         >
                           View Profile
-                        </Link>
-                        <Link
-                          href="/volunteer"
-                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
-                        >
-                          Volunteer Dashboard
                         </Link>
                         <button
                           onClick={handleSignOut}
@@ -574,12 +575,6 @@ function NavigationBar() {
                           className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
                         >
                           View Profile
-                        </Link>
-                        <Link
-                          href="/volunteer"
-                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200"
-                        >
-                          Volunteer Dashboard
                         </Link>
                         <button
                           onClick={handleSignOut}

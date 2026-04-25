@@ -328,7 +328,7 @@ export const eventFormSchema = z
     organizingSchool: z.string().min(1, "Organizing school is required"),
     organizingDept: z.string().min(1, "Organizing department is required"),
     category: z.string().min(1, "Category is required"),
-    festEvent: z.string().optional(),
+    festEvent: z.string().min(1, "Please select an option"),
     registrationDeadline: z.string().min(1, "Deadline is required"),
     location: z
       .string()
