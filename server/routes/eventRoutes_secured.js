@@ -22,6 +22,11 @@ import {
 import { sendBroadcastNotification } from "./notificationRoutes.js";
 import { pushEventToGated, shouldPushEventToGated, isGatedEnabled } from "../utils/gatedSync.js";
 import { supabase } from "../config/database.js";
+import {
+  buildVolunteerAssignments,
+  normalizeRegisterNumber,
+  normalizeVolunteerRecords,
+} from "../utils/volunteerAccess.js";
 
 const router = express.Router();
 const debugRoutesEnabled = process.env.NODE_ENV !== "production";
@@ -343,6 +348,7 @@ router.get("/", optionalAuth, checkRoleExpiration, async (req, res) => {
         schedule: normalizeJsonField(event.schedule),
         prizes: normalizeJsonField(event.prizes),
         custom_fields: normalizeJsonField(event.custom_fields),
+        volunteers: normalizeVolunteerRecords(event.volunteers),
         campus_hosted_at: normalizeSingleStringField(event.campus_hosted_at),
         allowed_campuses: normalizeStringListField(event.allowed_campuses),
         registration_count: eventRegistrationCounts[event.event_id] || 0,
@@ -676,6 +682,7 @@ router.get("/:eventId", async (req, res) => {
       schedule: normalizeJsonField(event.schedule),
       prizes: normalizeJsonField(event.prizes),
       custom_fields: normalizeJsonField(event.custom_fields),
+      volunteers: normalizeVolunteerRecords(event.volunteers),
       campus_hosted_at: normalizeSingleStringField(event.campus_hosted_at),
       allowed_campuses: normalizeStringListField(event.allowed_campuses),
       ...archiveState,
@@ -723,6 +730,7 @@ router.post(
         description,
         event_date,
         event_time,
+        end_time,
         venue,
         category,
         claims_applicable,
@@ -864,6 +872,12 @@ router.post(
       const parsedSchedule = parseJsonField(schedule, []);
       const parsedPrizes = parseJsonField(prizes, []);
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
+      const parsedVolunteers = await buildVolunteerAssignments(req.body.volunteers, {
+        endDate: req.body.end_date,
+        eventDate: event_date,
+        endTime: end_time || req.body.endTime,
+        assignedBy: req.userInfo?.email,
+      });
       const campusHostedAt = normalizeSingleStringField(
         req.body.campus_hosted_at || req.body.campusHostedAt || ""
       );
@@ -916,6 +930,7 @@ router.post(
         description: description || null,
         event_date: event_date || null,
         event_time: event_time || null,
+        end_time: end_time || req.body.endTime || null,
         end_date: req.body.end_date || null,
         venue: venue || null,
         category: category || null,
@@ -930,6 +945,7 @@ router.post(
         schedule: parsedSchedule,
         prizes: parsedPrizes,
         custom_fields: parsedCustomFields,
+        volunteers: parsedVolunteers,
         organizer_email: organizerEmail,
         organizer_phone: req.body.organizer_phone || null,
         whatsapp_invite_link: req.body.whatsapp_invite_link || null,
@@ -1067,6 +1083,9 @@ router.post(
 
       // Return detailed error information
       let errorDetail = error.message || "Unknown error occurred";
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: errorDetail });
+      }
       
       // Truncate stack trace for response
       const stackLines = (error.stack || "").split("\n").slice(0, 3).join(" | ");
@@ -1268,6 +1287,7 @@ router.put(
         description,
         event_date,
         event_time,
+        end_time,
         venue,
         category,
         claims_applicable,
@@ -1391,6 +1411,16 @@ router.put(
       const parsedSchedule = parseJsonField(schedule, []);
       const parsedPrizes = parseJsonField(prizes, []);
       const parsedCustomFields = parseJsonField(req.body.custom_fields, []);
+      const hasVolunteerPayload = Object.prototype.hasOwnProperty.call(req.body, "volunteers");
+      const parsedVolunteers = hasVolunteerPayload
+        ? await buildVolunteerAssignments(req.body.volunteers, {
+            endDate: req.body.end_date,
+            eventDate: event_date,
+            endTime: end_time || req.body.endTime,
+            assignedBy: req.userInfo?.email,
+            existingVolunteers: event.volunteers,
+          })
+        : normalizeVolunteerRecords(event.volunteers);
       const campusHostedAt = normalizeSingleStringField(
         req.body.campus_hosted_at || req.body.campusHostedAt || ""
       );
@@ -1440,6 +1470,7 @@ router.put(
         description: description || null,
         event_date: event_date || null,
         event_time: event_time || null,
+        end_time: end_time || req.body.endTime || null,
         end_date: req.body.end_date || null,
         venue: venue || null,
         category: category || null,
@@ -1454,6 +1485,7 @@ router.put(
         schedule: parsedSchedule,
         prizes: parsedPrizes,
         custom_fields: parsedCustomFields,
+        volunteers: parsedVolunteers,
         organizer_email: resolvedOrganizerEmail,
         organizer_phone: req.body.organizer_phone || null,
         whatsapp_invite_link: req.body.whatsapp_invite_link || null,
@@ -1637,6 +1669,10 @@ router.put(
         supabaseError: error.status || error.statusCode || "N/A",
         errorType: error.constructor.name
       });
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       
       // More detailed logging for debugging
       if (error.message && error.message.includes('Supabase')) {
@@ -1653,6 +1689,62 @@ router.put(
           timestamp: new Date().toISOString()
         }
       });
+    }
+  }
+);
+
+// DELETE volunteer access - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
+router.delete(
+  "/:eventId/volunteers/:registerNumber",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  (req, res, next) => {
+    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) {
+      return next();
+    }
+    return res.status(403).json({ error: "Access denied: Organiser privileges required" });
+  },
+  requireOwnership("events", "eventId", "auth_uuid"),
+  async (req, res) => {
+    try {
+      const { eventId, registerNumber } = req.params;
+      const targetRegisterNumber = normalizeRegisterNumber(registerNumber);
+
+      if (!targetRegisterNumber) {
+        return res.status(400).json({ error: "Volunteer register number is required." });
+      }
+
+      const existingVolunteers = normalizeVolunteerRecords(req.resource?.volunteers);
+      const updatedVolunteers = existingVolunteers.filter(
+        (volunteer) => volunteer.register_number !== targetRegisterNumber
+      );
+
+      if (updatedVolunteers.length === existingVolunteers.length) {
+        return res.status(404).json({ error: "Volunteer assignment not found." });
+      }
+
+      const updatedRows = await update(
+        "events",
+        {
+          volunteers: updatedVolunteers,
+          updated_at: new Date().toISOString(),
+        },
+        { event_id: eventId }
+      );
+
+      return res.status(200).json({
+        message: "Volunteer access revoked successfully.",
+        event: updatedRows?.[0]
+          ? {
+              ...updatedRows[0],
+              volunteers: normalizeVolunteerRecords(updatedRows[0].volunteers),
+            }
+          : null,
+      });
+    } catch (error) {
+      console.error("Server error DELETE /api/events/:eventId/volunteers/:registerNumber:", error);
+      return res.status(500).json({ error: "Internal server error while revoking volunteer access." });
     }
   }
 );

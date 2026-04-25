@@ -37,6 +37,9 @@ import {
   MapPin,
   ChefHat,
   Store,
+  Trash2,
+  UserPlus,
+  UsersRound,
 } from "lucide-react";
 
 // ─── TYPES & CONSTANTS ──────────────────────────────────────────────────────
@@ -147,6 +150,26 @@ const ACCREDITATION_BODIES = [
 
 
 // ─── UI COMPONENTS ────────────────────────────────────────────────────────
+type VolunteerRecord = {
+  register_number: string;
+  expires_at: string;
+  assigned_by: string;
+};
+
+const normalizeRegisterNumber = (value: unknown): string =>
+  String(value ?? "").trim().toUpperCase();
+
+const normalizeVolunteerRecords = (value: unknown): VolunteerRecord[] => {
+  const rawItems = Array.isArray(value) ? value : [];
+  return rawItems
+    .map((item: any) => ({
+      register_number: normalizeRegisterNumber(item?.register_number),
+      expires_at: String(item?.expires_at || "").trim(),
+      assigned_by: String(item?.assigned_by || "").trim(),
+    }))
+    .filter((item) => item.register_number && item.expires_at && item.assigned_by);
+};
+
 interface MappedFestCardProps {
   fest: Fest;
   baseUrl: string;
@@ -431,6 +454,96 @@ const MappedEventCard = ({
 
 
 // ─── MAIN DASHBOARD COMPONENT ───────────────────────────────────────────────
+const ActiveVolunteersTable = ({
+  event,
+  onRevoke,
+  isRevoking,
+}: {
+  event: ContextEvent;
+  onRevoke: (eventId: string, registerNumber: string) => void;
+  isRevoking: (eventId: string, registerNumber: string) => boolean;
+}) => {
+  const volunteers = normalizeVolunteerRecords((event as any).volunteers);
+  if (volunteers.length === 0) return null;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <UsersRound className="w-4 h-4 text-[#154cb3]" />
+          <h3 className="text-sm font-bold text-slate-900">Active Volunteers</h3>
+        </div>
+        <p className="text-xs font-medium text-slate-500">{event.title}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[680px]">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                Register Number
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                Status
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                Audit Trail
+              </th>
+              <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {volunteers.map((volunteer) => {
+              const expiresAt = new Date(volunteer.expires_at);
+              const isActive = !Number.isNaN(expiresAt.getTime()) && new Date() < expiresAt;
+              const revokeKeyActive = isRevoking(event.event_id, volunteer.register_number);
+
+              return (
+                <tr key={`${event.event_id}-${volunteer.register_number}`} className="hover:bg-slate-50/70">
+                  <td className="px-5 py-3">
+                    <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-mono text-xs font-bold text-slate-800">
+                      {volunteer.register_number}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {isActive ? "Active" : "Expired"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <UserPlus className="w-4 h-4 text-slate-400" />
+                      Assigned by: {volunteer.assigned_by}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <button
+                      type="button"
+                      disabled={revokeKeyActive}
+                      onClick={() => onRevoke(event.event_id, volunteer.register_number)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {revokeKeyActive ? "Revoking" : "Revoke"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 export default function ManageDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -450,6 +563,7 @@ export default function ManageDashboard() {
   const statusFilterRef = useRef<HTMLDivElement>(null);
   const topOfPageRef = useRef<HTMLDivElement>(null);
   const previousPagesRef = useRef({ eventsPage: 1, festsPage: 1 });
+  const [volunteerRevokingIds, setVolunteerRevokingIds] = useState<Set<string>>(new Set());
   
   // Auth Context & Session
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -1324,6 +1438,45 @@ export default function ManageDashboard() {
     }
   };
 
+  const handleRevokeVolunteer = async (eventId: string, registerNumber: string) => {
+    if (!authToken) {
+      toast.error("Please sign in again to revoke volunteer access.");
+      return;
+    }
+
+    const normalizedRegisterNumber = normalizeRegisterNumber(registerNumber);
+    const revokeKey = `${eventId}:${normalizedRegisterNumber}`;
+    setVolunteerRevokingIds((prev) => new Set(prev).add(revokeKey));
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/events/${encodeURIComponent(eventId)}/volunteers/${encodeURIComponent(normalizedRegisterNumber)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to revoke volunteer access.");
+      }
+
+      toast.success("Volunteer access revoked.");
+      await refreshLiveEvents();
+    } catch (error: any) {
+      toast.error(error?.message || "Unable to revoke volunteer access.");
+    } finally {
+      setVolunteerRevokingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(revokeKey);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <div ref={topOfPageRef} />
@@ -1508,6 +1661,7 @@ export default function ManageDashboard() {
                     : "No results found."}
                 </div>
               ) : (
+                <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {paginatedEvents.items.map((event) => {
                         const archiveState = getEffectiveArchiveState(event);
@@ -1532,6 +1686,21 @@ export default function ManageDashboard() {
                         );
                     })}
                 </div>
+                {paginatedEvents.items.some((event) => normalizeVolunteerRecords((event as any).volunteers).length > 0) && (
+                  <div className="mt-8 space-y-5">
+                    {paginatedEvents.items.map((event) => (
+                      <ActiveVolunteersTable
+                        key={`volunteers-${event.event_id}`}
+                        event={event}
+                        onRevoke={handleRevokeVolunteer}
+                        isRevoking={(eventId, registerNumber) =>
+                          volunteerRevokingIds.has(`${eventId}:${normalizeRegisterNumber(registerNumber)}`)
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+                </>
               )}
             </>
         )}

@@ -57,10 +57,17 @@ export const EventCard = ({
   const showOutsiderBadge = !isLoading && isOutsiderUser && Boolean(allowOutsiders);
   const isAdminOrOrganizer = !isLoading && (userData?.is_organiser || userData?.is_masteradmin);
 
+  const normalizeEmail = (value?: string | null) =>
+    typeof value === "string" ? value.toLowerCase() : null;
+
+  const createdByEmail = normalizeEmail(createdBy);
+  const organizerEmailLower = normalizeEmail(organizerEmail);
+  const userEmail = normalizeEmail(userData?.email);
+
   const isOwner = !isLoading && (
     (session?.user?.id && createdBy && session.user.id === createdBy) ||
-    (userData?.email && createdBy && userData.email.toLowerCase() === createdBy.toLowerCase()) ||
-    (userData?.email && organizerEmail && userData.email.toLowerCase() === organizerEmail.toLowerCase())
+    (userEmail && createdByEmail && userEmail === createdByEmail) ||
+    (userEmail && organizerEmailLower && userEmail === organizerEmailLower)
   );
 
   if (userData?.is_organiser && !isLoading) {

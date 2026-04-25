@@ -138,6 +138,7 @@ export default function CreateEventPage() {
     appendIfExists("event_date", dataFromHookForm.eventDate);
     appendIfExists("end_date", dataFromHookForm.endDate);
     appendIfExists("event_time", dataFromHookForm.eventTime);
+    appendIfExists("end_time", dataFromHookForm.endTime);
     appendIfExists("description", dataFromHookForm.detailedDescription);
     appendIfExists("organizing_school", dataFromHookForm.organizingSchool);
     appendIfExists("organizing_dept", dataFromHookForm.organizingDept);
@@ -171,6 +172,7 @@ export default function CreateEventPage() {
     appendJsonArrayOrObject("prizes", dataFromHookForm.prizes);
     appendJsonArrayOrObject("event_heads", dataFromHookForm.eventHeads);
     appendJsonArrayOrObject("custom_fields", dataFromHookForm.customFields);
+    appendJsonArrayOrObject("volunteers", dataFromHookForm.volunteers || []);
     appendIfExists("created_by", userEmail);
 
     const itConfig = operationalConfigRef.current.it;
