@@ -79,7 +79,7 @@ export const EventCard = ({
     console.log(`[EventCard Debug] title: ${title}, isOwner: ${isOwner}, createdBy: ${JSON.stringify(createdBy)}, createdByEmail: ${createdByLower}, sessionUserId: ${session?.user?.id}, organizerEmail: ${organizerEmail}, userEmail: ${userData?.email}`);
   }
 
-  const canManage = !isLoading && (userData?.is_masteradmin || (userData?.is_organiser && isOwner));
+  const canManage = !isLoading && (userData?.is_organiser && isOwner && !userData?.is_masteradmin);
   const reminderAuthToken = authToken || session?.access_token || "";
 
   const eventSlug = idForLink;

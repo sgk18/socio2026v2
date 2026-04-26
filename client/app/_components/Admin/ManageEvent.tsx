@@ -1254,8 +1254,12 @@ function BudgetEstimator({
 }) {
   const total = items.reduce((s, b) => s + b.quantity * b.unitPrice, 0);
 
-  const addRow = () =>
+  const canAddRow = items.length === 0 || items[items.length - 1].name.trim() !== '';
+
+  const addRow = () => {
+    if (!canAddRow) return;
     onChange([...items, { id: crypto.randomUUID(), name: '', quantity: 1, unitPrice: 0 }]);
+  };
 
   const removeRow = (id: string) => onChange(items.filter(b => b.id !== id));
 
@@ -1327,7 +1331,12 @@ function BudgetEstimator({
       </div>
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-        <button type="button" onClick={addRow} className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+        <button
+          type="button"
+          onClick={addRow}
+          disabled={!canAddRow}
+          className="text-sm text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
           + Add item
         </button>
         <div className="text-right">

@@ -501,6 +501,12 @@ function WeekCalendar({
   const days  = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
   const todayStr = ymd(new Date());
+  const currentWeekStartStr = ymd(startOfWeek(new Date()));
+  const canGoPrev = ymd(addDays(weekStart, -7)) >= currentWeekStartStr;
+
+  // Strip out bookings from before today
+  const visibleBookings = bookings.filter(b => b.date >= todayStr);
+  const visibleOwnBookings = ownBookings.filter(b => b.date >= todayStr);
 
   return (
     <div>
@@ -508,8 +514,9 @@ function WeekCalendar({
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onWeekChange(addDays(weekStart, -7))}
-            className="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:border-[#154CB3] hover:text-[#154CB3] transition-colors"
+            onClick={() => canGoPrev && onWeekChange(addDays(weekStart, -7))}
+            disabled={!canGoPrev}
+            className="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:border-[#154CB3] hover:text-[#154CB3] transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-500"
             aria-label="Previous week"
           >
             <IconChevronLeft />
@@ -589,8 +596,8 @@ function WeekCalendar({
           {/* 7 day columns */}
           {days.map((d, di) => {
             const dateStr    = ymd(d);
-            const dayBooks   = bookings.filter(b => b.date === dateStr);
-            const dayOwn     = ownBookings.filter(b => b.date === dateStr);
+            const dayBooks   = visibleBookings.filter(b => b.date === dateStr);
+            const dayOwn     = visibleOwnBookings.filter(b => b.date === dateStr);
             return (
               <div key={di} className="relative border-l border-gray-100 first:border-l-0">
                 {/* Clickable hour cells */}
