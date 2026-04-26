@@ -231,7 +231,7 @@ export default function BookVenuePage() {
         </div>
 
         {tab === "mine"     && <MyBookingsView session={session} />}
-        {tab === "specific" && <SpecificVenueView session={session} userData={userData} />}
+        {tab === "specific" && <SpecificVenueView session={session} userData={userData} onBookingSuccess={() => setTab("mine")} />}
         {tab === "any"      && <AnyAvailableView session={session} userData={userData} />}
       </div>
     </div>
@@ -262,7 +262,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 // VIEW 1 — BOOK SPECIFIC VENUE
 // ══════════════════════════════════════════════════════════════════════════════
 
-function SpecificVenueView({ session, userData }: { session: any; userData: any }) {
+function SpecificVenueView({ session, userData, onBookingSuccess }: { session: any; userData: any; onBookingSuccess?: () => void }) {
   const [campuses,       setCampuses]       = useState<string[]>([]);
   const [selectedCampus, setSelectedCampus] = useState("");
   const [blocks,         setBlocks]         = useState<string[]>([]);
@@ -478,7 +478,7 @@ function SpecificVenueView({ session, userData }: { session: any; userData: any 
           venue={selectedVenue}
           initial={modal}
           onClose={() => setModal(null)}
-          onSuccess={() => { setModal(null); loadBookings(); loadOwnBookings(); }}
+          onSuccess={() => { setModal(null); loadBookings(); loadOwnBookings(); onBookingSuccess?.(); }}
         />
       )}
     </>

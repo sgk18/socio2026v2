@@ -1335,6 +1335,7 @@ function BudgetEstimator({
           type="button"
           onClick={addRow}
           disabled={!canAddRow}
+          title={canAddRow ? "Add item" : "Fill in the current item to add another"}
           className="text-sm text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + Add item
@@ -1937,6 +1938,17 @@ export default function EventForm({
         allowedCampuses: normalizeAllowedCampuses(defaultValues.allowedCampuses),
       };
       reset(transformedDefaults);
+      // Prevent the fest auto-fill effect from overwriting category and other fields
+      // that were already loaded from the event's own data during edit mode.
+      if (
+        isEditMode &&
+        transformedDefaults.festEvent &&
+        String(transformedDefaults.festEvent).toLowerCase() !== "none"
+      ) {
+        lastAutoFilledFestRef.current = toCanonical(
+          String(transformedDefaults.festEvent)
+        );
+      }
     }
   }, [defaultValues, reset, isEditMode]);
 

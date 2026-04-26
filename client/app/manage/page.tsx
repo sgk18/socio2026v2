@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -732,7 +732,15 @@ const ActiveVolunteersTable = ({
   );
 };
 
-export default function ManageDashboard() {
+export default function ManageDashboardPage() {
+  return (
+    <Suspense>
+      <ManageDashboard />
+    </Suspense>
+  );
+}
+
+function ManageDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   type ManageTab = "fests" | "events" | "report";

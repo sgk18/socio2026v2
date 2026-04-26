@@ -614,6 +614,7 @@ export function DynamicScheduleList({
           type="button"
           onClick={() => canAddSchedule && append({ time: "", activity: "" } as ScheduleItemType)}
           disabled={!canAddSchedule}
+          title={canAddSchedule ? "Add schedule item" : "Fill in the current field to add another"}
           className="bg-[#063168] p-3 rounded-full text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg
@@ -784,6 +785,7 @@ export function DynamicTextList({
             canAddItem && append({ value: "" }, { shouldFocus: false })
           }
           disabled={!canAddItem}
+          title={canAddItem ? `Add ${itemNoun}` : "Fill in the current field to add another"}
           className="bg-[#063168] p-3 rounded-full text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg

@@ -308,6 +308,18 @@ export interface HodFestSummary {
   deptBreakdown: { dept: string; count: number; color?: string }[];
 }
 
+// ── Token-less fetch helpers (mirrors deanAnalyticsApi pattern) ───────────────
+
+export function fetchHodFestsInternal(): Promise<{ fests: HodFest[]; department: string }> {
+  return getJson<{ fests: HodFest[]; department: string }>("/api/hod-analytics/fests");
+}
+
+export function fetchHodFestDetail(festId: string): Promise<HodFestSummary> {
+  return getJson<HodFestSummary>(
+    `/api/hod-analytics/fest-summary?festId=${encodeURIComponent(festId)}`
+  );
+}
+
 export async function fetchHodFests(token: string): Promise<HodFest[]> {
   const response = await fetch(`${API_URL}/api/hod-analytics/fests`, {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

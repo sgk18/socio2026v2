@@ -102,15 +102,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Restore session from localStorage on mount
+  const persistUserData = (user: UserData | null) => {
+    if (user) {
+      localStorage.setItem('socio_user_data', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('socio_user_data');
+    }
+  };
+
+  // Restore session + userData from localStorage on mount — eliminates the
+  // loading flash for returning users by skipping the async Supabase round-trip.
   useEffect(() => {
     const storedSession = localStorage.getItem('socio_session');
-    if (storedSession && !session) {
+    const storedUserData = localStorage.getItem('socio_user_data');
+    if (storedSession && storedUserData) {
       try {
-        const parsedSession = JSON.parse(storedSession);
-        setSession(parsedSession);
-      } catch (e) {
+        setSession(JSON.parse(storedSession));
+        setUserData(JSON.parse(storedUserData));
+        setIsLoading(false);
+      } catch {
         localStorage.removeItem('socio_session');
+        localStorage.removeItem('socio_user_data');
       }
     }
   }, []);
@@ -141,7 +153,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const checkUserSession = async () => {
-      setIsLoading(true);
+      // Only show the loading spinner when there is no cached data to display.
+      if (!localStorage.getItem('socio_user_data')) setIsLoading(true);
       try {
         // Add timeout to prevent hanging on Supabase connection issues
         const timeoutPromise = new Promise((_, reject) =>
@@ -239,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         setUserData(null);
         persistSession(null);
+        persistUserData(null);
         setIsLoading(false);
       } else if (event === "USER_UPDATED" && newSession) {
         setSession(newSession);
@@ -343,6 +357,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             `User data not found for ${email}. User might need to be created.`
           );
           setUserData(null);
+          persistUserData(null);
         } else {
           throw new Error(`Failed to fetch user data: ${response.statusText}`);
         }
@@ -351,6 +366,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       const user = { ...data.user, is_support: Boolean(data.user?.is_support) };
       setUserData(user);
+      persistUserData(user);
       return user;
     } catch (error) {
       console.error("Error fetching user data:", error);
