@@ -1649,20 +1649,18 @@ export default function EventForm({
             ? options.filter((o) => subHeadFestIds.includes(o.value))
             : options;
 
-          setFetchedFests([
-            {
-              value: "none",
-              label: "None",
-              departmentAccess: [],
-              organizingSchool: "",
-              organizingDept: "",
-              category: "",
-              campusHostedAt: "",
-              allowedCampuses: [],
-              allowOutsiders: false,
-            },
-            ...filteredOptions,
-          ]);
+          const noneOption = isStudentOrganiser ? [] : [{
+            value: "none",
+            label: "None",
+            departmentAccess: [],
+            organizingSchool: "",
+            organizingDept: "",
+            category: "",
+            campusHostedAt: "",
+            allowedCampuses: [],
+            allowOutsiders: false,
+          }];
+          setFetchedFests([...noneOption, ...filteredOptions]);
         }
       } catch (error) {
         console.error("Failed to fetch fests:", error);
@@ -2128,6 +2126,8 @@ export default function EventForm({
       };
       setWasDraftOnSubmit(Boolean(isDraft));
       await onSubmit(sanitizedData);
+      // Student organisers are redirected to /manage immediately — no success modal
+      if (isStudentOrganiser) return;
       setSuccessAction("publish");
       // Don't show modal yet — let the overlay finish its animation first
       setPendingSuccess("publish");
@@ -2601,14 +2601,22 @@ export default function EventForm({
                 {/* ── Details tab ── */}
                 <div className={`p-6 sm:p-8 md:p-10 space-y-6 sm:space-y-8 ${activeTab !== 'details' ? 'hidden' : ''}`}>
                 <div>
-                  <InputField
-                    label="Event title:"
-                    name="eventTitle"
-                    register={register}
-                    error={errors.eventTitle}
-                    required
-                    placeholder="Enter event title"
-                  />
+                  <div>
+                    <InputField
+                      label="Event title:"
+                      name="eventTitle"
+                      register={register}
+                      error={errors.eventTitle}
+                      required
+                      placeholder="Enter event title"
+                      maxLength={60}
+                    />
+                    {!errors.eventTitle && (
+                      <p className={`text-xs mt-1 text-right ${(watch("eventTitle") || "").length >= 60 ? "text-red-500" : "text-gray-400"}`}>
+                        {(watch("eventTitle") || "").length}/60
+                      </p>
+                    )}
+                  </div>
                   {isEditMode && (
                     <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                       <p className="text-sm text-amber-800">
@@ -2734,7 +2742,7 @@ export default function EventForm({
                     control={control}
                     options={fetchedFests.length > 0 ? fetchedFests : [{ value: "none", label: "None" }]}
                     placeholder="Select fest"
-                    label="Is this event under any fest?"
+                    label={isStudentOrganiser ? "Which fest is this event under?" : "Is this event under any fest?"}
                     error={errors.festEvent}
                     required
                   />
@@ -3457,35 +3465,70 @@ export default function EventForm({
                       <div>
                         <p className="text-sm font-semibold text-gray-800 mb-1">Approval Stages</p>
                         <p className="text-xs text-gray-500 mb-3">
-                          Toggle off any stages that are not required for this event.
+                          Toggle the stages required for this event — approvals will be sent in sequential order.
                         </p>
-                        <div className="space-y-2">
-                          {blockingStages.map((s) => (
-                            <div key={s.role} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
-                              <div>
-                                <p className="text-sm font-medium text-gray-800">{s.label}</p>
-                                <p className="text-xs text-gray-400">{s.desc}</p>
-                              </div>
-                              <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="sr-only peer"
-                                  checked={s.enabled}
-                                  onChange={(e) =>
-                                    setBlockingStages(prev =>
-                                      prev.map(bs => {
-                                        if (bs.role === s.role) return { ...bs, enabled: e.target.checked };
-                                        if (s.role === 'cfo' && bs.role === 'accounts' && e.target.checked) return { ...bs, enabled: true };
-                                        return bs;
-                                      })
-                                    )
-                                  }
-                                />
-                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
-                              </label>
-                            </div>
-                          ))}
+                        <div className="space-y-1">
+                          {(() => {
+                            let activeStep = 0;
+                            return blockingStages.map((s, idx) => {
+                              if (s.enabled) activeStep++;
+                              const stepNum = s.enabled ? activeStep : null;
+                              const fixedPos = idx + 1;
+                              const isLast = idx === blockingStages.length - 1;
+                              return (
+                                <div key={s.role}>
+                                  <div className={`flex items-center justify-between px-4 py-3 rounded-lg border transition-colors ${s.enabled ? "border-[#154CB3]/30 bg-blue-50/40" : "border-gray-200 bg-gray-50"}`}>
+                                    <div className="flex items-center gap-3">
+                                      {/* Step badge */}
+                                      {s.enabled ? (
+                                        <div className="w-7 h-7 rounded-full bg-[#154CB3] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
+                                          {stepNum}
+                                        </div>
+                                      ) : (
+                                        <div className="w-7 h-7 rounded-full border-2 border-gray-200 flex-shrink-0" />
+                                      )}
+                                      <div>
+                                        <p className={`text-sm font-medium ${s.enabled ? "text-gray-800" : "text-gray-400"}`}>{s.label}</p>
+                                        <p className="text-xs text-gray-400">{s.desc}</p>
+                                      </div>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={s.enabled}
+                                        onChange={(e) =>
+                                          setBlockingStages(prev =>
+                                            prev.map(bs => {
+                                              if (bs.role === s.role) return { ...bs, enabled: e.target.checked };
+                                              if (s.role === 'cfo' && bs.role === 'accounts' && e.target.checked) return { ...bs, enabled: true };
+                                              return bs;
+                                            })
+                                          )
+                                        }
+                                      />
+                                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+                                    </label>
+                                  </div>
+                                  {/* Flow arrow between enabled stages */}
+                                  {!isLast && s.enabled && blockingStages.slice(idx + 1).some(bs => bs.enabled) && (
+                                    <div className="flex justify-start pl-[22px] py-0.5">
+                                      <svg className="w-3 h-3 text-[#154CB3]/50" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H4a1 1 0 110-2h10.586l-5.293-5.293A1 1 0 0110 3z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
                         </div>
+                        <p className="text-xs text-gray-400 mt-2 flex items-center gap-1.5">
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Approvals are processed from top to bottom in sequential order.
+                        </p>
                         {/* Budget estimator appears when CFO or Accounts is enabled */}
                         {blockingStages.some(s => (s.role === 'cfo' || s.role === 'accounts') && s.enabled) && (
                           <>
@@ -3534,18 +3577,30 @@ export default function EventForm({
                       </button>
                     )}
 
-                    {onSubmitDraft && (
-                      <button
-                        type="button"
-                        onClick={handleDraftSave}
-                        className={secondaryButtonClasses}
-                        disabled={isSubmittingProp || rhfIsSubmitting || isDeleting}
-                      >
-                        {isSubmittingProp || rhfIsSubmitting
-                          ? "Saving..."
-                          : "Save as Draft"}
-                      </button>
-                    )}
+                    {onSubmitDraft && (() => {
+                      const draftBlocked =
+                        !(watch("eventTitle") || "").trim() || !(watch("contactEmail") || "").trim();
+                      return (
+                        <div className="relative group w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={handleDraftSave}
+                            className={secondaryButtonClasses}
+                            disabled={isSubmittingProp || rhfIsSubmitting || isDeleting || draftBlocked}
+                          >
+                            {isSubmittingProp || rhfIsSubmitting
+                              ? "Saving..."
+                              : "Save as Draft"}
+                          </button>
+                          {draftBlocked && (
+                            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[220px] rounded-lg bg-gray-800 px-3 py-1.5 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-center z-50">
+                              Fill event title and contact email to save as draft
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {isEditMode && !shouldBlockPublishByApproval && (
                       <div className="relative" ref={actionsDropdownRef}>
@@ -3622,7 +3677,10 @@ export default function EventForm({
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveTab('approvals');
+                        // setTimeout breaks the ghost-click: without it, React synchronously
+                        // replaces this type="button" with the type="submit" in the same DOM
+                        // position, and the browser fires a spurious submit on mouseup.
+                        setTimeout(() => setActiveTab('approvals'), 0);
                       }}
                       disabled={
                         isSubmittingProp ||
@@ -3650,12 +3708,12 @@ export default function EventForm({
                           ? isDraft
                             ? "Publishing..."
                             : "Updating..."
-                          : "Publishing..."
+                          : isStudentOrganiser ? "Submitting..." : "Publishing..."
                         : isEditMode
                         ? isDraft
-                          ? "Publish Event"
+                          ? isStudentOrganiser ? "Submit Event" : "Publish Event"
                           : "Update Event"
-                        : "Publish Event"}
+                        : isStudentOrganiser ? "Submit Event" : "Publish Event"}
                     </button>
                   )}
                 </div>

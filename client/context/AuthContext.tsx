@@ -401,19 +401,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       let pollTimer: ReturnType<typeof setInterval>;
+      let authTimeout: ReturnType<typeof setTimeout>;
+
+      const cleanup = (closePopup = false) => {
+        clearInterval(pollTimer);
+        clearTimeout(authTimeout);
+        window.removeEventListener("message", handleMessage);
+        if (closePopup && !popup.closed) popup.close();
+      };
 
       const handleMessage = (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
         if (event.data?.type === "GOOGLE_AUTH_SUCCESS") {
-          window.removeEventListener("message", handleMessage);
-          clearInterval(pollTimer);
-          if (!popup.closed) popup.close();
-          // Re-read session from cookies set by the popup's callback route
-          void supabase.auth.getSession();
+          cleanup(true);
+
+          const { accessToken, refreshToken } = event.data as { accessToken?: string; refreshToken?: string };
+
+          const applySession = accessToken && refreshToken
+            ? supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+                .then(({ data }) => data.session)
+            : supabase.auth.getSession().then(({ data }) => data.session);
+
+          applySession.then((newSession) => {
+            if (newSession) {
+              setSession(newSession);
+              persistSession(newSession);
+              void fetchUserData(newSession.user.email!);
+            }
+            setIsLoading(false);
+          }).catch(() => {
+            setIsLoading(false);
+          });
         } else if (event.data?.type === "GOOGLE_AUTH_ERROR") {
-          window.removeEventListener("message", handleMessage);
-          clearInterval(pollTimer);
-          if (!popup.closed) popup.close();
+          cleanup(true);
           setIsLoading(false);
         }
       };
@@ -423,11 +443,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Detect if the user manually closed the popup
       pollTimer = setInterval(() => {
         if (popup.closed) {
-          clearInterval(pollTimer);
-          window.removeEventListener("message", handleMessage);
+          cleanup();
           setIsLoading(false);
         }
       }, 500);
+
+      // Safety timeout: if sign-in takes more than 3 minutes, unblock the UI
+      authTimeout = setTimeout(() => {
+        cleanup(true);
+        setIsLoading(false);
+      }, 3 * 60 * 1000);
 
     } catch (error) {
       console.error("Google authentication error:", error);
