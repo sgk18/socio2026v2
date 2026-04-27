@@ -37,6 +37,11 @@ const HeartIcon = () => (
     <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
   </svg>
 );
+const ClipboardIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  </svg>
+);
 const CheckIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 6 9 17l-5-5" />
@@ -78,6 +83,13 @@ const TEMPLATES = [
     preview: (title: string) => `There's been an update regarding "${title}". Check the event page for details.`,
   },
   {
+    id: "feedback",
+    label: "Send Feedback Form",
+    desc: "Send feedback form to all participants",
+    icon: ClipboardIcon,
+    preview: (title: string) => `We'd love your feedback on "${title}"! Please fill out the form to share your experience.`,
+  },
+  {
     id: "thankYou",
     label: "Thank You",
     desc: "Post-event gratitude message",
@@ -90,16 +102,38 @@ interface EventReminderButtonProps {
   eventId: string;
   eventTitle: string;
   authToken: string;
+  feedbackEndDate?: string | null;
+  feedbackSentAt?: string | null;
+  onFeedbackSent?: (sentAt: string) => void;
 }
 
 type Step = "select" | "confirm";
 
-export default function EventReminderButton({ eventId, eventTitle, authToken }: EventReminderButtonProps) {
+export default function EventReminderButton({
+  eventId,
+  eventTitle,
+  authToken,
+  feedbackEndDate,
+  feedbackSentAt,
+  onFeedbackSent,
+}: EventReminderButtonProps) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [justSent, setJustSent] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("select");
+  const [localFeedbackSentAt, setLocalFeedbackSentAt] = useState<string | null>(feedbackSentAt ?? null);
+
+  const canSendFeedback = (() => {
+    if (!feedbackEndDate) return false;
+    const endMidnight = new Date(feedbackEndDate);
+    endMidnight.setHours(0, 0, 0, 0);
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    return endMidnight <= todayMidnight;
+  })();
+
+  const feedbackAlreadySent = !!localFeedbackSentAt;
 
   const close = () => {
     setOpen(false);
@@ -112,31 +146,51 @@ export default function EventReminderButton({ eventId, eventTitle, authToken }: 
     if (!selected) return;
     setSending(true);
     try {
-      const res = await fetch(`${API_URL}/api/notifications/event-reminder`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ event_id: eventId, template: selected }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to send");
+      if (selected === "feedback") {
+        const res = await fetch(`${API_URL}/api/feedbacks/${eventId}/send`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to send");
+        }
+        const data = await res.json();
+        const sentAt = data.feedback_sent_at || new Date().toISOString();
+        setLocalFeedbackSentAt(sentAt);
+        onFeedbackSent?.(sentAt);
+        toast.success(`Feedback form sent to ${data.sent} participant${data.sent !== 1 ? "s" : ""}!`);
+      } else {
+        const res = await fetch(`${API_URL}/api/notifications/event-reminder`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ event_id: eventId, template: selected }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to send");
+        }
+        toast.success("Reminder sent to all users!");
+        setJustSent(selected);
       }
-
-      toast.success("Reminder sent to all users!");
-      setJustSent(selected);
       setTimeout(() => close(), 1500);
     } catch (err: any) {
-      toast.error(err.message || "Failed to send reminder");
+      toast.error(err.message || "Failed to send");
     } finally {
       setSending(false);
     }
   };
 
   const selectedTemplate = TEMPLATES.find((t) => t.id === selected);
+
+  const isFeedbackDisabled = (id: string) =>
+    id === "feedback" && (!canSendFeedback || feedbackAlreadySent);
 
   return (
     <>
@@ -176,17 +230,22 @@ export default function EventReminderButton({ eventId, eventTitle, authToken }: 
                 </div>
 
                 {/* Template list */}
-                <div className="p-4 space-y-2 max-h-[340px] overflow-y-auto">
+                <div className="p-4 space-y-2 max-h-[380px] overflow-y-auto">
                   {TEMPLATES.map((tpl) => {
                     const isSelected = selected === tpl.id;
                     const wasSent = justSent === tpl.id;
+                    const isFbAlreadySent = tpl.id === "feedback" && feedbackAlreadySent;
+                    const isDisabled = isFeedbackDisabled(tpl.id);
                     const Icon = tpl.icon;
                     return (
                       <button
                         key={tpl.id}
-                        onClick={() => setSelected(tpl.id)}
+                        onClick={() => !isDisabled && setSelected(tpl.id)}
+                        disabled={isDisabled}
                         className={`w-full text-left p-3.5 rounded-xl border-2 transition-all ${
-                          wasSent
+                          isDisabled
+                            ? "border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed"
+                            : wasSent || isFbAlreadySent
                             ? "border-green-400 bg-green-50"
                             : isSelected
                             ? "border-[#154CB3] bg-blue-50"
@@ -195,17 +254,24 @@ export default function EventReminderButton({ eventId, eventTitle, authToken }: 
                       >
                         <div className="flex items-center gap-3">
                           <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
-                            isSelected ? "bg-[#154CB3] text-white" : "bg-gray-100 text-gray-500"
+                            isDisabled
+                              ? "bg-gray-100 text-gray-300"
+                              : isSelected
+                              ? "bg-[#154CB3] text-white"
+                              : "bg-gray-100 text-gray-500"
                           }`}>
                             <Icon />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-sm text-gray-900">{tpl.label}</span>
-                              {wasSent && (
+                              {(wasSent || isFbAlreadySent) && (
                                 <span className="text-xs font-medium text-green-600 flex items-center gap-1">
                                   <CheckIcon /> Sent
                                 </span>
+                              )}
+                              {tpl.id === "feedback" && !feedbackAlreadySent && !canSendFeedback && (
+                                <span className="text-[10px] text-gray-400">After event ends</span>
                               )}
                             </div>
                             <p className="text-xs text-gray-500 mt-0.5">{tpl.desc}</p>
@@ -241,72 +307,123 @@ export default function EventReminderButton({ eventId, eventTitle, authToken }: 
 
             {step === "confirm" && selectedTemplate && (
               <>
-                {/* Confirmation Header */}
-                <div className="px-6 py-5 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
-                      <WarningIcon />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900">Confirm Broadcast</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">This will be sent to every user on the platform</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preview */}
-                <div className="p-5">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Message Preview</p>
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-[#154CB3] flex-shrink-0 mt-0.5">
-                        <BellIcon />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900">{selectedTemplate.label}: {eventTitle}</p>
-                        <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-                          {selectedTemplate.preview(eventTitle)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-3">
-                          <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-[#154CB3]">
-                            Broadcast
-                          </span>
-                          <span className="text-[10px] text-gray-400">Just now</span>
+                {selected === "feedback" ? (
+                  <>
+                    {/* Feedback Confirmation Header */}
+                    <div className="px-6 py-5 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0">
+                          <WarningIcon />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-gray-900">Send Feedback Form</h3>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate max-w-64">
+                            for <strong className="text-gray-700">{eventTitle}</strong>
+                          </p>
                         </div>
                       </div>
                     </div>
-                  </div>
+                    <div className="p-5 space-y-4">
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        This will send a feedback notification to every registered participant for this event.
+                        They will be asked to rate 5 standard questions on a 1–5 scale.
+                      </p>
+                      <div className="p-3 bg-violet-50 border border-violet-200 rounded-lg">
+                        <p className="text-xs text-violet-700 font-medium">
+                          This action can only be performed once per event and cannot be undone.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+                      <button
+                        onClick={() => setStep("select")}
+                        className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors text-sm"
+                      >
+                        Go Back
+                      </button>
+                      <button
+                        onClick={handleSend}
+                        disabled={sending}
+                        className={`flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors text-sm ${
+                          sending
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-violet-600 text-white hover:bg-violet-700"
+                        }`}
+                      >
+                        {sending ? "Sending..." : "Yes, Send Now"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Regular Reminder Confirmation Header */}
+                    <div className="px-6 py-5 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+                          <WarningIcon />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-gray-900">Confirm Broadcast</h3>
+                          <p className="text-xs text-gray-500 mt-0.5">This will be sent to every user on the platform</p>
+                        </div>
+                      </div>
+                    </div>
 
-                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-xs text-amber-700 font-medium">
-                      Are you sure you want to broadcast this notification to everyone?
-                    </p>
-                    <p className="text-[11px] text-amber-600 mt-1">
-                      This action cannot be undone. All users will receive this notification immediately.
-                    </p>
-                  </div>
-                </div>
+                    {/* Preview */}
+                    <div className="p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Message Preview</p>
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-[#154CB3] flex-shrink-0 mt-0.5">
+                            <BellIcon />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-900">{selectedTemplate.label}: {eventTitle}</p>
+                            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                              {selectedTemplate.preview(eventTitle)}
+                            </p>
+                            <div className="flex items-center gap-2 mt-3">
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-[#154CB3]">
+                                Broadcast
+                              </span>
+                              <span className="text-[10px] text-gray-400">Just now</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                {/* Confirm Actions */}
-                <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
-                  <button
-                    onClick={() => setStep("select")}
-                    className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors text-sm"
-                  >
-                    Go Back
-                  </button>
-                  <button
-                    onClick={handleSend}
-                    disabled={sending || !!justSent}
-                    className={`flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors text-sm ${
-                      sending || justSent
-                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        : "bg-[#154CB3] text-white hover:bg-[#0e3a8a]"
-                    }`}
-                  >
-                    {sending ? "Sending..." : justSent ? "Sent" : "Yes, Broadcast Now"}
-                  </button>
-                </div>
+                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs text-amber-700 font-medium">
+                          Are you sure you want to broadcast this notification to everyone?
+                        </p>
+                        <p className="text-[11px] text-amber-600 mt-1">
+                          This action cannot be undone. All users will receive this notification immediately.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Confirm Actions */}
+                    <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+                      <button
+                        onClick={() => setStep("select")}
+                        className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors text-sm"
+                      >
+                        Go Back
+                      </button>
+                      <button
+                        onClick={handleSend}
+                        disabled={sending || !!justSent}
+                        className={`flex-1 px-4 py-2.5 font-medium rounded-xl transition-colors text-sm ${
+                          sending || justSent
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-[#154CB3] text-white hover:bg-[#0e3a8a]"
+                        }`}
+                      >
+                        {sending ? "Sending..." : justSent ? "Sent" : "Yes, Broadcast Now"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -327,4 +444,3 @@ export default function EventReminderButton({ eventId, eventTitle, authToken }: 
     </>
   );
 }
-

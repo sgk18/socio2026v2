@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -20,7 +20,6 @@ import {
 } from "@/lib/xlsxTheme";
 import AnimatedListDropdown from "@/app/_components/UI/AnimatedListDropdown";
 import EventReminderButton from "@/app/_components/EventReminderButton";
-import SendFeedbackButton from "@/app/_components/SendFeedbackButton";
 import BookVenueModal from "@/app/_components/BookVenueModal";
 import {
   Search,
@@ -612,16 +611,9 @@ const MappedEventCard = ({
               eventId={event.event_id}
               eventTitle={event.title}
               authToken={authToken || ""}
-            />
-          )}
-          {!isDraft && (
-            <SendFeedbackButton
-              eventId={event.event_id}
-              eventTitle={event.title}
-              endDate={(event as any).end_date ?? event.event_date ?? null}
+              feedbackEndDate={(event as any).end_date ?? event.event_date ?? null}
               feedbackSentAt={feedbackSentAt}
-              authToken={authToken || ""}
-              onSent={(sentAt) => setFeedbackSentAt(sentAt)}
+              onFeedbackSent={(sentAt) => setFeedbackSentAt(sentAt)}
             />
           )}
           {!isDraft && (
@@ -636,7 +628,7 @@ const MappedEventCard = ({
             <button
               type="button"
               onClick={() => onManageVolunteers(event)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-100 text-violet-700 font-semibold text-xs hover:bg-violet-200 transition-colors"
+              className="inline-flex items-center gap-1.5 text-violet-700 font-semibold text-xs hover:text-violet-900 transition-colors"
             >
               <UsersRound className="w-3.5 h-3.5" />
               Volunteers
@@ -740,7 +732,15 @@ const ActiveVolunteersTable = ({
   );
 };
 
-export default function ManageDashboard() {
+export default function ManageDashboardPage() {
+  return (
+    <Suspense>
+      <ManageDashboard />
+    </Suspense>
+  );
+}
+
+function ManageDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   type ManageTab = "fests" | "events" | "report";

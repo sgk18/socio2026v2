@@ -7,6 +7,7 @@ import {
   Control,
   Controller,
   useFieldArray,
+  useWatch,
   FieldErrors,
   FieldValues,
   Path,
@@ -371,7 +372,7 @@ export function CustomDropdown({
               <span
                 className={`text-sm ${
                   value ? "text-gray-900" : "text-gray-500"
-                } truncate max-w-[140px] sm:max-w-[160px]`}
+                } truncate`}
               >
                 {options.find((opt) => opt.value === value)?.label ||
                   placeholder}
@@ -571,6 +572,10 @@ export function DynamicScheduleList({
     control,
     name: "scheduleItems",
   });
+  const watchedSchedule = useWatch({ control, name: "scheduleItems" });
+  const canAddSchedule =
+    fields.length === 0 ||
+    (watchedSchedule?.[fields.length - 1]?.activity?.trim() || "") !== "";
 
   return (
     <div>
@@ -607,8 +612,10 @@ export function DynamicScheduleList({
         </div>
         <button
           type="button"
-          onClick={() => append({ time: "", activity: "" } as ScheduleItemType)}
-          className="bg-[#063168] p-3 rounded-full text-white cursor-pointer"
+          onClick={() => canAddSchedule && append({ time: "", activity: "" } as ScheduleItemType)}
+          disabled={!canAddSchedule}
+          title={canAddSchedule ? "Add schedule item" : "Fill in the current field to add another"}
+          className="bg-[#063168] p-3 rounded-full text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -707,6 +714,10 @@ export function DynamicTextList({
     name: listName,
     keyName: "id",
   });
+  const watchedList = useWatch({ control, name: listName });
+  const canAddItem =
+    fields.length === 0 ||
+    (watchedList?.[fields.length - 1]?.value?.trim() || "") !== "";
 
   let listIcon;
   if (listName === "rules") {
@@ -771,14 +782,11 @@ export function DynamicTextList({
         <button
           type="button"
           onClick={() =>
-            append(
-              { value: "" },
-              {
-                shouldFocus: false,
-              }
-            )
+            canAddItem && append({ value: "" }, { shouldFocus: false })
           }
-          className="bg-[#063168] p-3 rounded-full text-white cursor-pointer"
+          disabled={!canAddItem}
+          title={canAddItem ? `Add ${itemNoun}` : "Fill in the current field to add another"}
+          className="bg-[#063168] p-3 rounded-full text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

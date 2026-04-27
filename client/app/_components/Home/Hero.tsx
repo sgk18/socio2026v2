@@ -7,10 +7,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { TypeAnimation } from "react-type-animation";
 import FunkyButton from "./FunkyButton";
+import Image from "next/image";
 
 const Hero = () => {
   const heroRef = useRef<HTMLDivElement>(null);
-  const { session, isLoading, userData } = useAuth();
+  const { session, isLoading, userData, isStudentOrganiser } = useAuth();
   const router = useRouter();
   const [startTyping, setStartTyping] = useState(false);
 
@@ -69,15 +70,6 @@ const Hero = () => {
       });
     }
 
-    if (imageDiv) {
-      gsap.from(imageDiv, {
-        opacity: 0,
-        scale: 0.8,
-        duration: 1,
-        delay: 0.5,
-        ease: "elastic.out(1, 0.5)",
-      });
-    }
   }, []);
 
   const buttonsDisabled = isLoading;
@@ -216,6 +208,14 @@ const Hero = () => {
             >
               IT Dashboard
             </button>
+          ) : session && isStudentOrganiser ? (
+            <button
+              onClick={() => router.push("/manage?tab=events")}
+              disabled={buttonsDisabled}
+              className="cursor-pointer font-semibold px-6 py-2.5 sm:px-6 sm:py-3 border-2 border-[#154CB3] text-sm sm:text-base rounded-md text-white bg-[#154CB3] hover:bg-[#0d3a8a] hover:border-[#0d3a8a] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out hover:shadow-md"
+            >
+              Manage Events
+            </button>
           ) : (
             <button
               onClick={handleExploreClick}
@@ -239,10 +239,13 @@ const Hero = () => {
             boxShadow: '0 10px 25px -5px rgba(21, 76, 179, 0.4), 0 8px 10px -6px rgba(21, 76, 179, 0.3)',
             border: '5px solid rgba(255, 255, 255, 0.7)'
           }}>
-          <img
+          <Image
             src="/images/christuniversity.jpg"
             alt="Christ University Campus"
-            className="w-full h-full object-cover transform transition-transform duration-10000 hover:scale-110"
+            fill
+            priority
+            sizes="(max-width: 640px) 192px, (max-width: 768px) 240px, 288px"
+            className="object-cover transform transition-transform duration-10000 hover:scale-110"
           />
         </div>
         {/* Decorative elements */}

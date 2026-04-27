@@ -2528,6 +2528,8 @@ function CreateFestForm(props?: CreateFestProps) {
     });
   };
   const addSubHead = () => {
+    const last = formData.subHeads[formData.subHeads.length - 1];
+    if (last && !last.email.trim()) return;
     if (formData.subHeads.length < 5)
       setFormData((prev) => ({
         ...prev,
@@ -3289,9 +3291,20 @@ function CreateFestForm(props?: CreateFestProps) {
                     <button
                       type="button"
                       onClick={addSubHead}
-                      disabled={formData.subHeads.length >= 5}
+                      disabled={
+                        formData.subHeads.length >= 5 ||
+                        (formData.subHeads.length > 0 &&
+                          !formData.subHeads[formData.subHeads.length - 1].email.trim())
+                      }
                       aria-label="Add sub head"
-                      title="Add sub head"
+                      title={
+                        formData.subHeads.length >= 5
+                          ? "Maximum of 5 sub heads allowed"
+                          : formData.subHeads.length > 0 &&
+                            !formData.subHeads[formData.subHeads.length - 1].email.trim()
+                          ? "Fill in the current sub head's email to add another"
+                          : "Add sub head"
+                      }
                       className="bg-[#063168] px-4 py-2.5 rounded-full text-white cursor-pointer text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       + Add Sub Head

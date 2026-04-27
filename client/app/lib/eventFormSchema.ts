@@ -302,7 +302,7 @@ export const eventFormSchema = z
     eventTitle: z
       .string()
       .min(1, "Event title is required")
-      .max(100, "Max 100 chars"),
+      .max(60, "Title must be 60 characters or fewer"),
     eventDate: z.string().min(1, "Event date is required"),
     eventTime: z
       .string()

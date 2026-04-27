@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { MiniCalendar, findConflict, type VenueBooking } from "@/app/_components/OperationalRequestsWizard";
@@ -169,7 +169,15 @@ function formatDate(iso: string) {
   });
 }
 
-export default function ApprovalsPage() {
+export default function ApprovalsPageWrapper() {
+  return (
+    <Suspense>
+      <ApprovalsPage />
+    </Suspense>
+  );
+}
+
+function ApprovalsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();

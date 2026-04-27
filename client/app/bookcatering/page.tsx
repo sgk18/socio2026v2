@@ -633,18 +633,16 @@ export default function BookCateringPage() {
                       <FormField label="Name">
                         <input
                           value={contactName}
-                          onChange={e => setContactName(e.target.value)}
-                          className={inputCls}
-                          placeholder="Your full name"
+                          readOnly
+                          className="w-full h-9 rounded-lg border border-gray-300 bg-gray-100 px-3 text-sm text-gray-500 cursor-default select-none focus:outline-none"
                         />
                       </FormField>
                       <FormField label="Email">
                         <input
                           type="email"
                           value={contactEmail}
-                          onChange={e => setContactEmail(e.target.value)}
-                          className={inputCls}
-                          placeholder="you@christuniversity.in"
+                          readOnly
+                          className="w-full h-9 rounded-lg border border-gray-300 bg-gray-100 px-3 text-sm text-gray-500 cursor-default select-none focus:outline-none"
                         />
                       </FormField>
                       <FormField label="Mobile (optional)">

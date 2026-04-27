@@ -292,6 +292,7 @@ function NavigationBar() {
       await signInWithGoogle();
     } catch (error) {
       console.error('Sign in error:', error);
+    } finally {
       setIsSigningIn(false);
     }
   }, [signInWithGoogle]);

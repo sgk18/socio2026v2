@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
 import { Pagination } from "../_components/UI/Pagination";
 
-const HodFestDashboard = dynamic(() => import("../_components/Hod/HodFestDashboard"), {
+const HodAnalyticsDashboard = dynamic(() => import("../_components/Hod/HodAnalyticsDashboard"), {
   ssr: false,
 });
 
@@ -61,12 +61,26 @@ function hodActedBy(item: QueueItem): string | null {
   return safeText(item.stages?.find((s) => s.role === "hod")?.approved_by, "") || null;
 }
 
-export default function HodDashboard() {
+export default function HodDashboardPage() {
+  return (
+    <Suspense>
+      <HodDashboard />
+    </Suspense>
+  );
+}
+
+function HodDashboard() {
   const { session, userData, isLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
 
-  const [activeView, setActiveView] = useState<HodView>("analytics");
+  const activeView = (searchParams.get("tab") as HodView) || "queue";
+  const setActiveView = (view: HodView) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", view);
+    router.replace(`?${params.toString()}`);
+  };
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionItemId, setActionItemId] = useState<string | null>(null);
@@ -240,54 +254,70 @@ export default function HodDashboard() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      {/* Header — full width */}
-      <div className="max-w-full mx-auto mb-6 px-0">
-        <div className="flex flex-wrap items-start justify-between gap-4 max-w-3xl mx-auto xl:max-w-full">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">HOD Dashboard</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              Manage department approvals and view analytics.
-            </p>
-          </div>
-
-          {/* Tab switcher */}
-          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
-            {(["analytics", "queue"] as HodView[]).map((view) => (
+  // Analytics view — tab bar + full-page component (mirrors Dean's split-return pattern)
+  if (activeView === "analytics") {
+    return (
+      <>
+        <div className="bg-white border-b border-gray-200 px-4">
+          <div className="max-w-screen-xl mx-auto flex">
+            {(["queue", "analytics"] as HodView[]).map((view) => (
               <button
                 key={view}
-                type="button"
                 onClick={() => setActiveView(view)}
-                className={[
-                  "rounded-lg px-4 py-1.5 text-[11px] font-semibold transition-colors",
-                  activeView === view ? "bg-[#154CB3] text-white" : "text-slate-600 hover:bg-white",
-                ].join(" ")}
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeView === view
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
               >
-                {view === "analytics" ? "Dashboard" : "Approval Queue"}
+                {view === "analytics" ? "Analytics" : "Approval Queue"}
               </button>
             ))}
           </div>
         </div>
+        <HodAnalyticsDashboard />
+      </>
+    );
+  }
+
+  // Queue view
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Tab bar */}
+      <div className="bg-white border-b border-gray-200 px-4">
+        <div className="max-w-screen-xl mx-auto flex">
+          {(["queue", "analytics"] as HodView[]).map((view) => (
+            <button
+              key={view}
+              onClick={() => setActiveView(view)}
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeView === view
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {view === "analytics" ? "Analytics" : "Approval Queue"}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Analytics view — full width */}
-      {activeView === "analytics" && (
-        <div className="max-w-full xl:px-2">
-          <HodFestDashboard />
-        </div>
-      )}
+      <div className="py-8 px-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">HOD Approval Queue</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Submissions from your department pending your review.
+            </p>
+          </div>
 
-      {/* Queue view — constrained width */}
-      {activeView === "queue" && (
-        <div className="max-w-3xl mx-auto space-y-8">
           {loading ? (
             <p className="text-gray-500 text-sm">Loading queue…</p>
           ) : (
             <>
               <section>
-                <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between">
-                  <span>Pending <span className="text-gray-400 font-normal ml-1">({pendingItems.length})</span></span>
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">
+                  Pending <span className="text-gray-400 font-normal ml-1">({pendingItems.length})</span>
                 </h2>
                 {pendingItems.length === 0 ? (
                   <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
@@ -315,8 +345,8 @@ export default function HodDashboard() {
 
               {reviewedItems.length > 0 && (
                 <section>
-                  <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between">
-                    <span>Reviewed <span className="text-gray-400 font-normal ml-1">({reviewedItems.length})</span></span>
+                  <h2 className="text-sm font-semibold text-gray-700 mb-3">
+                    Reviewed <span className="text-gray-400 font-normal ml-1">({reviewedItems.length})</span>
                   </h2>
                   <div>
                     <div className="space-y-3">
@@ -339,7 +369,7 @@ export default function HodDashboard() {
             </>
           )}
         </div>
-      )}
+      </div>
 
       {/* Reject modal */}
       {rejectModal && (

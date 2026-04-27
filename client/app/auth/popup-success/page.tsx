@@ -1,15 +1,38 @@
 "use client";
 
 import { useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function PopupSuccess() {
   useEffect(() => {
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: "GOOGLE_AUTH_SUCCESS" }, window.location.origin);
-    }
-    // Give the parent a tick to receive the message before closing
-    const t = setTimeout(() => window.close(), 100);
-    return () => clearTimeout(t);
+    const notifyParent = async () => {
+      if (!window.opener || window.opener.closed) {
+        window.close();
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          window.opener.postMessage(
+            {
+              type: "GOOGLE_AUTH_SUCCESS",
+              accessToken: session.access_token,
+              refreshToken: session.refresh_token,
+            },
+            window.location.origin
+          );
+        } else {
+          window.opener.postMessage({ type: "GOOGLE_AUTH_SUCCESS" }, window.location.origin);
+        }
+      } catch {
+        window.opener.postMessage({ type: "GOOGLE_AUTH_SUCCESS" }, window.location.origin);
+      }
+
+      setTimeout(() => window.close(), 100);
+    };
+
+    void notifyParent();
   }, []);
 
   return (

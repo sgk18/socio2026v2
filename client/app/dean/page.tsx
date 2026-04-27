@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, lazy, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -50,12 +50,26 @@ function deanStatus(item: QueueItem) {
   return safeLower(item.stages?.find((s) => s.role === "dean")?.status) || "pending";
 }
 
-export default function DeanDashboard() {
+export default function DeanDashboardPage() {
+  return (
+    <Suspense>
+      <DeanDashboard />
+    </Suspense>
+  );
+}
+
+function DeanDashboard() {
   const { session, userData, isLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
 
-  const [activeTab, setActiveTab] = useState<"approvals" | "analytics">("approvals");
+  const activeTab = (searchParams.get("tab") as "approvals" | "analytics") || "approvals";
+  const setActiveTab = (tab: "approvals" | "analytics") => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`?${params.toString()}`);
+  };
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionItemId, setActionItemId] = useState<string | null>(null);
@@ -226,7 +240,7 @@ export default function DeanDashboard() {
       <>
         {/* Tab bar */}
         <div className="bg-white border-b border-gray-200 px-4">
-          <div className="max-w-5xl mx-auto flex">
+          <div className="max-w-screen-xl mx-auto flex">
             {(["approvals", "analytics"] as const).map((tab) => (
               <button
                 key={tab}
@@ -242,7 +256,7 @@ export default function DeanDashboard() {
             ))}
           </div>
         </div>
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-gray-900"><p className="text-gray-400 text-sm">Loading analytics…</p></div>}>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-gray-50"><p className="text-gray-400 text-sm">Loading analytics…</p></div>}>
           <DeanAnalyticsDashboard />
         </Suspense>
       </>
@@ -253,7 +267,7 @@ export default function DeanDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Tab bar */}
       <div className="bg-white border-b border-gray-200 px-4">
-        <div className="max-w-3xl mx-auto flex">
+        <div className="max-w-screen-xl mx-auto flex">
           {(["approvals", "analytics"] as const).map((tab) => (
             <button
               key={tab}

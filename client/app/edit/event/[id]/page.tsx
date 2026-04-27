@@ -26,7 +26,7 @@ export default function EditEventPage() {
   const validateEmail = (value: unknown): boolean =>
     EMAIL_REGEX.test(normalizeEmail(value));
 
-  const { session, userData, isLoading: authIsLoading } = useAuth();
+  const { session, userData, isLoading: authIsLoading, isStudentOrganiser } = useAuth();
   const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 
   const [initialData, setInitialData] = useState<Partial<EventFormData>>();
@@ -60,7 +60,7 @@ export default function EditEventPage() {
       return;
     }
 
-    if (!userData || !(userData.is_organiser || (userData as any).is_masteradmin)) {
+    if (!userData || !(userData.is_organiser || (userData as any).is_masteradmin || isStudentOrganiser)) {
       setIsLoading(false);
       setErrorMessage("You are not authorized to edit this event.");
       return;
@@ -383,7 +383,7 @@ export default function EditEventPage() {
     }
 
     fetchEventData();
-  }, [eventIdSlug, session, userData, authIsLoading, router]); // Added router to dependencies if used inside
+  }, [eventIdSlug, session, userData, authIsLoading, isStudentOrganiser, router]);
 
   const handleToggleArchive = async () => {
     if (!session?.access_token) {
@@ -493,7 +493,7 @@ export default function EditEventPage() {
       setIsSubmitting(false);
       throw new Error("Authentication session expired or not found."); // Ensure EventForm knows
     }
-    if (!userData || !(userData.is_organiser || (userData as any).is_masteradmin)) {
+    if (!userData || !(userData.is_organiser || (userData as any).is_masteradmin || isStudentOrganiser)) {
       setErrorMessage("You are not authorized to perform this action.");
       setIsSubmitting(false);
       throw new Error("Not authorized."); // Ensure EventForm knows
@@ -894,7 +894,7 @@ export default function EditEventPage() {
   return initialData &&
     session &&
     userData &&
-    (userData.is_organiser || (userData as any).is_masteradmin) ? (
+    (userData.is_organiser || (userData as any).is_masteradmin || isStudentOrganiser) ? (
     <>
       {errorMessage && !isSubmitting && (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-12 pt-4">
@@ -924,38 +924,6 @@ export default function EditEventPage() {
         }}
         publishBlockedByApproval={!(approvalExists && approvalPhase1Complete)}
       />
-      {/* Approval workflow actions */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-12 pb-8">
-        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-800">Approval Workflow</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {approvalExists
-                ? "This event has been submitted for approval."
-                : "Submit this event to start the HOD → Dean approval process."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {approvalExists && (
-              <a
-                href={`/approvals/${eventIdSlug}?type=event`}
-                className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50"
-              >
-                View Approvals
-              </a>
-            )}
-            {!approvalExists && (
-              <button
-                onClick={submitForApproval}
-                disabled={isSubmittingApproval}
-                className="px-4 py-1.5 text-sm rounded-lg bg-[#154CB3] text-white hover:bg-[#154cb3df] disabled:opacity-50"
-              >
-                {isSubmittingApproval ? "Submitting…" : "Submit for Approval"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
     </>
   ) : (
     <div className="p-8 text-center">

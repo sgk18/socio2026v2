@@ -102,15 +102,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Restore session from localStorage on mount
+  const persistUserData = (user: UserData | null) => {
+    if (user) {
+      localStorage.setItem('socio_user_data', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('socio_user_data');
+    }
+  };
+
+  // Restore session + userData from localStorage on mount — eliminates the
+  // loading flash for returning users by skipping the async Supabase round-trip.
   useEffect(() => {
     const storedSession = localStorage.getItem('socio_session');
-    if (storedSession && !session) {
+    const storedUserData = localStorage.getItem('socio_user_data');
+    if (storedSession && storedUserData) {
       try {
-        const parsedSession = JSON.parse(storedSession);
-        setSession(parsedSession);
-      } catch (e) {
+        setSession(JSON.parse(storedSession));
+        setUserData(JSON.parse(storedUserData));
+        setIsLoading(false);
+      } catch {
         localStorage.removeItem('socio_session');
+        localStorage.removeItem('socio_user_data');
       }
     }
   }, []);
@@ -141,7 +153,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const checkUserSession = async () => {
-      setIsLoading(true);
+      // Only show the loading spinner when there is no cached data to display.
+      if (!localStorage.getItem('socio_user_data')) setIsLoading(true);
       try {
         // Add timeout to prevent hanging on Supabase connection issues
         const timeoutPromise = new Promise((_, reject) =>
@@ -239,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         setUserData(null);
         persistSession(null);
+        persistUserData(null);
         setIsLoading(false);
       } else if (event === "USER_UPDATED" && newSession) {
         setSession(newSession);
@@ -343,6 +357,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             `User data not found for ${email}. User might need to be created.`
           );
           setUserData(null);
+          persistUserData(null);
         } else {
           throw new Error(`Failed to fetch user data: ${response.statusText}`);
         }
@@ -351,6 +366,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       const user = { ...data.user, is_support: Boolean(data.user?.is_support) };
       setUserData(user);
+      persistUserData(user);
       return user;
     } catch (error) {
       console.error("Error fetching user data:", error);
@@ -401,19 +417,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       let pollTimer: ReturnType<typeof setInterval>;
+      let authTimeout: ReturnType<typeof setTimeout>;
+
+      const cleanup = (closePopup = false) => {
+        clearInterval(pollTimer);
+        clearTimeout(authTimeout);
+        window.removeEventListener("message", handleMessage);
+        if (closePopup && !popup.closed) popup.close();
+      };
 
       const handleMessage = (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
         if (event.data?.type === "GOOGLE_AUTH_SUCCESS") {
-          window.removeEventListener("message", handleMessage);
-          clearInterval(pollTimer);
-          if (!popup.closed) popup.close();
-          // Re-read session from cookies set by the popup's callback route
-          void supabase.auth.getSession();
+          cleanup(true);
+
+          const { accessToken, refreshToken } = event.data as { accessToken?: string; refreshToken?: string };
+
+          const applySession = accessToken && refreshToken
+            ? supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+                .then(({ data }) => data.session)
+            : supabase.auth.getSession().then(({ data }) => data.session);
+
+          applySession.then((newSession) => {
+            if (newSession) {
+              setSession(newSession);
+              persistSession(newSession);
+              void fetchUserData(newSession.user.email!);
+            }
+            setIsLoading(false);
+          }).catch(() => {
+            setIsLoading(false);
+          });
         } else if (event.data?.type === "GOOGLE_AUTH_ERROR") {
-          window.removeEventListener("message", handleMessage);
-          clearInterval(pollTimer);
-          if (!popup.closed) popup.close();
+          cleanup(true);
           setIsLoading(false);
         }
       };
@@ -423,11 +459,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Detect if the user manually closed the popup
       pollTimer = setInterval(() => {
         if (popup.closed) {
-          clearInterval(pollTimer);
-          window.removeEventListener("message", handleMessage);
+          cleanup();
           setIsLoading(false);
         }
       }, 500);
+
+      // Safety timeout: if sign-in takes more than 3 minutes, unblock the UI
+      authTimeout = setTimeout(() => {
+        cleanup(true);
+        setIsLoading(false);
+      }, 3 * 60 * 1000);
 
     } catch (error) {
       console.error("Google authentication error:", error);
