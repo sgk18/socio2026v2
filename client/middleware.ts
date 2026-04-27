@@ -158,38 +158,38 @@ export async function middleware(req: NextRequest) {
         );
       }) ?? false;
 
-      if (!isSubHead) return redirect("/error");
+      if (!isSubHead) return redirect("/error?error=not_authorized");
     }
 
     if (isHodRoute && !userData?.is_hod && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isDeanRoute && !userData?.is_dean && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isCfoRoute && !userData?.is_cfo && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isAccountsRoute && !userData?.is_accounts_office && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isVenueRoute && !userData?.is_venue_manager && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isCateringRoute && !userData?.is_masteradmin) {
       const caters = (userData as any)?.caters;
       const list = Array.isArray(caters) ? caters : caters ? [caters] : [];
       const isCaterer = list.some((c: any) => c?.is_catering);
-      if (!isCaterer) return redirect("/error");
+      if (!isCaterer) return redirect("/error?error=not_authorized");
     }
 
     if (isItRoute && !(userData as any)?.is_it_support && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
   }
 
