@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState, useEffect, useRef } from "react";
 import {
   useForm,
@@ -49,6 +49,10 @@ import {
   saveEventPreviewDraft,
 } from "@/app/lib/eventPreviewDraft";
 import { Info, Plus, UsersRound, X } from "lucide-react";
+import ApprovalsWorkflowBuilder, {
+  type WorkflowStage as _WorkflowStage,
+  type BudgetItem as _BudgetItem,
+} from "@/app/_components/UI/ApprovalsWorkflowBuilder";
 
 export const formatDateToYYYYMMDD = (date: Date): string => {
   const year = date.getFullYear();
@@ -958,12 +962,8 @@ const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
   );
 };
 
-export interface WorkflowStage {
-  role: string;
-  label: string;
-  desc: string;
-  blocking: boolean;
-}
+export type WorkflowStage = _WorkflowStage;
+export type BudgetItem = _BudgetItem;
 
 export const STANDALONE_EVENT_STAGES: WorkflowStage[] = [
   { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         blocking: true  },
@@ -975,13 +975,6 @@ export const STANDALONE_EVENT_STAGES: WorkflowStage[] = [
   { role: 'catering', label: 'Catering',         desc: 'Food & catering vendors',    blocking: false },
   { role: 'stalls',   label: 'Stalls / Misc',    desc: 'Stall allocations',          blocking: false },
 ];
-
-export interface BudgetItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-}
 
 export interface OperationalConfig {
   it:       { enabled: boolean; description: string };
@@ -996,20 +989,6 @@ const DEFAULT_OPERATIONAL_CONFIG: OperationalConfig = {
   catering: { enabled: false, approximate_count: '', description: '' },
   stalls:   { enabled: false, total_stalls: '', canopy_count: '', hardboard_count: '', description: '' },
 };
-
-interface BlockingStageConfig {
-  role: string;
-  label: string;
-  desc: string;
-  enabled: boolean;
-}
-
-const DEFAULT_BLOCKING_STAGES: BlockingStageConfig[] = [
-  { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         enabled: true  },
-  { role: 'dean',     label: 'Dean',            desc: 'Dean of the School',         enabled: true  },
-  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', enabled: false },
-  { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance',        enabled: false },
-];
 
 interface EventFormProps {
   onSubmit: SubmitHandler<EventFormData>;
@@ -1029,325 +1008,7 @@ interface EventFormProps {
   publishBlockedByApproval?: boolean;
 }
 
-function EventApprovalsOperationalSection({
-  config,
-  onChange,
-}: {
-  config: OperationalConfig;
-  onChange: (c: OperationalConfig) => void;
-}) {
-  const toggleEnabled = (role: keyof OperationalConfig, enabled: boolean) =>
-    onChange({ ...config, [role]: { ...config[role], enabled } });
 
-  const updateField = <R extends keyof OperationalConfig>(
-    role: R,
-    field: keyof OperationalConfig[R],
-    value: string | boolean
-  ) => onChange({ ...config, [role]: { ...config[role], [field]: value } });
-
-  return (
-    <div>
-      <p className="text-sm font-semibold text-gray-800 mb-1">Operational Requests</p>
-      <p className="text-xs text-gray-500 mb-4">
-        Enable any services you need for this event. Forms are submitted to the relevant teams for coordination.
-      </p>
-      <div className="space-y-3">
-        {/* IT Support */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-            <div>
-              <p className="text-sm font-medium text-gray-800">IT Support</p>
-              <p className="text-xs text-gray-400">Technical setup, AV, projectors, network</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={config.it.enabled}
-                onChange={(e) => toggleEnabled('it', e.target.checked)} />
-              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
-            </label>
-          </div>
-          {config.it.enabled && (
-            <div className="px-4 pb-4 pt-3 border-t border-gray-100">
-              <label className="block text-xs font-medium text-gray-600 mb-1">What do you need?</label>
-              <textarea
-                rows={2}
-                value={config.it.description}
-                onChange={(e) => updateField('it', 'description', e.target.value)}
-                placeholder="Describe your technical requirements..."
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Venue */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-            <div>
-              <p className="text-sm font-medium text-gray-800">Venue Booking</p>
-              <p className="text-xs text-gray-400">Hall, auditorium, or room reservation</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={config.venue.enabled}
-                onChange={(e) => toggleEnabled('venue', e.target.checked)} />
-              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
-            </label>
-          </div>
-          {config.venue.enabled && (
-            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Venue name</label>
-                <input
-                  type="text"
-                  value={config.venue.venue_name}
-                  onChange={(e) => updateField('venue', 'venue_name', e.target.value)}
-                  placeholder="e.g., Main Auditorium"
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
-                  <input
-                    type="date"
-                    value={config.venue.date}
-                    onChange={(e) => updateField('venue', 'date', e.target.value)}
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Start time</label>
-                  <input
-                    type="time"
-                    value={config.venue.start_time}
-                    onChange={(e) => updateField('venue', 'start_time', e.target.value)}
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">End time</label>
-                  <input
-                    type="time"
-                    value={config.venue.end_time}
-                    onChange={(e) => updateField('venue', 'end_time', e.target.value)}
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Catering */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-            <div>
-              <p className="text-sm font-medium text-gray-800">Catering</p>
-              <p className="text-xs text-gray-400">Food, beverages, or vendor stalls</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={config.catering.enabled}
-                onChange={(e) => toggleEnabled('catering', e.target.checked)} />
-              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
-            </label>
-          </div>
-          {config.catering.enabled && (
-            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Approximate attendee count</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={config.catering.approximate_count}
-                  onChange={(e) => updateField('catering', 'approximate_count', e.target.value)}
-                  placeholder="e.g., 200"
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Requirements</label>
-                <textarea
-                  rows={2}
-                  value={config.catering.description}
-                  onChange={(e) => updateField('catering', 'description', e.target.value)}
-                  placeholder="Dietary needs, meal type, timing..."
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Stalls */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-            <div>
-              <p className="text-sm font-medium text-gray-800">Stalls</p>
-              <p className="text-xs text-gray-400">Exhibition stalls, canopy, hardboard</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={config.stalls.enabled}
-                onChange={(e) => toggleEnabled('stalls', e.target.checked)} />
-              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
-            </label>
-          </div>
-          {config.stalls.enabled && (
-            <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Total number of stalls</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={config.stalls.total_stalls}
-                  onChange={(e) => updateField('stalls', 'total_stalls', e.target.value)}
-                  placeholder="e.g., 10"
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Canopy stalls needed</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={config.stalls.canopy_count}
-                    onChange={(e) => updateField('stalls', 'canopy_count', e.target.value)}
-                    placeholder="0"
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Hardboard stalls needed</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={config.stalls.hardboard_count}
-                    onChange={(e) => updateField('stalls', 'hardboard_count', e.target.value)}
-                    placeholder="0"
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Additional requirements</label>
-                <textarea
-                  rows={2}
-                  value={config.stalls.description}
-                  onChange={(e) => updateField('stalls', 'description', e.target.value)}
-                  placeholder="Any specific setup needs, location preference..."
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BudgetEstimator({
-  items,
-  onChange,
-}: {
-  items: BudgetItem[];
-  onChange: (items: BudgetItem[]) => void;
-}) {
-  const total = items.reduce((s, b) => s + b.quantity * b.unitPrice, 0);
-
-  const canAddRow = items.length === 0 || items[items.length - 1].name.trim() !== '';
-
-  const addRow = () => {
-    if (!canAddRow) return;
-    onChange([...items, { id: crypto.randomUUID(), name: '', quantity: 1, unitPrice: 0 }]);
-  };
-
-  const removeRow = (id: string) => onChange(items.filter(b => b.id !== id));
-
-  const updateRow = (id: string, field: keyof Omit<BudgetItem, 'id'>, value: string) =>
-    onChange(items.map(b => {
-      if (b.id !== id) return b;
-      if (field === 'name') return { ...b, name: value };
-      return { ...b, [field]: parseFloat(value) || 0 };
-    }));
-
-  return (
-    <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-sm font-semibold text-gray-800">Budget Estimate</p>
-        <span className="text-xs text-gray-400">Required for CFO / Finance review</span>
-      </div>
-      <p className="text-xs text-gray-500 mb-4">List your expected expenses. This is submitted with the approval request.</p>
-
-      <div className="grid grid-cols-[1fr_64px_88px_80px_28px] gap-2 mb-1 px-1">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Item</span>
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide text-center">Qty</span>
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide text-right">Unit (₹)</span>
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide text-right">Total (₹)</span>
-        <span />
-      </div>
-
-      <div className="space-y-2">
-        {items.map(b => (
-          <div key={b.id} className="grid grid-cols-[1fr_64px_88px_80px_28px] gap-2 items-center">
-            <input
-              type="text"
-              placeholder="e.g. Sound system"
-              value={b.name}
-              onChange={e => updateRow(b.id, 'name', e.target.value)}
-              className="w-full rounded border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-            />
-            <input
-              type="number"
-              min="1"
-              value={b.quantity}
-              onChange={e => updateRow(b.id, 'quantity', e.target.value)}
-              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-gray-400"
-            />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={b.unitPrice}
-              onChange={e => updateRow(b.id, 'unitPrice', e.target.value)}
-              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-gray-400"
-            />
-            <span className="text-sm text-gray-700 text-right tabular-nums">
-              {(b.quantity * b.unitPrice).toLocaleString('en-IN')}
-            </span>
-            <button
-              type="button"
-              onClick={() => removeRow(b.id)}
-              className="flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 text-base leading-none"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        {items.length === 0 && (
-          <div className="text-center py-4 text-sm text-gray-400 border border-dashed border-gray-200 rounded">
-            No items yet.
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={addRow}
-          disabled={!canAddRow}
-          title={canAddRow ? "Add item" : "Fill in the current item to add another"}
-          className="text-sm text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          + Add item
-        </button>
-        <div className="text-right">
-          <p className="text-xs text-gray-400 mb-0.5">Total estimate</p>
-          <p className="text-base font-semibold text-gray-900 tabular-nums">₹{total.toLocaleString('en-IN')}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const baseButtonClasses =
   "inline-flex items-center justify-center text-sm sm:text-base font-medium rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-opacity-50";
@@ -1624,10 +1285,8 @@ export default function EventForm({
   const [activeTab, setActiveTab] = useState<'details' | 'approvals'>(
     shouldOpenApprovalsTab ? 'approvals' : 'details'
   );
-  const [blockingStages, setBlockingStages] = useState<BlockingStageConfig[]>(DEFAULT_BLOCKING_STAGES);
-  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
-  const [festApprovalStages, setFestApprovalStages] = useState<any[]>([]);
   const [operationalConfig, setOperationalConfig] = useState<OperationalConfig>(DEFAULT_OPERATIONAL_CONFIG);
+  const [festApprovalStages, setFestApprovalStages] = useState<any[]>([]);
   const [fetchedFests, setFetchedFests] = useState<FestOption[]>([]);
   const { session, userData, isStudentOrganiser, subHeadFestIds } = useAuth();
 
@@ -1964,6 +1623,10 @@ export default function EventForm({
     control,
     name: "organizingSchool",
   });
+  const watchedOrganizingDept = useWatch({
+    control,
+    name: "organizingDept",
+  });
   const lastAutoFilledFestRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -2105,16 +1768,15 @@ export default function EventForm({
   const isStandaloneEvent = !watchedFestEvent || String(watchedFestEvent).toLowerCase() === "none";
 
   useEffect(() => {
-    if (!onApprovalConfigChange) return;
-    const enabled = blockingStages
-      .filter(s => s.enabled)
-      .map(s => ({ role: s.role, label: s.label, desc: s.desc, blocking: true as const }));
-    onApprovalConfigChange(isStandaloneEvent && enabled.length > 0, enabled, budgetItems);
-  }, [blockingStages, budgetItems, isStandaloneEvent]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     if (onOperationalConfigChange) onOperationalConfigChange(operationalConfig);
   }, [operationalConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When under a fest, clear standalone approval config (fest handles its own approvals)
+  useEffect(() => {
+    if (!isStandaloneEvent) {
+      onApprovalConfigChange?.(false, [], []);
+    }
+  }, [isStandaloneEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch parent fest's approval stages when a fest is selected
   useEffect(() => {
@@ -2131,6 +1793,7 @@ export default function EventForm({
       .catch(() => {});
   }, [watchedFestEvent, isStandaloneEvent, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [itDescriptionError, setItDescriptionError] = React.useState(false);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isNavigating, setIsNavigating] = React.useState(false);
   const [pendingSuccess, setPendingSuccess] = React.useState<"publish" | "draft" | "delete" | null>(null);
@@ -2140,6 +1803,11 @@ export default function EventForm({
   const shouldBlockPublishByApproval = Boolean(isEditMode && isDraft && publishBlockedByApproval);
 
   const processSubmit: SubmitHandler<EventFormData> = async (data) => {
+    if (operationalConfig.it.enabled && !operationalConfig.it.description.trim()) {
+      setItDescriptionError(true);
+      setActiveTab('approvals');
+      return;
+    }
     try {
       const sanitizedData = {
         ...data,
@@ -3440,10 +3108,20 @@ export default function EventForm({
                 </div>{/* end details tab */}
 
                 {/* ── Approvals tab ── */}
-                <div className={`p-6 sm:p-8 md:p-10 space-y-6 ${activeTab !== 'approvals' ? 'hidden' : ''}`}>
-                  {!isStandaloneEvent ? (
-                    /* Under-fest: locked blocking rows + operational toggles */
-                    <div className="space-y-6">
+                <div className={activeTab !== 'approvals' ? 'hidden' : ''}>
+                  {isStandaloneEvent ? (
+                    /* Standalone: drag-and-drop approval builder */
+                    <ApprovalsWorkflowBuilder
+                      context="event"
+                      organizingSchool={watchedOrganizingSchool || ""}
+                      organizingDept={watchedOrganizingDept || ""}
+                      onChange={(stages, budgetItems) => {
+                        onApprovalConfigChange?.(true, stages, budgetItems);
+                      }}
+                    />
+                  ) : (
+                    /* Under-fest: fest approval status (read-only) */
+                    <div className="p-6 sm:p-8 md:p-10 space-y-6">
                       <div>
                         <p className="text-sm font-semibold text-gray-800 mb-1">Blocking Approval Stages</p>
                         <p className="text-xs text-gray-500 mb-3">
@@ -3456,7 +3134,7 @@ export default function EventForm({
                             { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight' },
                             { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance' },
                           ].map((s) => {
-                            const festStage = festApprovalStages.find(fs => fs.role === s.role);
+                            const festStage = festApprovalStages.find((fs: any) => fs.role === s.role);
                             const statusMap: Record<string, string> = {
                               approved: 'Approved',
                               pending:  'Pending',
@@ -3478,91 +3156,60 @@ export default function EventForm({
                           })}
                         </div>
                       </div>
-                      <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
-                    </div>
-                  ) : (
-                    /* Standalone: per-stage toggles for blocking + optional budget + operational */
-                    <div className="space-y-6">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 mb-1">Approval Stages</p>
-                        <p className="text-xs text-gray-500 mb-3">
-                          Toggle the stages required for this event — approvals will be sent in sequential order.
-                        </p>
-                        <div className="space-y-1">
-                          {(() => {
-                            let activeStep = 0;
-                            return blockingStages.map((s, idx) => {
-                              if (s.enabled) activeStep++;
-                              const stepNum = s.enabled ? activeStep : null;
-                              const fixedPos = idx + 1;
-                              const isLast = idx === blockingStages.length - 1;
-                              return (
-                                <div key={s.role}>
-                                  <div className={`flex items-center justify-between px-4 py-3 rounded-lg border transition-colors ${s.enabled ? "border-[#154CB3]/30 bg-blue-50/40" : "border-gray-200 bg-gray-50"}`}>
-                                    <div className="flex items-center gap-3">
-                                      {/* Step badge */}
-                                      {s.enabled ? (
-                                        <div className="w-7 h-7 rounded-full bg-[#154CB3] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
-                                          {stepNum}
-                                        </div>
-                                      ) : (
-                                        <div className="w-7 h-7 rounded-full border-2 border-gray-200 flex-shrink-0" />
-                                      )}
-                                      <div>
-                                        <p className={`text-sm font-medium ${s.enabled ? "text-gray-800" : "text-gray-400"}`}>{s.label}</p>
-                                        <p className="text-xs text-gray-400">{s.desc}</p>
-                                      </div>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        className="sr-only peer"
-                                        checked={s.enabled}
-                                        onChange={(e) =>
-                                          setBlockingStages(prev =>
-                                            prev.map(bs => {
-                                              if (bs.role === s.role) return { ...bs, enabled: e.target.checked };
-                                              if (s.role === 'cfo' && bs.role === 'accounts' && e.target.checked) return { ...bs, enabled: true };
-                                              return bs;
-                                            })
-                                          )
-                                        }
-                                      />
-                                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
-                                    </label>
-                                  </div>
-                                  {/* Flow arrow between enabled stages */}
-                                  {!isLast && s.enabled && blockingStages.slice(idx + 1).some(bs => bs.enabled) && (
-                                    <div className="flex justify-start pl-[22px] py-0.5">
-                                      <svg className="w-3 h-3 text-[#154CB3]/50" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H4a1 1 0 110-2h10.586l-5.293-5.293A1 1 0 0110 3z" clipRule="evenodd" />
-                                      </svg>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-2 flex items-center gap-1.5">
-                          <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Approvals are processed from top to bottom in sequential order.
-                        </p>
-                        {/* Budget estimator appears when CFO or Accounts is enabled */}
-                        {blockingStages.some(s => (s.role === 'cfo' || s.role === 'accounts') && s.enabled) && (
-                          <>
-                            <BudgetEstimator items={budgetItems} onChange={setBudgetItems} />
-                            {budgetItems.length === 0 && (
-                              <p className="text-xs text-red-500 mt-1">Budget Estimate is required when CFO or Finance Officer is included.</p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      <EventApprovalsOperationalSection config={operationalConfig} onChange={setOperationalConfig} />
                     </div>
                   )}
+
+                  {/* IT Support — shown for both standalone and under-fest */}
+                  <div className="px-6 sm:px-8 md:px-10 pb-6 sm:pb-8 md:pb-10 space-y-3">
+                    <p className="text-sm font-semibold text-gray-800 mb-1">Operational Requests</p>
+                    <p className="text-xs text-gray-500 mb-4">
+                      Enable any services you need for this event. Forms are submitted to the relevant teams for coordination.
+                    </p>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">IT Support</p>
+                          <p className="text-xs text-gray-400">Technical setup, AV, projectors, network</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={operationalConfig.it.enabled}
+                            onChange={(e) => {
+                              setOperationalConfig(prev => ({ ...prev, it: { ...prev.it, enabled: e.target.checked } }));
+                              if (!e.target.checked) setItDescriptionError(false);
+                            }}
+                          />
+                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#154CB3]" />
+                        </label>
+                      </div>
+                      {operationalConfig.it.enabled && (
+                        <div className="px-4 pb-4 pt-3 border-t border-gray-100">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            What do you need? <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={operationalConfig.it.description}
+                            onChange={(e) => {
+                              setOperationalConfig(prev => ({ ...prev, it: { ...prev.it, description: e.target.value } }));
+                              if (e.target.value.trim()) setItDescriptionError(false);
+                            }}
+                            placeholder="Describe your technical requirements..."
+                            className={`w-full border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 ${
+                              itDescriptionError
+                                ? 'border-red-400 focus:ring-red-400'
+                                : 'border-gray-200 focus:ring-gray-400'
+                            }`}
+                          />
+                          {itDescriptionError && (
+                            <p className="text-xs text-red-500 mt-1">Please describe your IT support requirements.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>{/* end approvals tab */}
 
                 {/* ── Action buttons — always visible ── */}
@@ -3746,4 +3393,3 @@ export default function EventForm({
     </div>
   );
 }
-
