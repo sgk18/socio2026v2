@@ -103,6 +103,8 @@ const formatHHMMTo12Hour = (timeString?: string): string => {
 const normalizeRegisterNumber = (value: unknown): string =>
   String(value ?? "").trim().toUpperCase();
 
+const ALL_DEPARTMENTS_VALUE = "all_departments";
+
 const computeVolunteerExpiresAt = (
   endDate?: string,
   endTime?: string
@@ -321,12 +323,39 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
       name={name}
       control={control}
       render={({ field }) => {
-        const selectedValues = Array.isArray(field.value) ? field.value as string[] : [];
+        const hasAllDepartmentsOption = options.some(
+          (option) => option.value === ALL_DEPARTMENTS_VALUE
+        );
+        const rawSelectedValues = Array.isArray(field.value)
+          ? (field.value as string[])
+          : [];
+        const selectedValues =
+          hasAllDepartmentsOption &&
+          rawSelectedValues.includes(ALL_DEPARTMENTS_VALUE)
+            ? [ALL_DEPARTMENTS_VALUE]
+            : rawSelectedValues;
+        const isAllDepartmentsSelected =
+          hasAllDepartmentsOption &&
+          selectedValues.includes(ALL_DEPARTMENTS_VALUE);
 
         const handleCheckboxChange = (optionValue: string) => {
-          const newValues = selectedValues.includes(optionValue)
-            ? selectedValues.filter((val) => val !== optionValue)
-            : [...selectedValues, optionValue];
+          if (
+            hasAllDepartmentsOption &&
+            optionValue === ALL_DEPARTMENTS_VALUE
+          ) {
+            field.onChange(
+              isAllDepartmentsSelected ? [] : [ALL_DEPARTMENTS_VALUE]
+            );
+            return;
+          }
+
+          const valuesWithoutAll = hasAllDepartmentsOption
+            ? selectedValues.filter((val) => val !== ALL_DEPARTMENTS_VALUE)
+            : selectedValues;
+
+          const newValues = valuesWithoutAll.includes(optionValue)
+            ? valuesWithoutAll.filter((val) => val !== optionValue)
+            : [...valuesWithoutAll, optionValue];
           field.onChange(newValues);
         };
 
@@ -406,22 +435,40 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 w-full max-h-60 overflow-y-auto"
                   role="listbox"
                 >
-                  {options.map((option) => (
-                    <label
-                      key={option.value}
-                      className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedValues.includes(option.value)}
-                        onChange={() => handleCheckboxChange(option.value)}
-                        className="h-4 w-4 text-[#154CB3] border-gray-300 rounded focus:ring-[#154CB3] cursor-pointer"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">
-                        {option.label}
-                      </span>
-                    </label>
-                  ))}
+                  {options.map((option) => {
+                    const isSelected = selectedValues.includes(option.value);
+                    const isDisabled =
+                      isAllDepartmentsSelected &&
+                      option.value !== ALL_DEPARTMENTS_VALUE;
+
+                    return (
+                      <label
+                        key={option.value}
+                        className={`flex items-center px-4 py-2 transition-colors ${
+                          isDisabled
+                            ? "bg-gray-50 cursor-not-allowed"
+                            : "hover:bg-gray-100 cursor-pointer"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={isDisabled}
+                          onChange={() => handleCheckboxChange(option.value)}
+                          className={`h-4 w-4 text-[#154CB3] border-gray-300 rounded focus:ring-[#154CB3] ${
+                            isDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                          }`}
+                        />
+                        <span
+                          className={`ml-2 text-sm ${
+                            isDisabled ? "text-gray-400" : "text-gray-700"
+                          }`}
+                        >
+                          {option.label}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1075,7 +1122,8 @@ const normalizeStringArray = (value: unknown): string[] => {
 };
 
 const normalizeDepartmentAccess = (value: unknown): string[] =>
-  Array.from(
+  (() => {
+    const normalizedValues = Array.from(
     new Set(
       normalizeStringArray(value).map((entry) => {
         const directValueMatch = departmentOptions.find((dept) => dept.value === entry);
@@ -1092,6 +1140,13 @@ const normalizeDepartmentAccess = (value: unknown): string[] =>
       })
     )
   );
+
+    if (normalizedValues.includes(ALL_DEPARTMENTS_VALUE)) {
+      return [ALL_DEPARTMENTS_VALUE];
+    }
+
+    return normalizedValues;
+  })();
 
 const normalizeCategoryValue = (value: unknown): string => {
   if (typeof value !== "string") return "";

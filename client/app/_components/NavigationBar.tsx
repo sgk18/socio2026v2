@@ -89,6 +89,7 @@ function NavigationBar() {
   const rightControlsRef = useRef<HTMLDivElement | null>(null);
   const desktopNavMeasureRef = useRef<HTMLDivElement | null>(null);
   const roleDropdownRef = useRef<HTMLDivElement | null>(null);
+  const profileDropdownRef = useRef<HTMLDivElement | null>(null);
   const sessionDisplayName =
     session?.user?.user_metadata?.full_name ||
     session?.user?.user_metadata?.name ||
@@ -112,6 +113,14 @@ function NavigationBar() {
     return Array.isArray(c) ? c : c ? [c] : [];
   })();
   const isCaterer = catersList.some((c: any) => c?.is_catering);
+
+  const isNavLinkActive = (href: string) => {
+    if (href === "/") {
+      return pathname === "/";
+    }
+
+    return pathname.startsWith(href);
+  };
 
   const roleActions: RoleAction[] = [];
   if (isMasterAdmin) roleActions.push({ key: "admin", label: "Admin", href: "/masteradmin", variant: "admin" });
@@ -257,6 +266,21 @@ function NavigationBar() {
   }, []);
 
   useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!profileDropdownRef.current) {
+        return;
+      }
+
+      if (!profileDropdownRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    window.addEventListener("mousedown", onMouseDown);
+    return () => window.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  useEffect(() => {
     if (!showDashboardDropdown) {
       setShowRoleDropdown(false);
     }
@@ -393,9 +417,16 @@ function NavigationBar() {
               >
                 <Link
                   href={link.href}
-                  className="font-medium hover:text-[#154cb3df] transition-colors duration-200 py-2 px-1 whitespace-nowrap"
+                  className="relative inline-flex items-center py-2 px-1 whitespace-nowrap font-medium text-[#063168] transition-colors duration-200 hover:text-[#154cb3df]"
                 >
-                  {link.name}
+                  <span className="inline-block transition-transform duration-200 group-hover:scale-105">
+                    {link.name}
+                  </span>
+                  <span
+                    className={`absolute left-1/2 -bottom-1 h-[2px] w-5 -translate-x-1/2 rounded-full bg-[#154CB3] transition-all duration-300 ease-out ${
+                      isNavLinkActive(link.href) ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0"
+                    }`}
+                  />
                 </Link>
                 
                 {/* Dropdown Menu */}
@@ -503,7 +534,7 @@ function NavigationBar() {
                     </div>
                   )}
                   {/* CHANGED ORGANISED AND ADMIN BUTTON */}
-                  <div className="relative">
+                  <div ref={profileDropdownRef} className="relative">
                     <button
                       onClick={() => setShowProfileDropdown(!showProfileDropdown)}
                       className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"
@@ -545,7 +576,7 @@ function NavigationBar() {
               ) : (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   {userData && <NotificationSystem />}
-                  <div className="relative">
+                  <div ref={profileDropdownRef} className="relative">
                     <button
                       onClick={() => setShowProfileDropdown(!showProfileDropdown)}
                       className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"

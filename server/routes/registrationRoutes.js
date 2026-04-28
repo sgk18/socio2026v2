@@ -29,6 +29,70 @@ const normalizeRegisterIdentifier = (value) => {
   return String(value || "").trim().toUpperCase();
 };
 
+const normalizeText = (value) => String(value || "").trim().toLowerCase();
+
+const normalizeDeptToken = (value) =>
+  normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+const toDeptKey = (value) => {
+  const normalized = normalizeDeptToken(value);
+  if (!normalized) return "";
+  if (normalized.startsWith("dept_")) return normalized;
+  return `dept_${normalized.replace(/^department_of_/, "")}`;
+};
+
+const normalizeStringList = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => typeof entry === "string");
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((entry) => typeof entry === "string");
+      }
+    } catch {
+      return [trimmed];
+    }
+    return [];
+  }
+
+  return [];
+};
+
+const isDepartmentAllowed = (allowedDepartments, userDepartment) => {
+  if (!allowedDepartments.length) return true;
+  if (!userDepartment) return false;
+
+  const normalizedUserDept = normalizeDeptToken(userDepartment);
+  const userDeptKey = toDeptKey(userDepartment);
+  const userDeptRaw = normalizeText(userDepartment);
+
+  return allowedDepartments.some((entry) => {
+    const rawEntry = String(entry || "").trim();
+    if (!rawEntry) return false;
+    if (normalizeText(rawEntry) === userDeptRaw) return true;
+
+    const entryKey = toDeptKey(rawEntry);
+    const entryNormalized = normalizeDeptToken(rawEntry);
+
+    return entryKey === userDeptKey || entryNormalized === normalizedUserDept;
+  });
+};
+
+const isCampusAllowed = (allowedCampuses, userCampus) => {
+  if (!allowedCampuses.length) return true;
+  if (!userCampus) return false;
+
+  const normalizedUserCampus = normalizeText(userCampus);
+  return allowedCampuses.some(
+    (campus) => normalizeText(campus) === normalizedUserCampus
+  );
+};
+
 const countParticipantsInRegistration = (registration) => {
   if (registration?.registration_type === "team" && registration?.teammates) {
     try {
@@ -219,6 +283,67 @@ router.post("/register", async (req, res) => {
         code: "EVENT_DRAFT",
       });
     }
+
+    const firstTeammate = isNewFormat && Array.isArray(teammates) ? teammates[0] : null;
+    const registerNumber = isNewFormat
+      ? firstTeammate?.registerNumber || null
+      : normalizedRegistrationType === "individual"
+      ? individual_register_number
+      : team_leader_register_number;
+    const participantEmail = isNewFormat
+      ? firstTeammate?.email || user_email || null
+      : normalizedRegistrationType === "individual"
+      ? individual_email || user_email || null
+      : team_leader_email || user_email || null;
+
+    let participantUser = null;
+    if (participantEmail) {
+      participantUser = await queryOne("users", { where: { email: participantEmail } });
+    }
+    if (!participantUser && registerNumber) {
+      participantUser = await queryOne("users", { where: { register_number: registerNumber } });
+    }
+
+    let participantOrganization = participantUser?.organization_type || "christ_member";
+    if (
+      registerNumber &&
+      String(registerNumber).toUpperCase().startsWith("VIS")
+    ) {
+      participantOrganization = "outsider";
+    }
+
+    if (participantOrganization === "christ_member") {
+      const allowedCampuses = normalizeStringList(event.allowed_campuses);
+      const allowedDepartments = normalizeStringList(event.department_access);
+
+      const hasAllDepartments = allowedDepartments.some(
+        (entry) => normalizeText(entry) === "all_departments"
+      );
+
+      if (!participantUser || !participantUser.campus || !participantUser.department) {
+        return res.status(403).json({
+          error: "Profile incomplete",
+          details: "Campus and department are required to register for this event.",
+          code: "PROFILE_INCOMPLETE",
+        });
+      }
+
+      if (!isCampusAllowed(allowedCampuses, participantUser.campus)) {
+        return res.status(403).json({
+          error: "Campus not eligible",
+          details: "Your campus is not eligible for this event.",
+          code: "CAMPUS_NOT_ALLOWED",
+        });
+      }
+
+      if (!hasAllDepartments && !isDepartmentAllowed(allowedDepartments, participantUser.department)) {
+        return res.status(403).json({
+          error: "Department not eligible",
+          details: "Your department is not eligible for this event.",
+          code: "DEPARTMENT_NOT_ALLOWED",
+        });
+      }
+    }
     
     // ===== REGISTRATION TIME VALIDATIONS =====
     const currentDate = new Date();
@@ -270,25 +395,6 @@ router.post("/register", async (req, res) => {
       }
     }
     
-    // Determine participant's organization type from register number
-    let participantOrganization = 'christ_member'; // default
-    let registerNumber = null;
-    
-    if (isNewFormat) {
-      const firstTeammate = teammates && teammates.length > 0 ? teammates[0] : null;
-      registerNumber = firstTeammate?.registerNumber || null;
-    } else {
-      registerNumber = normalizedRegistrationType === "individual"
-        ? individual_register_number
-        : team_leader_register_number;
-    }
-    
-    // Check if register number is a visitor ID - case-insensitive
-    if (registerNumber && String(registerNumber).toUpperCase().startsWith('VIS')) {
-      participantOrganization = 'outsider';
-      console.log('🌍 Outsider registration detected (visitor ID)');
-    }
-
     const registration_id = uuidv4().replace(/-/g, "");
 
     let processedData = {};
@@ -320,16 +426,7 @@ router.post("/register", async (req, res) => {
       };
     }
 
-    let participantEmail;
-    if (isNewFormat) {
-      const firstTeammate = teammates && teammates.length > 0 ? teammates[0] : null;
-      participantEmail = firstTeammate?.email || "unknown@example.com";
-    } else {
-      participantEmail =
-        normalizedRegistrationType === "individual"
-          ? individual_email || user_email
-          : team_leader_email || user_email;
-    }
+    const effectiveParticipantEmail = participantEmail || "unknown@example.com";
 
     const normalize = (value) => String(value || "").trim().toUpperCase();
 
@@ -389,7 +486,7 @@ router.post("/register", async (req, res) => {
     });
 
     const duplicateRegisterNumber = Array.from(incomingRegisterNumbers).find((rn) => existingRegisterNumbers.has(rn));
-    const normalizedParticipantEmail = String(participantEmail || "").trim().toLowerCase();
+    const normalizedParticipantEmail = String(effectiveParticipantEmail || "").trim().toLowerCase();
     const hasDuplicateEmail = normalizedParticipantEmail && existingEmails.has(normalizedParticipantEmail);
 
     if (duplicateRegisterNumber || hasDuplicateEmail) {
@@ -402,7 +499,7 @@ router.post("/register", async (req, res) => {
     const qrCodeData = generateQRCodeData(
       registration_id,
       normalizedEventId,
-      participantEmail
+      effectiveParticipantEmail
     );
 
     // Robust outsider detection & quota enforcement (fallbacks)
@@ -416,7 +513,7 @@ router.post("/register", async (req, res) => {
           console.log('🌍 Outsider detected from processed data (visitor ID)');
         } else if (!regCandidate && participantEmail) {
           // Lookup user by email to see if they're an outsider
-          const user = await queryOne('users', { where: { email: participantEmail } });
+          const user = await queryOne('users', { where: { email: effectiveParticipantEmail } });
           if (user && user.visitor_id && String(user.visitor_id).toUpperCase().startsWith('VIS')) {
             participantOrganization = 'outsider';
             console.log('🌍 Outsider detected from user record (visitor ID)');
@@ -522,7 +619,7 @@ router.post("/register", async (req, res) => {
 
     // For Christ members, add a simple QR string: "registerNumber/eventId"
     if (participantOrganization === 'christ_member') {
-      const regNo = processedData.individual_register_number || processedData.team_leader_register_number || participantEmail;
+      const regNo = processedData.individual_register_number || processedData.team_leader_register_number || effectiveParticipantEmail;
       qrCodeData.simple_qr = `${regNo}/${normalizedEventId}`;
     }
 
@@ -602,7 +699,7 @@ router.post("/register", async (req, res) => {
 
             const gatedVisitor = await createGatedVisitor({
               name: participantName,
-              email: participantEmail,
+              email: effectiveParticipantEmail,
               phone: participantPhone,
               registerNumber: participantRegNo,
               eventName: event.title,

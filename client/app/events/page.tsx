@@ -1,14 +1,15 @@
 "use client";
 
-import React, { Suspense, useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEvents } from "../../context/EventContext";
+import { useEvents, matchesSelectedCampus } from "../../context/EventContext";
 import { useAuth } from "@/context/AuthContext";
 import { EventCard } from "../_components/Discover/EventCard";
 import { PendingFeedbackSection } from "../_components/Discover/PendingFeedbackSection";
 import Footer from "../_components/Home/Footer";
 import { toast } from "sonner";
+import { christCampuses } from "../lib/eventFormSchema";
 
 const ITEMS_PER_PAGE = 12;
 
@@ -52,6 +53,9 @@ interface FetchedEvent {
   registration_fee: number | null;
   event_image_url: string | null;
   organizing_dept: string | null;
+  campus_hosted_at?: string | null;
+  allowed_campuses?: string[] | string | null;
+  location?: string | null;
   allow_outsiders?: boolean | null;
   is_archived?: boolean | null;
   created_by?: string | null;
@@ -91,6 +95,29 @@ const EventsPageContent = () => {
 
   const { allEvents, isLoading, error } = useEvents();
   const { userData, session } = useAuth();
+
+  const [selectedCampus, setSelectedCampus] = useState(
+    userData?.campus || "Central Campus (Main)"
+  );
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (userData?.campus && selectedCampus === "Central Campus (Main)") {
+      setSelectedCampus(userData.campus);
+    }
+  }, [selectedCampus, userData?.campus]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (!userData?.email || !session?.access_token) return;
@@ -210,6 +237,9 @@ const EventsPageContent = () => {
     fest: safeText(event?.fest, ""),
     created_by: safeText(event?.created_by ?? event?.event_creator ?? event?.fest_creator, "") || null,
     organizer_email: safeText(event?.organizer_email, "") || null,
+    campus_hosted_at: safeText(event?.campus_hosted_at ?? event?.campusHostedAt, "") || null,
+    allowed_campuses: event?.allowed_campuses ?? event?.allowedCampuses ?? null,
+    location: safeText(event?.location, "") || null,
   }));
 
   const handleToggleArchive = async (eventId: string, shouldArchive: boolean) => {
@@ -274,6 +304,20 @@ const EventsPageContent = () => {
     }
   };
   const filteredEvents = eventsToFilter.filter((event) => {
+    const matchesCampus = matchesSelectedCampus(
+      {
+        campus_hosted_at: event.campus_hosted_at,
+        allowed_campuses: event.allowed_campuses,
+        venue: event.venue,
+        location: event.location,
+      },
+      selectedCampus
+    );
+
+    if (!matchesCampus) {
+      return false;
+    }
+
     // Archive filter - hide archived events from normal users (including locally archived)
     if (localArchivedIds.has(event.event_id)) {
       return false;
@@ -316,7 +360,7 @@ const EventsPageContent = () => {
   // Reset to page 1 when filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilterName, searchQuery]);
+  }, [activeFilterName, searchQuery, selectedCampus]);
 
   const handleFilterClick = (clickedFilterName: string) => {
     setFilterOptions(
@@ -333,6 +377,15 @@ const EventsPageContent = () => {
   const handlePageSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     router.push(buildEventsUrl(categoryParam, searchQuery), { scroll: false });
+  };
+
+  const toggleDropdown = () => {
+    setIsDropdownOpen((prev) => !prev);
+  };
+
+  const handleCampusSelect = (campus: string) => {
+    setSelectedCampus(campus);
+    setIsDropdownOpen(false);
   };
 
   if (isLoading) {
@@ -404,6 +457,83 @@ const EventsPageContent = () => {
               </svg>
               Back to Discovery
             </Link>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
+            <div className="text-xs sm:text-sm text-gray-500">
+              Showing events hosted at
+            </div>
+            <div className="relative w-full sm:w-64" ref={dropdownRef}>
+              <div
+                className="bg-white rounded-lg px-4 py-3 border-2 border-gray-200 transition-all hover:border-[#154CB3] cursor-pointer"
+                onClick={toggleDropdown}
+              >
+                <div className="flex items-center space-x-3">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 text-[#154CB3] flex-shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500">
+                      CAMPUS
+                    </label>
+                    <div className="flex items-center justify-between mt-1 text-gray-900">
+                      <span className="text-sm font-medium truncate max-w-[160px]">
+                        {selectedCampus}
+                      </span>
+                      <svg
+                        className={`h-4 w-4 text-[#154CB3] transform transition-transform ${
+                          isDropdownOpen ? "rotate-180" : ""
+                        }`}
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+                  {christCampuses.map((campus) => (
+                    <div
+                      key={campus}
+                      className={`px-4 py-3 text-sm font-medium hover:bg-gray-100 cursor-pointer transition-colors ${
+                        selectedCampus === campus
+                          ? "bg-blue-50 text-[#154CB3]"
+                          : "text-gray-900"
+                      }`}
+                      onClick={() => handleCampusSelect(campus)}
+                    >
+                      {campus}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">

@@ -81,6 +81,23 @@ const toDateTimeLocalInputValue = (value: string | null): string => {
 };
 
 const FEST_TEAM_SETTINGS_KEY = "__team_event_settings__";
+const ALL_DEPARTMENTS_VALUE = "all_departments";
+
+const normalizeDepartmentSelection = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  const normalizedValues = Array.from(
+    new Set(
+      value
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean)
+    )
+  );
+
+  return normalizedValues.includes(ALL_DEPARTMENTS_VALUE)
+    ? [ALL_DEPARTMENTS_VALUE]
+    : normalizedValues;
+};
 
 interface FestTeamSettings {
   isTeamEvent: boolean;
@@ -522,10 +539,26 @@ function DepartmentAndCategoryInputs({
     setIsDepartmentDropdownOpen(false);
   };
 
+  const selectedDepartments = normalizeDepartmentSelection(formData.department);
+  const isAllDepartmentsSelected = selectedDepartments.includes(
+    ALL_DEPARTMENTS_VALUE
+  );
+
   const handleDepartmentChange = (dept: string) => {
-    const newDepartments = formData.department.includes(dept)
-      ? formData.department.filter((d) => d !== dept)
-      : [...formData.department, dept];
+    let newDepartments: string[] = [];
+
+    if (dept === ALL_DEPARTMENTS_VALUE) {
+      newDepartments = isAllDepartmentsSelected ? [] : [ALL_DEPARTMENTS_VALUE];
+    } else {
+      const departmentsWithoutAll = selectedDepartments.filter(
+        (entry) => entry !== ALL_DEPARTMENTS_VALUE
+      );
+
+      newDepartments = departmentsWithoutAll.includes(dept)
+        ? departmentsWithoutAll.filter((entry) => entry !== dept)
+        : [...departmentsWithoutAll, dept];
+    }
+
     setFormData((prev) => ({
       ...prev,
       department: newDepartments,
@@ -576,8 +609,8 @@ function DepartmentAndCategoryInputs({
           } ${errors.department ? "border-red-500" : ""}`}
         >
           <span className="text-sm text-gray-900 truncate max-w-[calc(100%-2rem)]">
-            {formData.department.length > 0
-              ? formData.department
+            {selectedDepartments.length > 0
+              ? selectedDepartments
                   .map(
                     (deptValue) =>
                       departments.find((d) => d.value === deptValue)?.label ||
@@ -609,15 +642,21 @@ function DepartmentAndCategoryInputs({
             className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-y-auto max-h-60 w-full"
           >
             {departments.map((dept) => {
-              const isSelected = formData.department.includes(dept.value);
+              const isSelected = selectedDepartments.includes(dept.value);
+              const isDisabled =
+                isAllDepartmentsSelected && dept.value !== ALL_DEPARTMENTS_VALUE;
+
               return (
                 <button
                   key={dept.value}
                   type="button"
+                  disabled={isDisabled}
                   onClick={() => handleDepartmentChange(dept.value)}
                   title={`Toggle ${dept.label}`}
                   className={`w-full px-4 py-3 text-left text-sm font-medium transition-colors ${
-                    isSelected
+                    isDisabled
+                      ? "bg-gray-50 text-gray-400 cursor-not-allowed"
+                      : isSelected
                       ? "bg-blue-50 text-[#154CB3]"
                       : "text-gray-700 hover:bg-gray-100"
                   }`}
@@ -625,7 +664,9 @@ function DepartmentAndCategoryInputs({
                   <span className="flex items-center">
                     <span
                       className={`mr-2 inline-flex h-4 w-4 items-center justify-center rounded border ${
-                        isSelected
+                        isDisabled
+                          ? "border-gray-200 bg-gray-100 text-gray-400"
+                          : isSelected
                           ? "border-[#154CB3] bg-[#154CB3] text-white"
                           : "border-gray-300"
                       }`}
@@ -843,7 +884,7 @@ function CreateFestForm(props?: CreateFestProps) {
   const minParticipants = "1";
   const maxParticipants = "1";
   const detailedDescription = props?.detailedDescription || "";
-  const department: string[] = props?.department || [];
+  const department: string[] = normalizeDepartmentSelection(props?.department || []);
   const category = props?.category || "";
   const contactEmail = normalizeEmail(props?.contactEmail || "");
   const contactPhone = normalizePhone(props?.contactPhone || "");
@@ -1035,7 +1076,7 @@ function CreateFestForm(props?: CreateFestProps) {
               minParticipants: "1",
               maxParticipants: "1",
               detailedDescription: data.fest.description || "",
-              department: data.fest.department_access || [],
+              department: normalizeDepartmentSelection(data.fest.department_access || []),
               category: data.fest.category || "",
               contactEmail: normalizeEmail(data.fest.contact_email || ""),
               contactPhone: normalizePhone(data.fest.contact_phone || ""),
@@ -1054,7 +1095,7 @@ function CreateFestForm(props?: CreateFestProps) {
               campusHostedAt: data.fest.campus_hosted_at || "",
               allowedCampuses: data.fest.allowed_campuses || [],
               departmentHostedAt: data.fest.department_hosted_at || "",
-              allowedDepartments: data.fest.department_access || [],
+              allowedDepartments: normalizeDepartmentSelection(data.fest.department_access || []),
               allowOutsiders: data.fest.allow_outsiders === true || data.fest.allow_outsiders === 'true' || false,
               customFields: parsedCustomFields,
             });
