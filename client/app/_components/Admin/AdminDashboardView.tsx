@@ -42,6 +42,9 @@ import {
   Zap,
   Plus,
   History,
+  MapPin,
+  UtensilsCrossed,
+  Grid3X3,
 } from "lucide-react";
 import OrganiserHistoryModal from "./OrganiserHistoryModal";
 import {
@@ -630,22 +633,40 @@ export default function AdminDashboardView({
             <History className="w-4 h-4" /> Event Backtracking
           </button>
           <Link
+            href="/bookvenue"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
+          >
+            <MapPin className="w-4 h-4" /> Venue
+          </Link>
+          <Link
+            href="/bookcatering"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] text-[#154cb3] bg-white px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
+          >
+            <UtensilsCrossed className="w-4 h-4" /> Catering
+          </Link>
+          <Link
+            href="/bookstall"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
+          >
+            <Grid3X3 className="w-4 h-4" /> Stalls
+          </Link>
+          <Link
             href="/create/event"
             className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Create Event
+            <Plus className="w-4 h-4" /> Event
           </Link>
           <Link
             href="/create/fest"
             className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] text-[#154cb3] bg-white px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
           >
-            <Plus className="w-4 h-4" /> Create Fest
+            <Plus className="w-4 h-4" /> Fest
           </Link>
           <Link
             href="/create/clubs"
             className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Create Club
+            <Plus className="w-4 h-4" /> Club
           </Link>
         </div>
       </div>

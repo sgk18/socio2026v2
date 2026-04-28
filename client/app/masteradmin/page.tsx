@@ -1919,7 +1919,7 @@ function MasterAdminPageInner() {
 
                   {/* Venue table pagination */}
                   {venues.length > VENUE_PAGE_SIZE && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50 mb-24">
                       <p className="text-xs text-gray-500">
                         {(venuePage - 1) * VENUE_PAGE_SIZE + 1}–{Math.min(venuePage * VENUE_PAGE_SIZE, venues.length)} of {venues.length} venues
                       </p>
@@ -2442,12 +2442,12 @@ function MasterAdminPageInner() {
                                   >
                                     Edit
                                   </a>
-                                  <a
+                                  <Link
                                     href={`/event/${event.event_id}`}
                                     className="px-3 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-lg hover:bg-gray-700 hover:-translate-y-0.5 transition-all"
                                   >
                                     View
-                                  </a>
+                                  </Link>
                                   <button
                                     onClick={() => handleViewEventBookings(event)}
                                     className="h-8 w-8 inline-flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 hover:-translate-y-0.5 transition-all"
@@ -3717,7 +3717,7 @@ function MasterAdminPageInner() {
                     </tbody>
                   </table>
                   {caterers.length > CATERER_PAGE_SIZE && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500 mb-24">
                       <span>{caterers.length} caterers</span>
                       <div className="flex gap-2">
                         <button onClick={() => setCatererPage(p => Math.max(1, p - 1))} disabled={catererPage === 1} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Prev</button>

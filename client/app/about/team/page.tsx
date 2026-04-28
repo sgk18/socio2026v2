@@ -6,6 +6,9 @@ import Image from "next/image";
 import Footer from "../../_components/Home/Footer";
 import sachinImg from '@/public/founder-sachin-yadav.jpg';
 import suryaImg from '@/public/founder-surya-vamshi.jpg';
+import advaithImg from '@/public/advaithsocio.jpeg';
+import altonImg from '@/public/altonsocio.jpeg';
+import suryachalamImg from '@/public/suryachalamsocio.jpeg';
 
 export default function TeamPage() {
   const founders = [
@@ -30,17 +33,6 @@ export default function TeamPage() {
       github: "https://github.com/ayrus15",
       quote: "Great products solve real problems. We just happened to find ours on campus.",
       image: suryaImg,
-    },
-    {
-      name: "Meeth Shah",
-      role: "Co-Founder & Design Lead",
-      bio: "Experience design expert who co-founded SOCIO to bridge the gap between students and campus opportunities. With a focus on intuitive interfaces and seamless user journeys, Meeth leads the design vision, ensuring the platform remains accessible and engaging for all university students. His background in creative strategy drives SOCIO's unique visual identity.",
-      skills: ["UI/UX Design", "Creative Strategy", "User Experience", "Brand Identity"],
-      email: "thesocio.blr@gmail.com",
-      linkedin: "https://www.linkedin.com/in/meeth-shah/",
-      github: "https://github.com/thesachinyyadav",
-      quote: "Design is not just what it looks like, it's how it works for the community.",
-      image: null,
     },
   ];
 
@@ -120,6 +112,27 @@ export default function TeamPage() {
     { metric: "20K+", achievement: "Students Served", description: "Growing community of active users" },
     { metric: "500+", achievement: "Events Managed", description: "Helping organizers reach their audience" },
     { metric: "95%", achievement: "Satisfaction", description: "High user satisfaction ratings" },
+  ];
+
+  const growingTeam = [
+    {
+      name: "Advaith Biju",
+      role: "Backend Engineer & System Design",
+      image: advaithImg,
+      skills: ["Backend Development", "System Design", "APIs"],
+    },
+    {
+      name: "Alton Joe",
+      role: "Wireframe Developer & System Design",
+      image: altonImg,
+      skills: ["Wireframing", "System Design", "UI Planning"],
+    },
+    {
+      name: "Suryachalam",
+      role: "Full Stack & Mobile App Developer",
+      image: suryachalamImg,
+      skills: ["Full Stack Development", "Mobile Apps", "Product Delivery"],
+    },
   ];
 
   return (
@@ -323,7 +336,7 @@ export default function TeamPage() {
                   </div>
                   <h4 className="font-bold text-gray-800">Technical Team</h4>
                 </div>
-                <p className="text-sm text-[#154CB3] font-semibold mb-3">8 Technical Interns</p>
+                <p className="text-sm text-[#154CB3] font-semibold mb-3">12 Technical Interns</p>
                 <ul className="text-xs text-gray-600 space-y-2">
                   <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Frontend Development & UI/UX</li>
                   <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Backend Development & Database</li>
@@ -347,6 +360,58 @@ export default function TeamPage() {
                   <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Marketing & Community Outreach</li>
                   <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Partnership Development</li>
                 </ul>
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-8 h-8 bg-[#FFCC00]/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-[#063168]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-1a4 4 0 00-5-3.874M17 20H7m10 0v-1c0-.896-.293-1.724-.788-2.386M7 20H2v-1a4 4 0 015-3.874M7 20v-1c0-.896.293-1.724.788-2.386m0 0a5.002 5.002 0 019.424 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-bold text-[#063168]">Growing Team</h4>
+                  <p className="text-xs text-gray-500 font-semibold">New members joining the mission</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {growingTeam.map((member) => (
+                  <div key={member.name} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="relative bg-gradient-to-br from-[#154CB3] to-[#063168] p-5 flex items-center justify-center">
+                      <div className="relative aspect-[3/4] w-36 overflow-hidden rounded-2xl border-4 border-white shadow-lg bg-white">
+                        <Image
+                          src={member.image}
+                          alt={member.name}
+                          placeholder="blur"
+                          fill
+                          sizes="144px"
+                          className="object-cover object-top"
+                        />
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
+                    </div>
+
+                    <div className="p-5">
+                      <div className="text-center mb-4">
+                        <h4 className="text-lg font-black text-gray-900 mb-1">{member.name}</h4>
+                        <p className="text-[#154CB3] font-semibold text-sm">{member.role}</p>
+                      </div>
+
+                      <div className="flex flex-wrap justify-center gap-1.5">
+                        {member.skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="bg-[#154CB3]/5 text-[#154CB3] px-3 py-1 rounded-full text-xs font-semibold border border-[#154CB3]/10"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
