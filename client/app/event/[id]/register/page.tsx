@@ -27,6 +27,77 @@ interface FormErrors {
   customFields?: Record<string, string>;
 }
 
+const normalizeText = (value: unknown): string =>
+  String(value ?? "").trim().toLowerCase();
+
+const normalizeDeptToken = (value: unknown): string =>
+  normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+const toDeptKey = (value: unknown): string => {
+  const normalized = normalizeDeptToken(value);
+  if (!normalized) return "";
+  if (normalized.startsWith("dept_")) return normalized;
+  return `dept_${normalized.replace(/^department_of_/, "")}`;
+};
+
+const normalizeStringList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((entry): entry is string => typeof entry === "string");
+      }
+    } catch {
+      return [trimmed];
+    }
+    return [];
+  }
+
+  return [];
+};
+
+const isDepartmentAllowed = (
+  allowedDepartments: string[],
+  userDepartment: string | null | undefined
+): boolean => {
+  if (!allowedDepartments.length) return true;
+  if (!userDepartment) return false;
+
+  const normalizedUserDept = normalizeDeptToken(userDepartment);
+  const userDeptKey = toDeptKey(userDepartment);
+  const userDeptRaw = normalizeText(userDepartment);
+
+  return allowedDepartments.some((entry) => {
+    const rawEntry = String(entry ?? "").trim();
+    if (!rawEntry) return false;
+    if (normalizeText(rawEntry) === userDeptRaw) return true;
+
+    const entryKey = toDeptKey(rawEntry);
+    const entryNormalized = normalizeDeptToken(rawEntry);
+
+    return entryKey === userDeptKey || entryNormalized === normalizedUserDept;
+  });
+};
+
+const isCampusAllowed = (
+  allowedCampuses: string[],
+  userCampus: string | null | undefined
+): boolean => {
+  if (!allowedCampuses.length) return true;
+  if (!userCampus) return false;
+
+  const normalizedUserCampus = normalizeText(userCampus);
+  return allowedCampuses.some(
+    (campus) => normalizeText(campus) === normalizedUserCampus
+  );
+};
+
 // Helper function to generate Google Calendar URL
 const generateGoogleCalendarUrl = (eventTitle: string, eventDate: string, eventTime?: string): string | null => {
   try {
@@ -372,6 +443,63 @@ const Page = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegistrationError(null);
+
+    if (selectedEvent && userData) {
+      const isOutsider = userData.organization_type === "outsider";
+      const allowsOutsiders = Boolean(
+        selectedEvent.allow_outsiders === true ||
+          selectedEvent.allow_outsiders === 1 ||
+          selectedEvent.allow_outsiders === "true" ||
+          selectedEvent.allow_outsiders === "1"
+      );
+
+      if (isOutsider && !allowsOutsiders) {
+        setRegistrationError(
+          "This event is only for Christ University members."
+        );
+        return;
+      }
+
+      if (!isOutsider) {
+        const allowedCampuses = normalizeStringList(
+          selectedEvent.allowed_campuses
+        );
+        const allowedDepartments = normalizeStringList(
+          selectedEvent.department_access
+        );
+
+        if (!userData.campus) {
+          setRegistrationError("Update your campus in profile to register.");
+          return;
+        }
+
+        if (!userData.department) {
+          setRegistrationError(
+            "Update your department in profile to register."
+          );
+          return;
+        }
+
+        if (!isCampusAllowed(allowedCampuses, userData.campus)) {
+          setRegistrationError("Your campus is not eligible for this event.");
+          return;
+        }
+
+        const hasAllDepartments = allowedDepartments.some(
+          (entry) => normalizeText(entry) === "all_departments"
+        );
+
+        if (
+          !hasAllDepartments &&
+          !isDepartmentAllowed(allowedDepartments, userData.department)
+        ) {
+          setRegistrationError(
+            "Your department is not eligible for this event."
+          );
+          return;
+        }
+      }
+    }
 
     let hasErrors = false;
     const newErrors: FormErrors = {

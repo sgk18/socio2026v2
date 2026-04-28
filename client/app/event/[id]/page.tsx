@@ -35,10 +35,83 @@ interface EventData {
   eventTimeRaw?: string | null;
   on_spot?: boolean;
   allow_outsiders?: boolean;
+  department_access?: string[] | string | null;
+  allowed_campuses?: string[] | string | null;
   custom_fields?: any[]; // Custom fields created by organizer
   is_archived?: boolean; // Add archive status to event data
   archived_at?: string; // When the event was archived
 }
+
+const normalizeText = (value: unknown): string =>
+  String(value ?? "").trim().toLowerCase();
+
+const normalizeDeptToken = (value: unknown): string =>
+  normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+const toDeptKey = (value: unknown): string => {
+  const normalized = normalizeDeptToken(value);
+  if (!normalized) return "";
+  if (normalized.startsWith("dept_")) return normalized;
+  return `dept_${normalized.replace(/^department_of_/, "")}`;
+};
+
+const normalizeStringList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((entry): entry is string => typeof entry === "string");
+      }
+    } catch {
+      return [trimmed];
+    }
+    return [];
+  }
+
+  return [];
+};
+
+const isDepartmentAllowed = (
+  allowedDepartments: string[],
+  userDepartment: string | null | undefined
+): boolean => {
+  if (!allowedDepartments.length) return true;
+  if (!userDepartment) return false;
+
+  const normalizedUserDept = normalizeDeptToken(userDepartment);
+  const userDeptKey = toDeptKey(userDepartment);
+  const userDeptRaw = normalizeText(userDepartment);
+
+  return allowedDepartments.some((entry) => {
+    const rawEntry = String(entry ?? "").trim();
+    if (!rawEntry) return false;
+    if (normalizeText(rawEntry) === userDeptRaw) return true;
+
+    const entryKey = toDeptKey(rawEntry);
+    const entryNormalized = normalizeDeptToken(rawEntry);
+
+    return entryKey === userDeptKey || entryNormalized === normalizedUserDept;
+  });
+};
+
+const isCampusAllowed = (
+  allowedCampuses: string[],
+  userCampus: string | null | undefined
+): boolean => {
+  if (!allowedCampuses.length) return true;
+  if (!userCampus) return false;
+
+  const normalizedUserCampus = normalizeText(userCampus);
+  return allowedCampuses.some(
+    (campus) => normalizeText(campus) === normalizedUserCampus
+  );
+};
 
 export default function Page() {
   const params = useParams(); // { id: string }
@@ -271,6 +344,8 @@ export default function Page() {
         (foundEvent as any).on_spot === "1" ||
         (foundEvent as any).on_spot === "true",
       allow_outsiders: !!foundEvent.allow_outsiders,
+      department_access: foundEvent.department_access ?? null,
+      allowed_campuses: foundEvent.allowed_campuses ?? null,
       custom_fields: (() => {
         // Handle custom_fields - could be array, JSON string, or null
         let fields = foundEvent.custom_fields;
@@ -453,6 +528,11 @@ export default function Page() {
       return;
     setRegistrationApiError(null);
 
+    if (!registerEligibility.allowed) {
+      setRegistrationApiError(registerEligibility.reason || "Not eligible to register.");
+      return;
+    }
+
     // ALWAYS redirect to registration page if event has custom fields
     // Custom fields need to be collected before registration
     const hasCustomFields = eventData.custom_fields && eventData.custom_fields.length > 0;
@@ -606,6 +686,55 @@ export default function Page() {
   const isIndividualEventForButton =
     eventData?.numTeammates !== undefined && eventData.numTeammates <= 1;
 
+  const registerEligibility = (() => {
+    if (!eventData || !userData) return { allowed: true, reason: "" };
+
+    if (userData.organization_type === "outsider") {
+      if (eventData.allow_outsiders) return { allowed: true, reason: "" };
+      return {
+        allowed: false,
+        reason: "This event is only for Christ University members.",
+      };
+    }
+
+    const allowedCampuses = normalizeStringList(eventData.allowed_campuses);
+    const allowedDepartments = normalizeStringList(eventData.department_access);
+
+    if (!userData.campus) {
+      return {
+        allowed: false,
+        reason: "Update your campus in profile to register.",
+      };
+    }
+
+    if (!userData.department) {
+      return {
+        allowed: false,
+        reason: "Update your department in profile to register.",
+      };
+    }
+
+    if (!isCampusAllowed(allowedCampuses, userData.campus)) {
+      return {
+        allowed: false,
+        reason: "Your campus is not eligible for this event.",
+      };
+    }
+
+    const hasAllDepartments = allowedDepartments.some(
+      (entry) => normalizeText(entry) === "all_departments"
+    );
+
+    if (!hasAllDepartments && !isDepartmentAllowed(allowedDepartments, userData.department)) {
+      return {
+        allowed: false,
+        reason: "Your department is not eligible for this event.",
+      };
+    }
+
+    return { allowed: true, reason: "" };
+  })();
+
   const getButtonTextAndProps = () => {
     if (authIsLoading || loadingUserRegistrations)
       return { text: "Loading...", disabled: true };
@@ -613,6 +742,8 @@ export default function Page() {
       return { text: "Registered", disabled: true };
     if (isDeadlineOverForThisEvent)
       return { text: "Registrations closed", disabled: true };
+    if (!registerEligibility.allowed)
+      return { text: "Not eligible", disabled: true };
     if (isRegistering)
       return {
         text: (
@@ -1200,6 +1331,29 @@ export default function Page() {
                     </div>
                   </div>
                 )
+              )}
+            {!registrationApiError &&
+              isIndividualEventForButton &&
+              !isUserRegisteredForThisEvent &&
+              !isDeadlineOverForThisEvent &&
+              !registerEligibility.allowed && (
+                <div
+                  ref={errorRef}
+                  tabIndex={-1}
+                  className="mb-4 w-full max-w-lg bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm outline-none focus:ring-4 focus:ring-slate-200"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-slate-800 text-sm">Registration restricted</h4>
+                      <p className="text-slate-600 text-sm mt-1">{registerEligibility.reason}</p>
+                    </div>
+                  </div>
+                </div>
               )}
             {isUserRegisteredForThisEvent && userRegistrationId ? (
               <button
