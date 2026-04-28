@@ -30,6 +30,7 @@ export default function AnimatedListDropdown({
   panelClassName,
 }: AnimatedListDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = useMemo(
@@ -64,6 +65,28 @@ export default function AnimatedListDropdown({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen || !wrapperRef.current) return;
+
+    const updatePlacement = () => {
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setOpenUpward(spaceBelow < 280 && spaceAbove > spaceBelow);
+    };
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [isOpen]);
+
   const labels = options.map((option) => option.label);
 
   return (
@@ -92,7 +115,8 @@ export default function AnimatedListDropdown({
       {isOpen && (
         <div
           className={cn(
-            "absolute z-40 mt-2 w-full rounded-xl border border-slate-200 bg-white shadow-lg p-2",
+            "absolute z-50 left-0 w-full rounded-xl border border-slate-200 bg-white shadow-lg p-2",
+            openUpward ? "bottom-full mb-2 top-auto" : "top-full mt-2",
             panelClassName
           )}
         >
