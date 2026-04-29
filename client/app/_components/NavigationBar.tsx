@@ -90,6 +90,7 @@ function NavigationBar() {
   const desktopNavMeasureRef = useRef<HTMLDivElement | null>(null);
   const roleDropdownRef = useRef<HTMLDivElement | null>(null);
   const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+  const dropdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionDisplayName =
     session?.user?.user_metadata?.full_name ||
     session?.user?.user_metadata?.name ||
@@ -352,7 +353,17 @@ function NavigationBar() {
   }, [isEventsPage, searchParams, searchQuery, router]);
 
   const handleDropdownHover = useCallback((linkName: string | null) => {
-    setActiveDropdown(linkName);
+    if (dropdownTimerRef.current) {
+      clearTimeout(dropdownTimerRef.current);
+      dropdownTimerRef.current = null;
+    }
+    if (linkName !== null) {
+      setActiveDropdown(linkName);
+    } else {
+      dropdownTimerRef.current = setTimeout(() => {
+        setActiveDropdown(null);
+      }, 150);
+    }
   }, []);
 
   return (
@@ -431,16 +442,18 @@ function NavigationBar() {
                 
                 {/* Dropdown Menu */}
                 {activeDropdown === link.name && link.dropdown && (
-                  <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
-                    {link.dropdown.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg"
-                      >
-                        {item.name}
-                      </Link>
-                    ))}
+                  <div className="absolute top-full left-0 pt-1 w-48 z-30">
+                    <div className="bg-white border border-gray-200 rounded-lg shadow-lg">
+                      {link.dropdown.map((item) => (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg"
+                        >
+                          {item.name}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
