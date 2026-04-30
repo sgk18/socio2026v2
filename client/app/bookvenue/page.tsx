@@ -109,9 +109,11 @@ function statusStyle(status: string) {
   }
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string | null | undefined): string {
   if (status === "returned_for_revision") return "Revision";
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  const text = String(status ?? "").trim();
+  if (!text) return "Unknown";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function bookingBarColor(status: string) {

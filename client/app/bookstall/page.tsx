@@ -76,6 +76,12 @@ const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
   declined: { badge: "bg-red-50 text-red-700 border border-red-200",        dot: "bg-red-500" },
 };
 
+function formatStatusLabel(value: unknown, fallback = "Unknown"): string {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function Counter({
   label,
   value,
@@ -499,7 +505,7 @@ export default function BookStallPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${style.badge}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-                            {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                            {formatStatusLabel(b.status)}
                           </span>
                           {b.campus && (
                             <span className="text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-100">

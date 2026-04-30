@@ -76,8 +76,10 @@ function statusStyle(status: string) {
   }
 }
 
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function statusLabel(status: string | null | undefined): string {
+  const text = String(status ?? "").trim();
+  if (!text) return "Unknown";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function formatDateShort(iso: string | null | undefined): string {

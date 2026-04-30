@@ -60,6 +60,12 @@ const STATUS_STYLES: Record<string, string> = {
   declined: "bg-red-100 text-red-700",
 };
 
+function formatStatusLabel(value: unknown, fallback = "Unknown"): string {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 // ─── Booking Card ─────────────────────────────────────────────────────────────
 
 function BookingCard({
@@ -86,7 +92,7 @@ function BookingCard({
                 STATUS_STYLES[booking.status] || "bg-gray-100 text-gray-600"
               }`}
             >
-              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+              {formatStatusLabel(booking.status)}
             </span>
             {booking.campus && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">

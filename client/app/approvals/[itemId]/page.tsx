@@ -64,6 +64,18 @@ const safeText = (value: unknown, fallback = ""): string => {
   return String(value);
 };
 
+const formatActionStepLabel = (value: unknown): string => {
+  const normalized = safeText(value, "").trim();
+  if (!normalized) return "GENERAL";
+  return normalized.toUpperCase();
+};
+
+const formatUpperLabel = (value: unknown, fallback = "UNKNOWN"): string => {
+  const normalized = safeText(value, "").trim();
+  if (!normalized) return fallback;
+  return normalized.toUpperCase();
+};
+
 function isPhase1Complete(stages: ApprovalStage[]): boolean {
   return stages.filter((s) => s.blocking).every(
     (s) => s.status === "approved" || s.status === "skipped"
@@ -367,7 +379,7 @@ function ApprovalsPage() {
             </p>
           )}
           <p className="text-sm text-slate-500">
-            {approval.type.toUpperCase()}
+            {formatUpperLabel(approval.type)}
             {item?.organizing_school ? ` · ${item.organizing_school}` : ""}
             {item?.organizing_dept ? ` · ${item.organizing_dept}` : ""}
           </p>
@@ -520,7 +532,7 @@ function ApprovalsPage() {
                         />
                       </span>
                       <p className="text-sm font-medium text-gray-900">
-                        {entry.step.toUpperCase()} —{" "}
+                        {formatActionStepLabel(entry.step)} —{" "}
                         {entry.action === "approve"
                           ? "Approved"
                           : entry.action === "return_for_revision"
