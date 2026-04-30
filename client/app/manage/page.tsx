@@ -632,7 +632,7 @@ const MappedEventCard = ({
               Feedback
             </Link>
           )}
-          {!isDraft && (event.end_date || event.event_date) && new Date(event.end_date || event.event_date) < new Date() && (
+          {!isDraft && (event.end_date || event.event_date) && new Date(event.end_date ?? event.event_date ?? "") < new Date() && (
             <Link
               href={`/event/${event.event_id}/iqac-report`}
               className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
