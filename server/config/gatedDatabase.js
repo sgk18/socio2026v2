@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import './loadEnv.js';
 
 // UniversityGated Supabase configuration
 const gatedSupabaseUrl = process.env.GATED_SUPABASE_URL;

@@ -11,7 +11,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 
 if (!hasSupabaseConfig) {
-  console.warn('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. Using a placeholder Supabase client until env vars are configured.');
+  console.warn('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. Add them to client/.env.local and restart Next.js. Using a placeholder Supabase client until then.');
 }
 
 const resolvedSupabaseUrl = supabaseUrl || 'https://placeholder.supabase.co';

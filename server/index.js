@@ -1,7 +1,7 @@
 import express from "express";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from 'url';
+import "./config/loadEnv.js";
 import { initializeDatabase } from "./config/database.js";
 
 // API Routes
@@ -27,8 +27,6 @@ import cateringRoutes from "./routes/cateringRoutes.js";
 import stallBookingRoutes from "./routes/stallBookingRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
