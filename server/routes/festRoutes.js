@@ -798,6 +798,12 @@ router.post(
         department_hosted_at: festData.department_hosted_at || festData.departmentHostedAt || null,
         allow_outsiders: festData.allow_outsiders === true || festData.allow_outsiders === 'true' || festData.allowOutsiders === true || festData.allowOutsiders === 'true' ? true : false,
         is_draft: shouldSaveAsDraft,
+        // IQAC fields
+        iqac_event_type: festData.iqac_event_type || festData.iqacEventType || null,
+        target_audience: festData.target_audience || festData.targetAudience || null,
+        external_speakers: festData.external_speakers || festData.externalSpeakers || null,
+        blog_link: festData.blog_link || festData.blogLink || null,
+        organising_committee: festData.organising_committee || festData.organisingCommittee || null,
       };
 
       const inserted = await insert(festTable, [festPayload]);
@@ -1104,6 +1110,12 @@ router.put(
         ["department_hosted_at", departmentHostedAtInput],
         ["allow_outsiders", allowOutsidersInput !== undefined ? (allowOutsidersInput === true || allowOutsidersInput === 'true') : undefined],
         ["is_draft", hasDraftPreference ? shouldSaveAsDraft : undefined],
+        // IQAC fields
+        ["iqac_event_type", pickDefined(updateData.iqac_event_type, updateData.iqacEventType)],
+        ["target_audience", pickDefined(updateData.target_audience, updateData.targetAudience)],
+        ["external_speakers", pickDefined(updateData.external_speakers, updateData.externalSpeakers)],
+        ["blog_link", pickDefined(updateData.blog_link, updateData.blogLink)],
+        ["organising_committee", pickDefined(updateData.organising_committee, updateData.organisingCommittee)],
       ];
 
       for (const [key, value] of mapFields) {

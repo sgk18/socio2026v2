@@ -27,6 +27,7 @@ import cateringRoutes from "./routes/cateringRoutes.js";
 import stallBookingRoutes from "./routes/stallBookingRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
+import iqacReportRoutes from "./routes/iqacReportRoutes.js";
 
 dotenv.config();
 
@@ -180,6 +181,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/hod-analytics", hodAnalyticsRoutes);
 app.use("/api/dean-analytics", deanAnalyticsRoutes);
 app.use("/api/volunteer", volunteerRoutes);
+app.use("/api", iqacReportRoutes);
 
 // Global error handler - ensures CORS headers are always sent
 app.use((err, req, res, next) => {

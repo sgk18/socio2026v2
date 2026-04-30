@@ -175,6 +175,13 @@ export default function CreateEventPage() {
     appendJsonArrayOrObject("volunteers", dataFromHookForm.volunteers || []);
     appendIfExists("created_by", userEmail);
 
+    // IQAC fields
+    appendIfExists("iqac_event_type", dataFromHookForm.iqacEventType);
+    appendJsonArrayOrObject("target_audience", dataFromHookForm.targetAudience);
+    appendJsonArrayOrObject("external_speakers", dataFromHookForm.externalSpeakers);
+    appendIfExists("blog_link", dataFromHookForm.blogLink);
+    appendJsonArrayOrObject("organising_committee", dataFromHookForm.organisingCommittee);
+
     const itConfig = operationalConfigRef.current.it;
     if (itConfig.enabled) {
       formData.append("it_enabled", "true");
