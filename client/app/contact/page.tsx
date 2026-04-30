@@ -3,7 +3,6 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import Image from "next/image";
 import Footer from "../_components/Home/Footer";
 
 const ContactForm = () => {
@@ -112,27 +111,6 @@ const ContactForm = () => {
       description: "Come visit our team at the campus",
       contact: "Christ University, Bengaluru",
       action: "https://maps.google.com/maps?q=Christ+University+Bengaluru"
-    }
-  ];
-
-  const teamMembers = [
-    {
-      name: "Sachin Yadav",
-      role: "Co-Founder & Lead Developer",
-      email: "thesocio.blr@gmail.com",
-      image: "/founder-sachin-yadav.jpg"
-    },
-    {
-      name: "Surya Vamshi",
-      role: "Co-Founder & Product Manager",
-      email: "thesocio.blr@gmail.com",
-      image: "/founder-surya-vamshi.jpg"
-    },
-    {
-      name: "Meeth Shah",
-      role: "Co-Founder & Design Lead",
-      email: "thesocio.blr@gmail.com",
-      image: "/founder-meeth-shah.jpg"
     }
   ];
 
@@ -319,40 +297,6 @@ const ContactForm = () => {
                 )}
               </button>
             </form>
-          </div>
-        </div>
-
-        {/* Team Section */}
-        <div className="mb-16">
-          <h2 className="text-xl sm:text-2xl font-bold text-[#063168] mb-6">
-            Meet Our Team
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-            {teamMembers.map((member, index) => (
-              <div key={index} className="text-center">
-                <div className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden">
-                  <Image
-                    src={member.image}
-                    alt={member.name}
-                    width={96}
-                    height={96}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-1">
-                  {member.name}
-                </h3>
-                <p className="text-[#154CB3] font-medium mb-2">
-                  {member.role}
-                </p>
-                <a
-                  href={`mailto:${member.email}`}
-                  className="text-[#154CB3] hover:underline text-sm font-medium"
-                >
-                  {member.email}
-                </a>
-              </div>
-            ))}
           </div>
         </div>
 
