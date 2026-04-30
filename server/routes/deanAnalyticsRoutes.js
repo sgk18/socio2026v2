@@ -6,9 +6,7 @@ import {
   requireDean,
 } from "../middleware/authMiddleware.js";
 import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-
-dotenv.config();
+import "../config/loadEnv.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

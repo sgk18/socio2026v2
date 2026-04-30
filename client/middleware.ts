@@ -6,6 +6,8 @@ const publicPaths = ["/", "/auth/callback", "/error", "/about", "/auth", "/event
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // 1. Skip middleware for static assets, internal Next.js requests and files with extensions
   if (
@@ -20,9 +22,16 @@ export async function middleware(req: NextRequest) {
   // 2. Handle Cookies and Supabase
   let res = NextResponse.next();
 
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. Add them to client/.env.local (or save your env file) and restart Next.js."
+    );
+    return res;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
