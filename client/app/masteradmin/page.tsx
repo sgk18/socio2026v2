@@ -3867,7 +3867,7 @@ function MasterAdminPageInner() {
               {/* ── Assign form (compact) ── */}
               <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
-                <div className="flex gap-3 items-end flex-wrap">
+                <div className="flex gap-3 items-start flex-wrap">
                   {/* Email */}
                   <div className="relative min-w-[220px] flex-1">
                     <input
@@ -3892,7 +3892,9 @@ function MasterAdminPageInner() {
                         ))}
                       </ul>
                     )}
-                    {roleSelectedEmail && <p className="mt-0.5 text-[11px] text-green-600 font-medium">✓ selected</p>}
+                    <div className="min-h-[18px] pt-0.5">
+                      {roleSelectedEmail && <p className="text-[11px] text-green-600 font-medium">✓ selected</p>}
+                    </div>
                   </div>
 
                   {/* Role dropdown */}
