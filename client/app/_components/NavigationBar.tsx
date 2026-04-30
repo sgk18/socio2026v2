@@ -2,12 +2,20 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Logo from "@/app/logo.svg";
 import { useAuth } from "@/context/AuthContext";
-import { NotificationSystem } from "./NotificationSystem";
-import TermsConsentModal from "./TermsConsentModal";
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+
+const NotificationSystem = dynamic(
+  () => import("./NotificationSystem").then((mod) => mod.NotificationSystem),
+  { ssr: false }
+);
+
+const TermsConsentModal = dynamic(() => import("./TermsConsentModal"), {
+  ssr: false,
+});
 
 // OPTIMIZATION: Move static data outside component to prevent recreation on every render
 const navigationLinks = [
@@ -332,6 +340,16 @@ function NavigationBar() {
     }
   }, [isSigningIn]);
 
+  const handleProfileDropdownToggle = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      return;
+    }
+    setShowProfileDropdown((prev) => !prev);
+  }, []);
+
+  const profileAvatarClasses =
+    "w-8 h-8 rounded-full border-2 border-[#154CB3] bg-gray-200 overflow-hidden relative flex-shrink-0";
+
   const handleSearchSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const trimmedSearch = searchQuery.trim();
@@ -547,12 +565,20 @@ function NavigationBar() {
                     </div>
                   )}
                   {/* CHANGED ORGANISED AND ADMIN BUTTON */}
-                  <div ref={profileDropdownRef} className="relative">
+                  <div
+                    ref={profileDropdownRef}
+                    className="relative"
+                    onMouseEnter={() => setShowProfileDropdown(true)}
+                    onMouseLeave={() => setShowProfileDropdown(false)}
+                  >
                     <button
-                      onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                      type="button"
+                      onClick={handleProfileDropdownToggle}
+                      aria-expanded={showProfileDropdown}
+                      aria-label="Open profile menu"
                       className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"
                     >
-                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden relative flex-shrink-0"> 
+                      <div className={profileAvatarClasses}>
                         {displayAvatar && !avatarLoadError ? (
                           <img
                             src={displayAvatar}
@@ -569,19 +595,21 @@ function NavigationBar() {
                       </div>
                     </button>
                     {showProfileDropdown && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
-                        <Link
-                          href="/profile"
-                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
-                        >
-                          View Profile
-                        </Link>
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
-                        >
-                          Logout
-                        </button>
+                      <div className="absolute right-0 top-full pt-2 z-30">
+                        <div className="w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
+                          <Link
+                            href="/profile"
+                            className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
+                          >
+                            View Profile
+                          </Link>
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
+                          >
+                            Logout
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -589,15 +617,23 @@ function NavigationBar() {
               ) : (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   {userData && <NotificationSystem />}
-                  <div ref={profileDropdownRef} className="relative">
+                  <div
+                    ref={profileDropdownRef}
+                    className="relative"
+                    onMouseEnter={() => setShowProfileDropdown(true)}
+                    onMouseLeave={() => setShowProfileDropdown(false)}
+                  >
                     <button
-                      onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                      type="button"
+                      onClick={handleProfileDropdownToggle}
+                      aria-expanded={showProfileDropdown}
+                      aria-label="Open profile menu"
                       className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"
                     >
                       <span className="hidden lg:block font-medium truncate max-w-[140px]">
                         {displayName}
                       </span>
-                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden relative flex-shrink-0">
+                      <div className={profileAvatarClasses}>
                         {displayAvatar && !avatarLoadError ? (
                           <img
                             src={displayAvatar}
@@ -614,19 +650,21 @@ function NavigationBar() {
                       </div>
                     </button>
                     {showProfileDropdown && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
-                        <Link
-                          href="/profile"
-                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
-                        >
-                          View Profile
-                        </Link>
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
-                        >
-                          Logout
-                        </button>
+                      <div className="absolute right-0 top-full pt-2 z-30">
+                        <div className="w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
+                          <Link
+                            href="/profile"
+                            className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
+                          >
+                            View Profile
+                          </Link>
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
+                          >
+                            Logout
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

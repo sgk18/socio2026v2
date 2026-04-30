@@ -1,15 +1,34 @@
 "use client";
 
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import Hero from "./_components/Home/Hero";
-import Features from "./_components/Home/Features";
-import UpcomingEvents from "./_components/Home/UpcomingEvents";
-import CTA from "./_components/Home/CTA";
-import FAQPage from "./_components/Home/FAQs";
-import Footer from "./_components/Home/Footer";
-import AnimatedText from "./_components/Home/AnimatedText";
 import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
+
+const AnimatedText = dynamic(() => import("./_components/Home/AnimatedText"), {
+  loading: () => <div className="h-28 sm:h-32 md:h-36" />,
+});
+
+const Features = dynamic(() => import("./_components/Home/Features"), {
+  loading: () => <div className="min-h-[420px] w-full animate-pulse bg-slate-50" />,
+});
+
+const UpcomingEvents = dynamic(() => import("./_components/Home/UpcomingEvents"), {
+  loading: () => <div className="min-h-[520px] w-full animate-pulse bg-white" />,
+});
+
+const CTA = dynamic(() => import("./_components/Home/CTA"), {
+  loading: () => <div className="min-h-[280px] w-full animate-pulse bg-slate-50" />,
+});
+
+const FAQPage = dynamic(() => import("./_components/Home/FAQs"), {
+  loading: () => <div className="min-h-[420px] w-full animate-pulse bg-white" />,
+});
+
+const Footer = dynamic(() => import("./_components/Home/Footer"), {
+  loading: () => <div className="min-h-[220px] w-full animate-pulse bg-[#063168]" />,
+});
 
 export default function Home() {
   useEffect(() => {
