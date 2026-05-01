@@ -10,10 +10,7 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV || 'development',
   tracesSampleRate: 1.0,
-  integrations: [
-    new Sentry.Integrations.Http({ tracing: true }),
-    new Sentry.Integrations.Express({ app: true, request: true, serverName: true }),
-  ],
+  sendDefaultPii: true,
 });
 
 // API Routes
@@ -50,9 +47,6 @@ initializeDatabase().catch(err => {
 
 const app = express();
 app.use(express.json());
-
-// Sentry request handler - must be early
-app.use(Sentry.Handlers.requestHandler());
 
 // Prevent stale API payloads from being cached by browsers or intermediary caches.
 app.use('/api', (req, res, next) => {
@@ -195,7 +189,7 @@ app.use("/api/dean-analytics", deanAnalyticsRoutes);
 app.use("/api/volunteer", volunteerRoutes);
 
 // Sentry error handler - must be before other error handlers
-app.use(Sentry.Handlers.errorHandler());
+Sentry.setupExpressErrorHandler(app);
 
 // Global error handler - ensures CORS headers are always sent
 app.use((err, req, res, next) => {

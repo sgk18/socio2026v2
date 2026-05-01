@@ -380,6 +380,7 @@ function MasterAdminPageInner() {
   const [catererPage,      setCatererPage]      = useState(1);
   const [catererSearchQuery, setCatererSearchQuery] = useState("");
   const CATERER_PAGE_SIZE = 15;
+  const campusDetailsRef   = useRef<HTMLDetailsElement>(null);
 
   const filteredCaterers = caterers.filter((caterer) => {
     const query = catererSearchQuery.trim().toLowerCase();
@@ -3619,7 +3620,7 @@ function MasterAdminPageInner() {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Campuses Served <span className="text-red-500">*</span></label>
-                  <details className="group relative">
+                  <details ref={campusDetailsRef} className="group relative" onBlur={() => { if (campusDetailsRef.current) campusDetailsRef.current.open = false; }} onMouseLeave={() => { if (campusDetailsRef.current) campusDetailsRef.current.open = false; }}>
                     <summary className="list-none cursor-pointer w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white flex items-center justify-between gap-3 focus:outline-none focus:ring-1 focus:ring-blue-400">
                       <span className={`truncate ${catererForm.campuses.length === 0 ? "text-gray-400" : "text-gray-800"}`}>
                         {catererForm.campuses.length === 0
@@ -3637,7 +3638,10 @@ function MasterAdminPageInner() {
                             type="checkbox"
                             className="h-4 w-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
                             checked={catererForm.campuses.includes(campus)}
-                            onChange={e => setCatererForm(f => ({ ...f, campuses: e.target.checked ? [...f.campuses, campus] : f.campuses.filter(c => c !== campus) }))}
+                            onChange={e => {
+                              setCatererForm(f => ({ ...f, campuses: e.target.checked ? [...f.campuses, campus] : f.campuses.filter(c => c !== campus) }));
+                              if (campusDetailsRef.current) campusDetailsRef.current.open = false;
+                            }}
                           />
                           <span>{campus}</span>
                         </label>
