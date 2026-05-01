@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -127,7 +127,7 @@ const IconPhone = () => (
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function BookCateringPage() {
+function BookCateringContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -888,6 +888,20 @@ export default function BookCateringPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BookCateringPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <BookCateringContent />
+    </Suspense>
   );
 }
 

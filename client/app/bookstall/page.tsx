@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { christCampuses } from "@/app/lib/eventFormSchema";
@@ -120,7 +120,7 @@ function Counter({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function BookStallPage() {
+function BookStallContent() {
   const { session, userData, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -664,5 +664,19 @@ export default function BookStallPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BookStallPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <BookStallContent />
+    </Suspense>
   );
 }

@@ -903,9 +903,24 @@ router.post(
         }
       }
 
+      // If a full organiser creates an event linked to a fest, look up that fest's creator
+      // so the fest owner retains visibility even after the organiser's role expires.
+      let festCreatorEmail = null;
+      const resolvedFestId = normalizeFestReference(fest_id ?? fest);
+      if (!req.isSubHead && resolvedFestId) {
+        try {
+          const festRow = await queryOne("fests", { where: { fest_id: resolvedFestId }, select: "created_by" });
+          if (festRow?.created_by && festRow.created_by !== req.userInfo?.email) {
+            festCreatorEmail = festRow.created_by;
+          }
+        } catch (_) { /* non-fatal — proceed without fest_creator */ }
+      }
+
       const createdByValue = req.isSubHead
         ? { event_creator: req.userInfo.email, fest_creator: matchedSubHeadFest.created_by, fest_id: matchedSubHeadFest.fest_id }
-        : { event_creator: req.userInfo?.email };
+        : festCreatorEmail
+          ? { event_creator: req.userInfo?.email, fest_creator: festCreatorEmail, fest_id: resolvedFestId }
+          : { event_creator: req.userInfo?.email };
 
       console.log("✅ JSON fields parsed successfully");
       console.log("About to insert event into database with:", {

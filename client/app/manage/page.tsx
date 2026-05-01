@@ -981,14 +981,22 @@ function ManageDashboard() {
 
         const payload = await response.json();
         const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
-        const normalizedEvents = rawEvents.map((event: any) => ({
-          ...event,
-          title: safeText(event?.title, "Untitled event"),
-          fest: safeText(event?.fest, ""),
-          organizing_dept: safeText(event?.organizing_dept, "No Department"),
-          created_by: safeText(event?.created_by ?? event?.event_creator ?? event?.fest_creator, ""),
-          venue: safeText(event?.venue, "Venue TBA"),
-        }));
+        const normalizedEvents = rawEvents.map((event: any) => {
+          const rawCreatedBy = event?.created_by;
+          const festCreator =
+            typeof rawCreatedBy === "object" && rawCreatedBy !== null
+              ? (rawCreatedBy.fest_creator ?? null)
+              : null;
+          return {
+            ...event,
+            title: safeText(event?.title, "Untitled event"),
+            fest: safeText(event?.fest, ""),
+            organizing_dept: safeText(event?.organizing_dept, "No Department"),
+            created_by: safeText(rawCreatedBy ?? event?.event_creator ?? event?.fest_creator, ""),
+            fest_creator: festCreator,
+            venue: safeText(event?.venue, "Venue TBA"),
+          };
+        });
         setLiveEvents(normalizedEvents);
       } catch (err) {
         console.error("Error fetching live events:", err);
@@ -1116,8 +1124,14 @@ function ManageDashboard() {
   };
 
   const userSpecificContextEvents = (liveEvents.length > 0 ? liveEvents : contextAllEvents as ContextEvent[]).filter((e) => {
+    // Extract fest_creator from explicit field (liveEvents) or raw JSONB created_by (contextAllEvents)
+    const rawCreatedBy = (e as any).created_by;
+    const festCreator =
+      (e as any).fest_creator ??
+      (typeof rawCreatedBy === "object" && rawCreatedBy !== null ? rawCreatedBy?.fest_creator : null);
     const isOwnerOrMaster = isOwnedByCurrentUser(
       e.created_by,
+      festCreator,
       (e as any).organizer_email,
       (e as any).organiser_email
     );
