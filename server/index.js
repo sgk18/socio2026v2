@@ -5,13 +5,19 @@ import "./config/loadEnv.js";
 import * as Sentry from "@sentry/node";
 import { initializeDatabase } from "./config/database.js";
 
-// Initialize Sentry for error tracking
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV || 'development',
-  tracesSampleRate: 1.0,
-  sendDefaultPii: true,
-});
+// Initialize Sentry for error tracking.
+// Keep startup resilient if the SDK or one of its integrations is not compatible
+// with the current runtime shape.
+try {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0,
+    sendDefaultPii: true,
+  });
+} catch (error) {
+  console.warn('Sentry initialization skipped:', error?.message || error);
+}
 
 // API Routes
 import userRoutes from "./routes/userRoutes.js";
@@ -189,7 +195,13 @@ app.use("/api/dean-analytics", deanAnalyticsRoutes);
 app.use("/api/volunteer", volunteerRoutes);
 
 // Sentry error handler - must be before other error handlers
-Sentry.setupExpressErrorHandler(app);
+try {
+  if (process.env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
+  }
+} catch (error) {
+  console.warn('Sentry Express error handler skipped:', error?.message || error);
+}
 
 // Global error handler - ensures CORS headers are always sent
 app.use((err, req, res, next) => {
