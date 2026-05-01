@@ -151,6 +151,8 @@ type User = {
   is_accounts_office?: boolean;
   is_it_support?: boolean;
   is_stalls?: boolean;
+    is_venue_manager?: boolean;
+    venue_manager_expires_at?: string | null;
   school?: string | null;
   department?: string | null;
   campus?: string | null;
