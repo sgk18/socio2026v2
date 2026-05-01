@@ -19,8 +19,6 @@
     "@google/generative-ai": "^0.21.0",
     "@supabase/supabase-js": "^2.57.4",
     "cors": "^2.8.5",
-    "docx": "^9.6.1",
-    "docxtemplater": "^3.68.6",
     "dotenv": "^16.5.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
@@ -30,7 +28,6 @@
     "openai": "^6.33.0",
     "path": "^0.12.7",
     "pg": "^8.18.0",
-    "pizzip": "^3.2.0",
     "qrcode": "^1.5.4",
     "resend": "^6.10.0",
     "uuid": "^14.0.0"

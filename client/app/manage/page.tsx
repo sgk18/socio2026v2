@@ -322,14 +322,6 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
             <Link href={`/${baseUrl}/${fest.fest_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
               Edit <ArrowRight className="w-4 h-4" />
             </Link>
-            {new Date(fest.closing_date) < new Date() && (
-              <Link
-                href={`/fest/${fest.fest_id}/iqac-report`}
-                className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
-              >
-                IQAC Report
-              </Link>
-            )}
           </div>
         ))}
       </div>
@@ -630,14 +622,6 @@ const MappedEventCard = ({
               className="inline-flex items-center gap-1 text-xs text-slate-500 font-semibold hover:text-slate-800 transition-colors"
             >
               Feedback
-            </Link>
-          )}
-          {!isDraft && new Date(event.end_date || event.event_date) < new Date() && (
-            <Link
-              href={`/event/${event.event_id}/iqac-report`}
-              className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
-            >
-              IQAC Report
             </Link>
           )}
           {onManageVolunteers && (

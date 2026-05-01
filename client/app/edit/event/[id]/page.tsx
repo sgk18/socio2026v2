@@ -334,12 +334,6 @@ export default function EditEventPage() {
             imageFile: null, // Always null initially for form, URL is separate
             bannerFile: null,
             pdfFile: null,
-            // IQAC fields
-            iqacEventType: data.iqac_event_type || "",
-            targetAudience: Array.isArray(data.target_audience) ? data.target_audience : [],
-            externalSpeakers: Array.isArray(data.external_speakers) ? data.external_speakers : [],
-            blogLink: data.blog_link || "",
-            organisingCommittee: Array.isArray(data.organising_committee) ? data.organising_committee : [],
           };
 
           setInitialData(transformedData);
@@ -582,13 +576,6 @@ export default function EditEventPage() {
     // Custom fields
     payload.append("custom_fields", JSON.stringify(formData.customFields || []));
     payload.append("volunteers", JSON.stringify(formData.volunteers || []));
-
-    // IQAC fields
-    if (formData.iqacEventType) payload.append("iqac_event_type", formData.iqacEventType);
-    if (formData.targetAudience?.length) payload.append("target_audience", JSON.stringify(formData.targetAudience));
-    if (formData.externalSpeakers?.length) payload.append("external_speakers", JSON.stringify(formData.externalSpeakers));
-    if (formData.blogLink) payload.append("blog_link", formData.blogLink);
-    if (formData.organisingCommittee?.length) payload.append("organising_committee", JSON.stringify(formData.organisingCommittee));
 
     const appendFile = (key: string, file: any) => {
       if (!file) return false;

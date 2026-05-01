@@ -967,12 +967,6 @@ router.post(
         it_info: (req.body.it_enabled === "true" || req.body.it_enabled === true) && req.body.it_description
           ? { description: req.body.it_description, status: "pending" }
           : null,
-        // IQAC fields
-        iqac_event_type: req.body.iqac_event_type || null,
-        target_audience: parseJsonField(req.body.target_audience, null),
-        external_speakers: parseJsonField(req.body.external_speakers, null),
-        blog_link: req.body.blog_link || null,
-        organising_committee: parseJsonField(req.body.organising_committee, null),
       }]);
 
       if (!created || created.length === 0) {
@@ -1502,12 +1496,6 @@ router.put(
         campus_hosted_at: campusHostedAt,
         allowed_campuses: parsedAllowedCampuses,
         min_participants: parseOptionalInt(req.body.min_participants || req.body.minParticipants, 1),
-        // IQAC fields
-        iqac_event_type: req.body.iqac_event_type || null,
-        target_audience: parseJsonField(req.body.target_audience, null),
-        external_speakers: parseJsonField(req.body.external_speakers, null),
-        blog_link: req.body.blog_link || null,
-        organising_committee: parseJsonField(req.body.organising_committee, null),
         updated_at: new Date().toISOString(),
         ...archiveOverridePayload,
         ...draftOverridePayload

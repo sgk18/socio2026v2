@@ -432,23 +432,6 @@ export const eventFormSchema = z
     scheduleItems: z.array(scheduleItemSchema).optional(),
     eventHeads: z.array(z.string().email("Invalid email format")).optional(),
     customFields: z.array(customFieldSchema).optional(),
-
-    // IQAC fields
-    iqacEventType: z.string().optional(),
-    targetAudience: z.array(z.string()).optional().default([]),
-    externalSpeakers: z.array(z.object({
-      name: z.string().min(1, "Name is required"),
-      designation: z.string().optional(),
-      organization: z.string().optional(),
-      contact: z.string().optional(),
-      website: z.string().url("Invalid URL").optional().or(z.literal("")),
-    })).optional().default([]),
-    blogLink: z.string().url("Invalid URL").optional().or(z.literal("")),
-    organisingCommittee: z.array(z.object({
-      name: z.string().min(1, "Name is required"),
-      role: z.string().optional(),
-      email: z.string().email("Invalid email").optional().or(z.literal("")),
-    })).optional().default([]),
   })
   .refine(
     (data) => {
@@ -586,31 +569,3 @@ export const campusData = [
 ];
 
 export const christCampuses = campusData.map((c) => c.name);
-
-export const iqacEventTypes = [
-  { value: "Guest Lecture", label: "Guest Lecture" },
-  { value: "Seminar", label: "Seminar" },
-  { value: "Workshop", label: "Workshop" },
-  { value: "Conference", label: "Conference" },
-  { value: "Webinar", label: "Webinar" },
-  { value: "Invited Lecture", label: "Invited Lecture" },
-  { value: "Alumni Interaction", label: "Alumni Interaction" },
-  { value: "Skill Enhancement Initiative", label: "Skill Enhancement Initiative" },
-  { value: "Knowledge Sharing Session", label: "Knowledge Sharing Session" },
-  { value: "Sports or Cultural Activity", label: "Sports or Cultural Activity" },
-  { value: "Sports or Cultural Competition", label: "Sports or Cultural Competition" },
-  { value: "Department Fest and Competition", label: "Department Fest and Competition" },
-  { value: "Peer Learning Session", label: "Peer Learning Session" },
-  { value: "Extension Activity", label: "Extension Activity" },
-  { value: "Quality Improvement Programme", label: "Quality Improvement Programme" },
-  { value: "Remedial Session", label: "Remedial Session" },
-];
-
-export const iqacTargetAudienceOptions = [
-  "Students",
-  "Faculty Members",
-  "Administrative Staff",
-  "External Students",
-  "Staff of Other Institutions",
-  "Open to Public",
-];

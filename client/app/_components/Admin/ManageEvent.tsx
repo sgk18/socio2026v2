@@ -27,8 +27,6 @@ import {
   categories as categoryOptions,
   festEvents as festEventOptions,
   christCampuses,
-  iqacEventTypes,
-  iqacTargetAudienceOptions,
 } from "@/app/lib/eventFormSchema";
 
 import { getFests } from "@/lib/api";
@@ -42,7 +40,6 @@ import {
 } from "@/app/_components/UI/FormElements";
 
 import { DynamicCustomFieldBuilder, CustomField } from "@/app/_components/UI/DynamicCustomFieldBuilder";
-import IqacSection from "@/app/_components/Admin/IqacSection";
 
 import { useAuth } from "@/context/AuthContext";
 import LoadingIndicator from "@/app/_components/UI/LoadingIndicator";
@@ -3162,9 +3159,6 @@ export default function EventForm({
                   register={register}
                   errors={errors}
                 />
-
-                {/* ── IQAC & Compliance Section ── */}
-                <IqacSection control={control} register={register} errors={errors} />
 
                 </div>{/* end details tab */}
 
