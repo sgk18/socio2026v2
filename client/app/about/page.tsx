@@ -234,7 +234,7 @@ const AboutPage = () => {
           <div className="relative w-full max-w-2xl mx-auto overflow-hidden rounded-lg shadow-lg mb-6">
             <Image
               src="/sachinsuryameeth.jpg"
-              alt="Sachin Yadav, Surya Vamshi, and Meeth Shah - Founders of SOCIO"
+              alt="Sachin Yadav and Surya Vamshi - Founders of SOCIO"
               width={800}
               height={400}
               priority
@@ -242,7 +242,7 @@ const AboutPage = () => {
             />
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#063168]/80 to-transparent p-4 rounded-b-xl">
               <p className="text-white text-center font-medium">
-          Our founders: Sachin Yadav, Surya Vamshi, and Meeth Shah
+          Our founders: Surya Vamshi (L) and Sachin Yadav (R)
               </p>
             </div>
           </div>
@@ -255,29 +255,6 @@ const AboutPage = () => {
           campuses stay informed, engaged, and connected with their college
           communities like never before.
         </p>
-
-        {/* Animated Stats Section */}
-        <div className="bg-gradient-to-br from-[#063168] to-[#154CB3] py-8 px-6 rounded-2xl mb-12">
-          <h3 className="text-xl md:text-2xl font-black text-white text-center mb-8">Our Impact in Numbers</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            <div className="flex flex-col items-center">
-              <div className="text-3xl md:text-4xl font-black text-white mb-2">4</div>
-              <div className="text-sm md:text-base text-gray-200">Colleges</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="text-3xl md:text-4xl font-black text-white mb-2">20</div>
-              <div className="text-sm md:text-base text-gray-200">Events Managed</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="text-3xl md:text-4xl font-black text-white mb-2">5,000+</div>
-              <div className="text-sm md:text-base text-gray-200">Student Users</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="text-3xl md:text-4xl font-black text-white mb-2">98%</div>
-              <div className="text-sm md:text-base text-gray-200">Satisfaction Rate</div>
-            </div>
-          </div>
-        </div>
 
         <div className="grid grid-cols-3 gap-3 sm:gap-4 md:gap-6 text-center">
           <div className="bg-white p-3 sm:p-4 md:p-6 rounded-lg shadow-sm border-t-4 border-[#FFCC00]">
@@ -299,7 +276,7 @@ const AboutPage = () => {
               </svg>
             </div>
             <div className="text-base sm:text-xl md:text-3xl font-bold text-[#154CB3]">
-              4+
+              5+
             </div>
             <div className="text-xs sm:text-sm md:text-base text-gray-600 mt-1 sm:mt-2">
               Campuses
@@ -325,10 +302,10 @@ const AboutPage = () => {
               </svg>
             </div>
             <div className="text-base sm:text-xl md:text-3xl font-bold text-[#154CB3]">
-              20K+
+              2000+
             </div>
             <div className="text-xs sm:text-sm md:text-base text-gray-600 mt-1 sm:mt-2">
-              Students
+              Students Impacted
             </div>
           </div>
 

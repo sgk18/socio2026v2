@@ -66,7 +66,7 @@ export default function MissionPage() {
       title: "Build Community",
       description: "Foster connections between students, clubs, and departments to create a more vibrant campus ecosystem.",
       icon: "community",
-      impact: "20,000+ students connected across 4+ campuses"
+      impact: "2000+ students connected across 5+ campuses"
     }
   ];
 
@@ -347,15 +347,15 @@ export default function MissionPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             <div className="bg-white p-6 rounded-xl shadow-sm">
-              <div className="text-3xl font-black text-[#154CB3] mb-2">4+</div>
+              <div className="text-3xl font-black text-[#154CB3] mb-2">5+</div>
               <div className="text-sm text-gray-600">Campuses Served</div>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm">
-              <div className="text-3xl font-black text-green-600 mb-2">20K+</div>
+              <div className="text-3xl font-black text-green-600 mb-2">2000+</div>
               <div className="text-sm text-gray-600">Active Students</div>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm">
-              <div className="text-3xl font-black text-yellow-600 mb-2">500+</div>
+              <div className="text-3xl font-black text-yellow-600 mb-2">50+</div>
               <div className="text-sm text-gray-600">Events Managed</div>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm">

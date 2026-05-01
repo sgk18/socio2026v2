@@ -6,6 +6,8 @@ import Image from "next/image";
 import Footer from "../../_components/Home/Footer";
 import sachinImg from '@/public/founder-sachin-yadav.jpg';
 import suryaImg from '@/public/founder-surya-vamshi.jpg';
+import socioTeam1Img from '@/public/socioteam1.jpeg';
+import socioTeam2Img from '@/public/socioteam2.jpeg';
 import advaithImg from '@/public/advaithsocio.jpeg';
 import altonImg from '@/public/altonsocio.jpeg';
 import suryachalamImg from '@/public/suryachalamsocio.jpeg';
@@ -108,9 +110,9 @@ export default function TeamPage() {
   ];
 
   const milestones = [
-    { metric: "4+", achievement: "Campuses", description: "Expanded beyond our home university" },
-    { metric: "20K+", achievement: "Students Served", description: "Growing community of active users" },
-    { metric: "500+", achievement: "Events Managed", description: "Helping organizers reach their audience" },
+    { metric: "5+", achievement: "Campuses", description: "Expanded beyond our home university" },
+    { metric: "2000+", achievement: "Students Served", description: "Growing community of active users" },
+    { metric: "50+", achievement: "Events Managed", description: "Helping organizers reach their audience" },
     { metric: "95%", achievement: "Satisfaction", description: "High user satisfaction ratings" },
   ];
 
@@ -182,6 +184,62 @@ export default function TeamPage() {
               Our team has grown from 3 founders to include 11 talented interns across
               technical and business domains, all working to transform campus life.
             </p>
+          </div>
+        </section>
+
+        {/* Module 11 Celebration */}
+        <section className="mb-20">
+          {/* Text card — full width */}
+          <div className="bg-gradient-to-br from-[#063168] via-[#154CB3] to-[#0f4aa6] rounded-3xl p-8 sm:p-10 text-white mb-5">
+            <div className="max-w-3xl mb-8">
+              <p className="text-sm font-bold uppercase tracking-widest text-[#FFCC00] mb-4">
+                Module 11 Milestone
+              </p>
+              <h2 className="text-2xl sm:text-4xl font-black leading-tight mb-5">
+                Celebrating the successful inauguration of a bigger Module 11 of SOCIO
+              </h2>
+              <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
+                This moment marks a crucial milestone for SOCIO. What began as a student-led idea has now
+                grown into a stronger, wider platform with a larger operational module, a bigger team,
+                and a clearer path for the future of campus experiences.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 max-w-xl">
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                <p className="text-2xl font-black text-[#FFCC00] mb-1">11</p>
+                <p className="text-sm text-blue-100">Module expansion</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                <p className="text-2xl font-black text-[#FFCC00] mb-1">SOCIO</p>
+                <p className="text-sm text-blue-100">Team in action</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                <p className="text-2xl font-black text-[#FFCC00] mb-1">Milestone</p>
+                <p className="text-sm text-blue-100">A bigger chapter ahead</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Landscape images — side by side at full section width */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-gray-100">
+              <Image
+                src={socioTeam1Img}
+                alt="SOCIO team celebrating the successful inauguration of Module 11"
+                fill
+                placeholder="blur"
+                className="object-cover object-center"
+              />
+            </div>
+            <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-gray-100">
+              <Image
+                src={socioTeam2Img}
+                alt="SOCIO team during the Module 11 celebration"
+                fill
+                placeholder="blur"
+                className="object-cover object-center"
+              />
+            </div>
           </div>
         </section>
 
@@ -299,6 +357,76 @@ export default function TeamPage() {
                         </svg>
                       </a>
                     )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mb-20">
+          {/* Advisors */}
+          <div className="text-center mb-10">
+            <p className="text-sm font-bold text-[#154CB3] uppercase tracking-widest mb-2">
+              Guidance
+            </p>
+            <h3 className="text-2xl sm:text-3xl font-black text-[#063168]">
+              Faculty Advisors
+            </h3>
+            <div className="mt-4 w-16 h-1 bg-[#FFCC00] mx-auto rounded-full" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {advisors.map((advisor, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100"
+              >
+                <div className="flex items-start gap-5 mb-5">
+                  {advisor.photo ? (
+                    <div className="relative w-20 h-20 rounded-full overflow-hidden border-[3px] border-gray-100 shadow flex-shrink-0">
+                      <Image
+                        src={advisor.photo}
+                        alt={advisor.name}
+                        width={160}
+                        height={160}
+                        className="w-full h-full object-cover object-top"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 bg-gradient-to-br from-[#154CB3] to-[#063168] rounded-full flex items-center justify-center shadow flex-shrink-0">
+                      <span className="text-white text-2xl font-bold">
+                        {advisor.name.split(" ").map((n) => n[0]).join("")}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900 mb-1">
+                      {advisor.name}
+                    </h3>
+                    <p className="text-[#154CB3] font-bold text-sm mb-1">
+                      {advisor.role}
+                    </p>
+                    <p className="text-gray-500 text-xs font-medium">
+                      {advisor.department}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-gray-600 text-sm mb-5 leading-relaxed">
+                  {advisor.bio}
+                </p>
+                <div>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Areas of Expertise
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {advisor.expertise.map((area, j) => (
+                      <span
+                        key={j}
+                        className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-100"
+                      >
+                        {area}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -464,74 +592,6 @@ export default function TeamPage() {
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* Advisors */}
-          <div className="text-center mb-10">
-            <p className="text-sm font-bold text-[#154CB3] uppercase tracking-widest mb-2">
-              Guidance
-            </p>
-            <h3 className="text-2xl sm:text-3xl font-black text-[#063168]">
-              Faculty Advisors
-            </h3>
-            <div className="mt-4 w-16 h-1 bg-[#FFCC00] mx-auto rounded-full" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {advisors.map((advisor, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100"
-              >
-                <div className="flex items-start gap-5 mb-5">
-                  {advisor.photo ? (
-                    <div className="relative w-20 h-20 rounded-full overflow-hidden border-[3px] border-gray-100 shadow flex-shrink-0">
-                      <Image
-                        src={advisor.photo}
-                        alt={advisor.name}
-                        width={160}
-                        height={160}
-                        className="w-full h-full object-cover object-top"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-20 h-20 bg-gradient-to-br from-[#154CB3] to-[#063168] rounded-full flex items-center justify-center shadow flex-shrink-0">
-                      <span className="text-white text-2xl font-bold">
-                        {advisor.name.split(" ").map((n) => n[0]).join("")}
-                      </span>
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="text-xl font-black text-gray-900 mb-1">
-                      {advisor.name}
-                    </h3>
-                    <p className="text-[#154CB3] font-bold text-sm mb-1">
-                      {advisor.role}
-                    </p>
-                    <p className="text-gray-500 text-xs font-medium">
-                      {advisor.department}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-600 text-sm mb-5 leading-relaxed">
-                  {advisor.bio}
-                </p>
-                <div>
-                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                    Areas of Expertise
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {advisor.expertise.map((area, j) => (
-                      <span
-                        key={j}
-                        className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-100"
-                      >
-                        {area}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 

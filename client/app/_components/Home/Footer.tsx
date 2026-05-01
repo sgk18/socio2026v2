@@ -90,8 +90,10 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-lg mb-5 text-white border-b border-[#FFCC00] pb-2">For Organizers</h3>
             <ul className="space-y-3">
-              <li><Link href="/solutions" className="text-white/70 text-base hover:text-white transition-colors">Our Solutions</Link></li>
+              <li><a href="https://gated.withsocio.com/" target="_blank" rel="noopener noreferrer" className="text-white/70 text-base hover:text-white transition-colors">Socio Gated</a></li>
               <li><a href="https://withsocio.com" target="_blank" rel="noopener noreferrer" className="text-white/70 text-base hover:text-white transition-colors">With Socio</a></li>
+              <li><Link href="/solutions" className="text-white/70 text-base hover:text-white transition-colors">Our Solutions</Link></li>
+
             </ul>
           </div>
 

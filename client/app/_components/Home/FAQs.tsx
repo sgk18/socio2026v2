@@ -1,10 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-
-gsap.registerPlugin(ScrollTrigger);
+import { useState } from "react";
 
 interface FAQ {
   question: string;
@@ -13,9 +9,8 @@ interface FAQ {
 
 export default function FAQSection() {
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({
-    "Is Socio free to use?": true,
+    "What is SOCIO?": true,
   });
-  const faqRef = useRef<HTMLDivElement>(null);
 
   const toggleItem = (question: string) => {
     setOpenItems((prev) => ({
@@ -26,86 +21,49 @@ export default function FAQSection() {
 
   const faqItems: FAQ[] = [
     {
+      question: "What is SOCIO?",
+      answer:
+        "SOCIO is a campus event platform that helps students discover events, register quickly, and stay connected with what is happening across their college community.",
+    },
+    {
       question: "Is Socio free to use?",
       answer:
         "Yes, absolutely. Socio is completely free for students. You can browse events, register, and stay updated, all without paying a rupee.",
     },
     {
-      question:
-        "Is Socio available for all colleges or just specific universities?",
+      question: "How do I find events I'm interested in?",
       answer:
-        "We’re starting off with Christ University, Central Campus. Very soon, we plan to expand to other Christ branches and eventually roll it out to other colleges across Bangalore. We want to make sure no student misses out, no matter which campus they’re from.",
+        "Use the Discover page to browse events by category, date, or department. You can also search for specific events using the site navigation.",
     },
     {
-      question: "What kind of events are usually listed on Socio?",
+      question: "How do I register for an event?",
       answer:
-        "All kinds! From casual open mics to major management fests, Socio covers it all. You’ll find vocational workshops, sports tournaments, speaker sessions, debates, cultural events, light-hearted activities, and more. Whether it’s your department’s internal contest, an inter-departmental battle, or a full-on intercollegiate fest, it’ll be listed here.",
+        "Open the event page, click Register Now, and follow the prompts to complete registration. You will receive a confirmation once your sign-up is successful.",
     },
     {
-      question: "Can anyone post an event, or do you verify the organizers?",
+      question: "How does QR code attendance work?",
       answer:
-        "To maintain authenticity, events can only be posted by the assigned teacher coordinator for that event. This helps us ensure everything listed on the platform is genuine and approved.",
+        "After registering, you receive a unique QR code. Show it at the event for quick check-in, and the attendance gets recorded instantly.",
+    },
+    {
+      question: "Can I cancel my event registration?",
+      answer:
+        "Yes, you can cancel a registration from your profile or event details page, subject to the organizer's cancellation policy and deadlines.",
+    },
+    {
+      question: "Who can post an event on SOCIO?",
+      answer:
+        "Events are posted by verified organizers and coordinators so the listings stay genuine and approved before they go live.",
     },
     {
       question: "How do I know when a new event has been posted?",
       answer:
-        "Our app sends you push notifications whenever a new event goes live. So even if your WhatsApp groups are flooded, you won’t miss a thing.",
+        "SOCIO notifies you when new events go live, so you can stay updated without constantly checking multiple group chats.",
     },
   ];
 
-  useEffect(() => {
-    const items = faqRef.current?.querySelectorAll(
-      ".faq-item"
-    ) as NodeListOf<HTMLElement>;
-    if (items) {
-      items.forEach((item: HTMLElement) => {
-        gsap.from(item, {
-          opacity: 0,
-          y: 20,
-          duration: 0.6,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: item,
-            start: "top 90%",
-          },
-        });
-
-        const button = item.querySelector("button") as HTMLButtonElement;
-        if (button) {
-          const mouseEnterHandler = () =>
-            gsap.to(button, { x: 5, duration: 0.3, ease: "power2.out" });
-          const mouseLeaveHandler = () =>
-            gsap.to(button, { x: 0, duration: 0.3, ease: "power2.out" });
-
-          button.addEventListener("mouseenter", mouseEnterHandler);
-          button.addEventListener("mouseleave", mouseLeaveHandler);
-
-          return () => {
-            button.removeEventListener("mouseenter", mouseEnterHandler);
-            button.removeEventListener("mouseleave", mouseLeaveHandler);
-          };
-        }
-      });
-    }
-
-    return () => {
-      ScrollTrigger.getAll().forEach((trigger) => {
-        if (
-          items &&
-          Array.from(items).some(
-            (item) =>
-              item === trigger.trigger || item.contains(trigger.trigger as Node)
-          )
-        ) {
-          trigger.kill();
-        }
-      });
-    };
-  }, []);
-
   return (
     <div
-      ref={faqRef}
       className="w-full py-8 sm:py-12 px-4 sm:px-6 md:px-16 bg-white mb-8"
     >
       <div className="max-w-7xl mx-auto">
@@ -125,7 +83,7 @@ export default function FAQSection() {
             <div className="space-y-1">
               {faqItems.map((faq, index) => (
                 <div
-                  key={index} // Reverted key to index as in original
+                  key={index}
                   className={`faq-item ${
                     index !== faqItems.length - 1
                       ? "border-b border-gray-200"
