@@ -353,6 +353,7 @@ function MasterAdminPageInner() {
   const [editVenueSaving,  setEditVenueSaving]  = useState(false);
   // Venue list pagination
   const [venuePage,        setVenuePage]        = useState(1);
+  const [venueSearchQuery, setVenueSearchQuery] = useState("");
   const VENUE_PAGE_SIZE = 15;
   const [selectedVenueForBookings, setSelectedVenueForBookings] = useState<VenueRow | null>(null);
   const [venueBookings, setVenueBookings] = useState<VenueBookingRow[]>([]);
@@ -1600,14 +1601,6 @@ function MasterAdminPageInner() {
             </span>
             Roles
           </button>
-          <Link href="/manage">
-            <span className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-medium">
-              <span className="text-slate-400">
-                <Eye className="w-4 h-4" />
-              </span>
-              Organiser View
-            </span>
-          </Link>
           <button
             onClick={() => setActiveTab("venues")}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${
@@ -1650,6 +1643,14 @@ function MasterAdminPageInner() {
               }`}>{caterers.length}</span>
             )}
           </button>
+          <Link href="/manage">
+            <span className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-medium">
+              <span className="text-slate-400">
+                <Eye className="w-4 h-4" />
+              </span>
+              Organiser View
+            </span>
+          </Link>
         </div>
       </aside>
 
@@ -1844,6 +1845,19 @@ function MasterAdminPageInner() {
                 <div className="p-8 text-center text-sm text-gray-400">No venues yet. Add one above.</div>
               ) : (
                 <>
+                  {/* Search */}
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="relative max-w-xs">
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                      <input
+                        type="text"
+                        value={venueSearchQuery}
+                        onChange={e => { setVenueSearchQuery(e.target.value); setVenuePage(1); }}
+                        placeholder="Search venues…"
+                        className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#154CB3] bg-gray-50"
+                      />
+                    </div>
+                  </div>
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
@@ -1857,7 +1871,13 @@ function MasterAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {venues.slice((venuePage - 1) * VENUE_PAGE_SIZE, venuePage * VENUE_PAGE_SIZE).map(v => (
+                      {venues.filter(v => {
+                        const q = venueSearchQuery.trim().toLowerCase();
+                        if (!q) return true;
+                        return (v.name || "").toLowerCase().includes(q) ||
+                               (v.campus || "").toLowerCase().includes(q) ||
+                               (v.location || "").toLowerCase().includes(q);
+                      }).slice((venuePage - 1) * VENUE_PAGE_SIZE, venuePage * VENUE_PAGE_SIZE).map(v => (
                         <tr key={v.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-900">{v.name}</td>
                           <td className="px-4 py-3 text-gray-600">{v.campus}</td>
