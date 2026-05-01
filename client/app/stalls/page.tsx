@@ -169,6 +169,8 @@ export default function StallsDashboardPage() {
   const [reviewed, setReviewed] = useState<StallBooking[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [reviewedPage, setReviewedPage] = useState(1);
+  const REVIEWED_PER_PAGE = 10;
 
   // ─── Auth Guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -202,6 +204,11 @@ export default function StallsDashboardPage() {
   useEffect(() => {
     if (session) fetchQueue();
   }, [session, fetchQueue]);
+
+  // Reset reviewed page when reviewed list changes
+  useEffect(() => {
+    setReviewedPage(1);
+  }, [reviewed.length]);
 
   // ─── Action ──────────────────────────────────────────────────────────────────
   const handleAction = async (id: string, action: "accept" | "decline") => {
@@ -295,11 +302,41 @@ export default function StallsDashboardPage() {
                   No reviewed bookings yet
                 </p>
               ) : (
-                <div className="space-y-4">
-                  {reviewed.map((b) => (
-                    <BookingCard key={b.stall_id} booking={b} />
-                  ))}
-                </div>
+                <>
+                  <div className="space-y-4">
+                    {(() => {
+                      const totalReviewedPages = Math.max(1, Math.ceil(reviewed.length / REVIEWED_PER_PAGE));
+                      const start = (reviewedPage - 1) * REVIEWED_PER_PAGE;
+                      const end = reviewedPage * REVIEWED_PER_PAGE;
+                      return reviewed.slice(start, end).map((b) => (
+                        <BookingCard key={b.stall_id} booking={b} />
+                      ));
+                    })()}
+                  </div>
+
+                  {/* Pagination controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing page {reviewedPage} of {Math.max(1, Math.ceil(reviewed.length / REVIEWED_PER_PAGE))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setReviewedPage((p) => Math.max(1, p - 1))}
+                        disabled={reviewedPage <= 1}
+                        className="px-3 py-1 rounded-lg border border-gray-200 text-sm disabled:opacity-50"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={() => setReviewedPage((p) => Math.min(Math.max(1, Math.ceil(reviewed.length / REVIEWED_PER_PAGE)), p + 1))}
+                        disabled={reviewedPage >= Math.ceil(reviewed.length / REVIEWED_PER_PAGE)}
+                        className="px-3 py-1 rounded-lg border border-gray-200 text-sm disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </section>
           </div>

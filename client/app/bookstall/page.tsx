@@ -197,6 +197,16 @@ export default function BookStallPage() {
       .finally(() => setOptionsLoading(false));
   }, [session, tab]);
 
+  // Prefill campus for organisers from their profile (allow change afterwards)
+  useEffect(() => {
+    if (!authLoading && userData && userData.is_organiser) {
+      // Only prefill if the field is empty (user can still change it)
+      if (!campus && (userData as any).campus) {
+        setCampus((userData as any).campus as string);
+      }
+    }
+  }, [authLoading, userData, campus]);
+
   useEffect(() => {
     setEventFestId("");
   }, [linkedType]);
@@ -239,7 +249,8 @@ export default function BookStallPage() {
       setDescription("");
       setHardboardStalls("0");
       setCanopyStalls("0");
-      setCampus("");
+      // For organisers keep their campus selected, otherwise clear
+      setCampus(userData && (userData as any).is_organiser ? ((userData as any).campus || "") : "");
       setLinkedType("none");
       setEventFestId("");
       setTab("mine");
