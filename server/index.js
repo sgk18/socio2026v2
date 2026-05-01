@@ -2,7 +2,19 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from 'url';
 import "./config/loadEnv.js";
+import * as Sentry from "@sentry/node";
 import { initializeDatabase } from "./config/database.js";
+
+// Initialize Sentry for error tracking
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: 1.0,
+  integrations: [
+    new Sentry.Integrations.Http({ tracing: true }),
+    new Sentry.Integrations.Express({ app: true, request: true, serverName: true }),
+  ],
+});
 
 // API Routes
 import userRoutes from "./routes/userRoutes.js";
@@ -38,6 +50,9 @@ initializeDatabase().catch(err => {
 
 const app = express();
 app.use(express.json());
+
+// Sentry request handler - must be early
+app.use(Sentry.Handlers.requestHandler());
 
 // Prevent stale API payloads from being cached by browsers or intermediary caches.
 app.use('/api', (req, res, next) => {
@@ -178,6 +193,9 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/hod-analytics", hodAnalyticsRoutes);
 app.use("/api/dean-analytics", deanAnalyticsRoutes);
 app.use("/api/volunteer", volunteerRoutes);
+
+// Sentry error handler - must be before other error handlers
+app.use(Sentry.Handlers.errorHandler());
 
 // Global error handler - ensures CORS headers are always sent
 app.use((err, req, res, next) => {

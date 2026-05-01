@@ -612,7 +612,7 @@ function WeekCalendar({
                       tabIndex={pastCell ? undefined : 0}
                       onClick={pastCell ? undefined : () => onCellClick(dateStr, h)}
                       onKeyDown={pastCell ? undefined : e => { if (e.key === "Enter") onCellClick(dateStr, h); }}
-                      className={`border-b border-gray-100 ${pastCell ? "bg-gray-50 cursor-not-allowed" : "cursor-pointer hover:bg-blue-50 transition-colors"}`}
+                      className={`border-b border-gray-100 ${pastCell ? "bg-gray-400 cursor-not-allowed" : "cursor-pointer hover:bg-blue-50 transition-colors"}`}
                       style={{ height: HOUR_HEIGHT }}
                       aria-label={pastCell ? "Past" : `Book ${formatTime12(`${pad2(h)}:00`)} — ${d.toLocaleDateString("en-IN", { weekday: "long", month: "short", day: "numeric" })}`}
                     />
@@ -807,10 +807,11 @@ function BookingModal({
             />
           </FormField>
 
-          <div className="grid grid-cols-3 gap-3">
-            <FormField label="Date">
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
-            </FormField>
+          <FormField label="Date">
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-3">
             <FormField label="Start">
               <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={inputCls} />
             </FormField>

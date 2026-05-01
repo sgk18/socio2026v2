@@ -87,6 +87,8 @@ export default function CateringDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionBookingId, setActionBookingId] = useState<string | null>(null);
+  const [reviewedPage, setReviewedPage] = useState(1);
+  const REVIEWED_PER_PAGE = 10;
 
   useEffect(() => {
     if (isLoading) return;
@@ -123,7 +125,15 @@ export default function CateringDashboard() {
   }
 
   async function handleAction(booking: Booking, action: "accept" | "decline") {
+    const previousBookings = bookings;
+    const newStatus = action === "accept" ? "accepted" : "declined";
+    
+    // Optimistic update
+    setBookings(bookings.map(b =>
+      b.booking_id === booking.booking_id ? { ...b, status: newStatus as any } : b
+    ));
     setActionBookingId(booking.booking_id);
+
     try {
       const res = await fetch(`${API_URL}/api/catering/bookings/${booking.booking_id}/action`, {
         method: "PATCH",
@@ -134,13 +144,16 @@ export default function CateringDashboard() {
         body: JSON.stringify({ action }),
       });
       if (!res.ok) {
+        // Revert on error
+        setBookings(previousBookings);
         const body = await res.json().catch(() => ({}));
         toast.error(body.error || "Action failed");
         return;
       }
       toast.success(action === "accept" ? "Order accepted" : "Order declined");
-      fetchBookings();
     } catch {
+      // Revert on network error
+      setBookings(previousBookings);
       toast.error("Network error");
     } finally {
       setActionBookingId(null);
@@ -152,6 +165,18 @@ export default function CateringDashboard() {
     : bookings.filter(b => b.catering_id === vendorFilter);
   const pendingBookings = visibleBookings.filter(b => b.status === "pending");
   const reviewedBookings = visibleBookings.filter(b => b.status !== "pending");
+  
+  // Pagination for reviewed bookings
+  const totalReviewedPages = Math.ceil(reviewedBookings.length / REVIEWED_PER_PAGE);
+  const paginatedReviewedBookings = reviewedBookings.slice(
+    (reviewedPage - 1) * REVIEWED_PER_PAGE,
+    reviewedPage * REVIEWED_PER_PAGE
+  );
+  
+  // Reset to page 1 when vendor filter changes
+  useEffect(() => {
+    setReviewedPage(1);
+  }, [vendorFilter]);
 
   function BookingCard({ booking, showActions }: { booking: Booking; showActions: boolean }) {
     const contact = parseContact(booking.contact_details);
@@ -243,16 +268,16 @@ export default function CateringDashboard() {
           {showActions && (
             <div className="flex items-center gap-2 lg:flex-col lg:items-stretch lg:w-36 shrink-0">
               <button
-                disabled={actionBookingId === booking.booking_id}
+                disabled={actionBookingId !== null && actionBookingId !== booking.booking_id}
                 onClick={() => handleAction(booking, "decline")}
-                className="flex-1 px-3 py-2 text-sm rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 font-medium"
+                className="flex-1 px-3 py-2 text-sm rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all"
               >
-                Decline
+                {actionBookingId === booking.booking_id ? "…" : "Decline"}
               </button>
               <button
-                disabled={actionBookingId === booking.booking_id}
+                disabled={actionBookingId !== null && actionBookingId !== booking.booking_id}
                 onClick={() => handleAction(booking, "accept")}
-                className="flex-1 px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 font-medium"
+                className="flex-1 px-3 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all"
               >
                 {actionBookingId === booking.booking_id ? "…" : "Accept"}
               </button>
@@ -326,10 +351,31 @@ export default function CateringDashboard() {
                   Reviewed <span className="text-gray-400 font-normal">({reviewedBookings.length})</span>
                 </h2>
                 <div className="space-y-3">
-                  {reviewedBookings.map(b => (
+                  {paginatedReviewedBookings.map(b => (
                     <BookingCard key={b.booking_id} booking={b} showActions={false} />
                   ))}
                 </div>
+                {totalReviewedPages > 1 && (
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setReviewedPage(p => Math.max(p - 1, 1))}
+                      disabled={reviewedPage === 1}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ← Prev
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      Page {reviewedPage} of {totalReviewedPages}
+                    </span>
+                    <button
+                      onClick={() => setReviewedPage(p => Math.min(p + 1, totalReviewedPages))}
+                      disabled={reviewedPage === totalReviewedPages}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
               </section>
             )}
           </>

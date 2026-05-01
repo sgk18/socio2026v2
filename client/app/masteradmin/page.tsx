@@ -376,7 +376,21 @@ function MasterAdminPageInner() {
   const [editCatererForm,  setEditCatererForm]  = useState({ catering_name: "", campuses: [] as string[], location: "", contacts: [] as CatererFormContact[] });
   const [editCatererSaving,setEditCatererSaving]= useState(false);
   const [catererPage,      setCatererPage]      = useState(1);
+  const [catererSearchQuery, setCatererSearchQuery] = useState("");
   const CATERER_PAGE_SIZE = 15;
+
+  const filteredCaterers = caterers.filter((caterer) => {
+    const query = catererSearchQuery.trim().toLowerCase();
+    if (!query) return true;
+
+    return (
+      (caterer.catering_name || "").toLowerCase().includes(query) ||
+      (caterer.catering_id || "").toLowerCase().includes(query) ||
+      (caterer.contact_details || []).some((contact) =>
+        (contact.name || "").toLowerCase().includes(query)
+      )
+    );
+  });
 
   async function fetchAllCaterers() {
     setCaterersLoading(true);
@@ -770,6 +784,10 @@ function MasterAdminPageInner() {
   useEffect(() => {
     setFestPage(1);
   }, [debouncedFestSearch, festSortKey, festSortDir]);
+
+  useEffect(() => {
+    setCatererPage(1);
+  }, [catererSearchQuery]);
 
   useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "users") return;
@@ -1324,6 +1342,7 @@ function MasterAdminPageInner() {
       const fieldMap: Record<string, string> = {
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
         director: "is_campus_director", accounts: "is_accounts_office", it_support: "is_it_support", stalls: "is_stalls",
+        venue_manager: "is_venue_manager",
       };
       const body: Record<string, unknown> = {
         [fieldMap[roleSelectedRole]]: true,
@@ -3564,13 +3583,13 @@ function MasterAdminPageInner() {
             </div>
 
             {/* Add caterer form */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <PlusCircle className="w-4 h-4 text-[#154CB3]" /> Add New Caterer
               </h3>
 
-              {/* Name + Location */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Name + Location + Campus */}
+              <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_1fr_1.15fr] gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Caterer Name <span className="text-red-500">*</span></label>
                   <input
@@ -3578,12 +3597,13 @@ function MasterAdminPageInner() {
                     value={catererForm.catering_name}
                     onChange={e => setCatererForm(f => ({ ...f, catering_name: e.target.value }))}
                     placeholder="e.g. Prestige Catering Co."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
                   {catererForm.catering_name.trim() && (
                     <p className="text-[11px] text-gray-400 mt-1">ID: <span className="font-mono text-gray-600">{catererForm.catering_name.toLowerCase().trim().replace(/[^\w\s-]/g,"").replace(/[\s_-]+/g,"-").replace(/^-+|-+$/g,"")}</span></p>
                   )}
                 </div>
+
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Location</label>
                   <input
@@ -3591,60 +3611,75 @@ function MasterAdminPageInner() {
                     value={catererForm.location}
                     onChange={e => setCatererForm(f => ({ ...f, location: e.target.value }))}
                     placeholder="e.g. Central Kitchen, Block C"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
                 </div>
-              </div>
 
-              {/* Campuses */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">Campuses Served</label>
-                <div className="flex flex-wrap gap-2">
-                  {christCampuses.map(campus => (
-                    <label key={campus} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-all ${catererForm.campuses.includes(campus) ? "bg-[#154CB3] text-white border-[#154CB3]" : "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"}`}>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={catererForm.campuses.includes(campus)}
-                        onChange={e => setCatererForm(f => ({ ...f, campuses: e.target.checked ? [...f.campuses, campus] : f.campuses.filter(c => c !== campus) }))}
-                      />
-                      {campus}
-                    </label>
-                  ))}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Campuses Served <span className="text-red-500">*</span></label>
+                  <details className="group relative">
+                    <summary className="list-none cursor-pointer w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white flex items-center justify-between gap-3 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                      <span className={`truncate ${catererForm.campuses.length === 0 ? "text-gray-400" : "text-gray-800"}`}>
+                        {catererForm.campuses.length === 0
+                          ? "Select campuses"
+                          : catererForm.campuses.length <= 2
+                            ? catererForm.campuses.join(", ")
+                            : `${catererForm.campuses.length} campuses selected`}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 transition-transform duration-200 group-open:rotate-90" />
+                    </summary>
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg p-2 max-h-60 overflow-y-auto">
+                      {christCampuses.map((campus) => (
+                        <label key={campus} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${catererForm.campuses.includes(campus) ? "bg-blue-50 text-[#154CB3]" : "hover:bg-gray-50 text-gray-700"}`}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
+                            checked={catererForm.campuses.includes(campus)}
+                            onChange={e => setCatererForm(f => ({ ...f, campuses: e.target.checked ? [...f.campuses, campus] : f.campuses.filter(c => c !== campus) }))}
+                          />
+                          <span>{campus}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                  <p className="text-[11px] text-gray-400 mt-1">Choose one or more campuses.</p>
                 </div>
               </div>
 
               {/* Contacts */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-gray-600">Contact Details</label>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block">Contact Details</label>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Orders will be received on this email.</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setCatererForm(f => ({ ...f, contacts: [...f.contacts, { name: "", email: "", mobile: "" }] }))}
-                    className="text-xs text-[#154CB3] font-medium hover:underline"
+                    className="text-xs text-[#154CB3] font-medium hover:underline shrink-0"
                   >+ Add Contact</button>
                 </div>
                 <div className="space-y-3">
                   {catererForm.contacts.map((contact, idx) => (
-                    <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-200 relative">
+                    <div key={idx} className="p-3.5 bg-white rounded-xl border border-gray-200 relative shadow-sm">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Contact {idx + 1}</span>
                         {catererForm.contacts.length > 1 && (
                           <button type="button" onClick={() => setCatererForm(f => ({ ...f, contacts: f.contacts.filter((_, i) => i !== idx) }))} className="text-gray-400 hover:text-red-500 text-sm leading-none">&times; Remove</button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[11px] text-gray-500 mb-1">Name</label>
-                          <input type="text" value={contact.name} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, name: e.target.value } : c) }))} placeholder="Contact name" className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <input type="text" value={contact.name} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, name: e.target.value } : c) }))} placeholder="Contact name" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-gray-500 mb-1">Email</label>
-                          <input type="email" value={contact.email} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, email: e.target.value } : c) }))} placeholder="email@example.com" className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <label className="block text-[11px] text-gray-500 mb-1">Email <span className="font-normal text-gray-400">(orders go here)</span></label>
+                          <input type="email" value={contact.email} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, email: e.target.value } : c) }))} placeholder="email@example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-gray-500 mb-1">Mobile(s) — comma-separated</label>
-                          <input type="text" value={contact.mobile} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, mobile: e.target.value } : c) }))} placeholder="9900001111, 9900002222" className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <label className="block text-[11px] text-gray-500 mb-1">Mobile</label>
+                          <input type="text" value={contact.mobile} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, mobile: e.target.value } : c) }))} placeholder="Mobile number" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                         </div>
                       </div>
                     </div>
@@ -3665,10 +3700,41 @@ function MasterAdminPageInner() {
 
             {/* Caterers list */}
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="border-b border-gray-200 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="w-full sm:max-w-md">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Search Caterers</label>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setCatererPage(1);
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={catererSearchQuery}
+                      onChange={(e) => setCatererSearchQuery(e.target.value)}
+                      placeholder="Search by caterer name or contact name..."
+                      className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3]"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-semibold bg-[#154CB3] text-white rounded-lg hover:bg-[#0f3a7a] transition-colors"
+                    >
+                      Search
+                    </button>
+                  </form>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Showing <span className="font-semibold text-gray-700">{filteredCaterers.length}</span> of <span className="font-semibold text-gray-700">{caterers.length}</span>
+                </div>
+              </div>
               {caterersLoading ? (
                 <div className="p-8 text-center text-sm text-gray-400">Loading caterers…</div>
-              ) : caterers.length === 0 ? (
-                <div className="p-8 text-center text-sm text-gray-400">No caterers yet. Add one above.</div>
+              ) : filteredCaterers.length === 0 ? (
+                <div className="p-8 text-center text-sm text-gray-400">
+                  {catererSearchQuery.trim() ? "No caterers found." : "No caterers yet. Add one above."}
+                </div>
               ) : (
                 <>
                   <table className="w-full text-sm">
@@ -3683,7 +3749,7 @@ function MasterAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {caterers.slice((catererPage - 1) * CATERER_PAGE_SIZE, catererPage * CATERER_PAGE_SIZE).map(c => (
+                      {filteredCaterers.slice((catererPage - 1) * CATERER_PAGE_SIZE, catererPage * CATERER_PAGE_SIZE).map(c => (
                         <tr key={c.catering_id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 font-medium text-gray-900">{c.catering_name}</td>
                           <td className="px-4 py-3 font-mono text-xs text-gray-500">{c.catering_id}</td>
@@ -3716,12 +3782,12 @@ function MasterAdminPageInner() {
                       ))}
                     </tbody>
                   </table>
-                  {caterers.length > CATERER_PAGE_SIZE && (
+                  {filteredCaterers.length > CATERER_PAGE_SIZE && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500 mb-24">
-                      <span>{caterers.length} caterers</span>
+                      <span>{filteredCaterers.length} caterers</span>
                       <div className="flex gap-2">
                         <button onClick={() => setCatererPage(p => Math.max(1, p - 1))} disabled={catererPage === 1} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Prev</button>
-                        <button onClick={() => setCatererPage(p => p + 1)} disabled={catererPage * CATERER_PAGE_SIZE >= caterers.length} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Next</button>
+                        <button onClick={() => setCatererPage(p => p + 1)} disabled={catererPage * CATERER_PAGE_SIZE >= filteredCaterers.length} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Next</button>
                       </div>
                     </div>
                   )}
@@ -3830,6 +3896,7 @@ function MasterAdminPageInner() {
             { key: "accounts",   label: "Finance Officer", flag: "is_accounts_office" as const },
             { key: "it_support", label: "IT Support",      flag: "is_it_support" as const },
             { key: "stalls",     label: "Stalls",          flag: "is_stalls" as const },
+            { key: "venue_manager", label: "Venue Manager", flag: "is_venue_manager" as const },
           ] as const;
           const ROLE_DEFS = [
             { key: "organiser",  label: "Organiser",       flag: "is_organiser" as const },
@@ -3861,6 +3928,7 @@ function MasterAdminPageInner() {
 
           const needsDept = roleListRoleFilter === "hod";
           const needsSchool = roleListRoleFilter === "dean";
+          const campusOnlyRoles = ["venue_manager"];
 
           return (
             <div className="flex flex-col h-full overflow-hidden">
@@ -3924,7 +3992,7 @@ function MasterAdminPageInner() {
                         {christCampuses.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
-                    {(roleSelectedRole === "hod" || roleSelectedRole === "dean") && (
+                    {!campusOnlyRoles.includes(roleSelectedRole) && (roleSelectedRole === "hod" || roleSelectedRole === "dean") && (
                       <div className="min-w-[200px]">
                         <label className="block text-[11px] font-medium text-gray-500 mb-0.5">School</label>
                         <select value={roleSchool} onChange={e => { setRoleSchool(e.target.value); setRoleDept(""); }}
@@ -3934,7 +4002,7 @@ function MasterAdminPageInner() {
                         </select>
                       </div>
                     )}
-                    {roleSelectedRole === "hod" && (
+                    {!campusOnlyRoles.includes(roleSelectedRole) && roleSelectedRole === "hod" && (
                       <div className="min-w-[200px]">
                         <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Department</label>
                         <select value={roleDept} onChange={e => setRoleDept(e.target.value)} disabled={!roleSchool}
@@ -3945,7 +4013,7 @@ function MasterAdminPageInner() {
                       </div>
                     )}
                     <button onClick={saveApprovalRole}
-                      disabled={!roleSelectedEmail || !roleSelectedRole || !roleCampus || (roleSelectedRole === "hod" && (!roleSchool || !roleDept)) || (roleSelectedRole === "dean" && !roleSchool) || roleSaving}
+                      disabled={!roleSelectedEmail || !roleSelectedRole || !roleCampus || (!campusOnlyRoles.includes(roleSelectedRole) && roleSelectedRole === "hod" && (!roleSchool || !roleDept)) || (!campusOnlyRoles.includes(roleSelectedRole) && roleSelectedRole === "dean" && !roleSchool) || roleSaving}
                       className="px-4 py-1.5 bg-[#154cb3] text-white rounded-lg text-sm font-semibold hover:bg-[#1240a0] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                     >{roleSaving ? "Saving…" : "Assign Role"}</button>
                   </div>
