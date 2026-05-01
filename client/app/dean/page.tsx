@@ -115,7 +115,11 @@ function DeanDashboard() {
           : [],
         _queue_role: safeLower(q?._queue_role),
       }));
-      setQueue(normalizedQueue.filter((q) => q._queue_role === "dean"));
+      setQueue(
+        normalizedQueue
+          .filter((q) => q._queue_role === "dean")
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      );
     } catch {
       toast.error("Network error");
     } finally {

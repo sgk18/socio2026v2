@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useEvents, FetchedEvent as ContextEvent } from "../../context/EventContext";
@@ -129,6 +129,8 @@ const IconPhone = () => (
 
 export default function BookCateringPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { session, userData, isLoading } = useAuth() as any;
   const { allEvents } = useEvents() as any;
 
@@ -145,6 +147,21 @@ export default function BookCateringPage() {
   }, [isLoading, session, userData, router]);
 
   const [tab, setTab] = useState<TabKey>("book");
+
+  // Sync tab with URL on mount
+  useEffect(() => {
+    const t = searchParams?.get("tab");
+    if (t === "mine" || t === "book") setTab(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function switchTab(next: TabKey) {
+    setTab(next);
+    const p = new URLSearchParams(searchParams?.toString() || "");
+    if (next === "mine") p.set("tab", "mine");
+    else p.delete("tab");
+    const qs = p.toString();
+    router.replace(qs ? `?${qs}` : pathname, { scroll: false });
+  }
 
   const [vendors, setVendors] = useState<CateringVendor[]>([]);
   const [loadingVendors, setLoadingVendors] = useState(false);
@@ -175,6 +192,13 @@ export default function BookCateringPage() {
   const [mineStatusFilter, setMineStatusFilter] = useState<"all" | "pending" | "accepted" | "declined">("all");
   const [minePage, setMinePage] = useState(1);
   const MINE_PAGE_SIZE = 8;
+
+  // Keep active tab in sync with URL, e.g. /bookcatering?tab=mine
+  useEffect(() => {
+    const tabParam = searchParams?.get("tab");
+    if (tabParam === "mine") setTab("mine");
+    else if (tabParam === "book") setTab("book");
+  }, [searchParams]);
 
   // Pre-fill contact from user profile
   useEffect(() => {
@@ -317,6 +341,32 @@ export default function BookCateringPage() {
     return [...events, ...fests];
   }, [myEvents, myFests]);
 
+  // Pre-fill event/fest from URL query param
+  useEffect(() => {
+    const urlEventFestId = searchParams?.get("event_fest_id");
+    if (!urlEventFestId || selectedEventFestId) return; // Don't override if already set
+    
+    const found = combinedEventFest.find(item => item.id === urlEventFestId);
+    if (found) {
+      setSelectedEventFestId(found.id);
+      setSelectedEventFestType(found.type);
+    } else {
+      setSelectedEventFestId(urlEventFestId);
+      // Read explicit type from URL, fallback to ID-prefix heuristic (events start with EV-)
+      const urlType = searchParams?.get("event_fest_type");
+      const inferredType: "event" | "fest" =
+        urlType === "fest" ? "fest" :
+        urlType === "event" ? "event" :
+        urlEventFestId.toUpperCase().startsWith("EV-") ? "event" : "fest";
+      setSelectedEventFestType(inferredType);
+    }
+  }, [searchParams, combinedEventFest, selectedEventFestId]);
+
+  // If URL provides an event_fest_id that matches one of the combined items,
+  // we'll treat it as a locked value and hide the selectable dropdown in the UI.
+  const urlEventFestId = searchParams?.get("event_fest_id");
+  const lockedEventFest = urlEventFestId ? combinedEventFest.find(item => item.id === urlEventFestId) || null : null;
+
   const canSubmit =
     !!selectedVendorId &&
     description.trim().length >= 3 &&
@@ -353,7 +403,19 @@ export default function BookCateringPage() {
         setError(body.error || "Failed to submit booking.");
         return;
       }
+
+      const returnEventFestId = searchParams?.get("event_fest_id");
+      const returnType: "event" | "fest" =
+        selectedEventFestType ||
+        ((returnEventFestId || selectedEventFestId || "").toUpperCase().startsWith("EV-") ? "event" : "fest");
+
       toast.success("Catering request sent — awaiting caterer's response.");
+
+      if (returnEventFestId) {
+        router.push(`/approvals/${returnEventFestId}?type=${returnType}`);
+        return;
+      }
+
       setSelectedVendorId("");
       setSelectedEventFestId("");
       setSelectedEventFestType(null);
@@ -444,7 +506,7 @@ export default function BookCateringPage() {
           {/* Tab strip */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
             <button
-              onClick={() => setTab("book")}
+              onClick={() => switchTab("book")}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 tab === "book" ? "bg-[#154CB3] text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               }`}
@@ -452,7 +514,7 @@ export default function BookCateringPage() {
               Book Caterer
             </button>
             <button
-              onClick={() => setTab("mine")}
+              onClick={() => switchTab("mine")}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 tab === "mine" ? "bg-[#154CB3] text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               }`}
@@ -725,38 +787,48 @@ export default function BookCateringPage() {
                   </FormField>
 
                   <FormField label={<span><strong>Event or Fest</strong> (optional)</span>}>
-                    <select
-                      value={selectedEventFestId}
-                      onChange={e => {
-                        if (!e.target.value) {
-                          setSelectedEventFestId("");
-                          setSelectedEventFestType(null);
-                        } else {
-                          const found = combinedEventFest.find(item => item.id === e.target.value);
-                          if (found) {
-                            setSelectedEventFestId(found.id);
-                            setSelectedEventFestType(found.type);
-                          }
-                        }
-                      }}
-                      className={selectCls}
-                    >
-                      <option value="">— Not linked to a specific event or fest —</option>
-                      {combinedEventFest.length > 0 && <optgroup label="Events" />}
-                      {myEvents.map((e: any) => (
-                        <option key={`event-${e.event_id}`} value={e.event_id}>
-                          {e.title}{e.event_date ? ` · ${new Date(e.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
-                        </option>
-                      ))}
-                      {myFests.length > 0 && <optgroup label="Fests" />}
-                      {myFests.map(f => (
-                        <option key={`fest-${f.fest_id}`} value={f.fest_id}>{f.fest_title}</option>
-                      ))}
-                    </select>
-                    {combinedEventFest.length === 0 && (
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        You have no upcoming events or fests. You can still submit a standalone request.
-                      </p>
+                    {urlEventFestId ? (
+                      <div className="py-2">
+                        <div className="text-sm font-medium text-gray-800">
+                          {lockedEventFest ? lockedEventFest.label : urlEventFestId}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedEventFestId}
+                          onChange={e => {
+                            if (!e.target.value) {
+                              setSelectedEventFestId("");
+                              setSelectedEventFestType(null);
+                            } else {
+                              const found = combinedEventFest.find(item => item.id === e.target.value);
+                              if (found) {
+                                setSelectedEventFestId(found.id);
+                                setSelectedEventFestType(found.type);
+                              }
+                            }
+                          }}
+                          className={selectCls}
+                        >
+                          <option value="">— Not linked to a specific event or fest —</option>
+                          {combinedEventFest.length > 0 && <optgroup label="Events" />}
+                          {myEvents.map((e: any) => (
+                            <option key={`event-${e.event_id}`} value={e.event_id}>
+                              {e.title}{e.event_date ? ` · ${new Date(e.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                            </option>
+                          ))}
+                          {myFests.length > 0 && <optgroup label="Fests" />}
+                          {myFests.map(f => (
+                            <option key={`fest-${f.fest_id}`} value={f.fest_id}>{f.fest_title}</option>
+                          ))}
+                        </select>
+                        {combinedEventFest.length === 0 && (
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            You have no upcoming events or fests. You can still submit a standalone request.
+                          </p>
+                        )}
+                      </>
                     )}
                   </FormField>
 

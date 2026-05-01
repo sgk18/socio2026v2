@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
@@ -68,6 +68,10 @@ export default function FinanceDashboard() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<{ itemId: string; type: string } | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [activeTab, setActiveTab] = useState<"pending" | "reviewed">("pending");
+  const [pendingPage, setPendingPage] = useState(1);
+  const [reviewedPage, setReviewedPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
     if (isLoading) return;
@@ -117,7 +121,11 @@ export default function FinanceDashboard() {
           : [],
         _queue_role: safeLower(q?._queue_role),
       }));
-      setQueue(normalizedQueue.filter((q) => q._queue_role === "accounts"));
+      setQueue(
+        normalizedQueue
+          .filter((q) => q._queue_role === "accounts")
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      );
     } catch {
       toast.error("Network error");
     } finally {
@@ -164,6 +172,26 @@ export default function FinanceDashboard() {
     setRejectModal(null);
   }
 
+  const pendingItems = useMemo(
+    () => queue.filter((item) => (item.stages.find((stage) => stage.role === "accounts")?.status || "pending") === "pending"),
+    [queue]
+  );
+
+  const reviewedItems = useMemo(
+    () => queue.filter((item) => (item.stages.find((stage) => stage.role === "accounts")?.status || "pending") !== "pending"),
+    [queue]
+  );
+
+  const activeItems = activeTab === "pending" ? pendingItems : reviewedItems;
+  const activePage = activeTab === "pending" ? pendingPage : reviewedPage;
+  const totalPages = Math.max(1, Math.ceil(activeItems.length / ITEMS_PER_PAGE));
+  const pagedItems = activeItems.slice((activePage - 1) * ITEMS_PER_PAGE, activePage * ITEMS_PER_PAGE);
+
+  useEffect(() => {
+    if (activeTab === "pending") setPendingPage(1);
+    else setReviewedPage(1);
+  }, [activeTab]);
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -174,17 +202,37 @@ export default function FinanceDashboard() {
           </p>
         </div>
 
+        <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("pending")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === "pending" ? "bg-white text-[#154CB3] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            Pending ({pendingItems.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("reviewed")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === "reviewed" ? "bg-white text-[#154CB3] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            Reviewed ({reviewedItems.length})
+          </button>
+        </div>
+
         {loading ? (
           <p className="text-gray-500 text-sm">Loading queue…</p>
-        ) : queue.length === 0 ? (
+        ) : activeItems.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-            <p className="text-gray-500">No pending approvals in your queue.</p>
+            <p className="text-gray-500">
+              {activeTab === "pending" ? "No pending approvals in your queue." : "No reviewed approvals yet."}
+            </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {queue.map((item) => {
+          <>
+            <div className="space-y-3">
+              {pagedItems.map((item) => {
               const hasBudget = Array.isArray(item.budget_items) && item.budget_items.length > 0;
               const isExpanded = expandedId === item.id;
+              const accountsStage = item.stages.find((stage) => stage.role === "accounts");
+              const isReviewed = (accountsStage?.status || "pending") !== "pending";
 
               return (
                 <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -195,6 +243,11 @@ export default function FinanceDashboard() {
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full uppercase">
                           {item.type}
                         </span>
+                        {isReviewed && accountsStage && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${accountsStage.status === "approved" ? "bg-green-50 text-green-700 border-green-200" : accountsStage.status === "rejected" ? "bg-red-50 text-red-700 border-red-200" : "bg-purple-50 text-purple-700 border-purple-200"}`}>
+                            {accountsStage.status === "approved" ? "Approved" : accountsStage.status === "rejected" ? "Returned" : "Reviewed"}
+                          </span>
+                        )}
                         {hasBudget && (
                           <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full tabular-nums">
                             ₹{budgetTotal(item.budget_items!).toLocaleString("en-IN")}
@@ -223,20 +276,24 @@ export default function FinanceDashboard() {
                       >
                         Details
                       </Link>
-                      <button
-                        disabled={actionItemId === item.event_or_fest_id}
-                        onClick={() => { setRejectModal({ itemId: item.event_or_fest_id, type: item.type }); setRejectNote(""); }}
-                        className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Return
-                      </button>
-                      <button
-                        disabled={actionItemId === item.event_or_fest_id}
-                        onClick={() => handleAction(item, "approve")}
-                        className="px-3 py-1.5 text-sm rounded-lg bg-[#154CB3] text-white hover:bg-[#0f3a7a] disabled:opacity-50"
-                      >
-                        {actionItemId === item.event_or_fest_id ? "…" : "Approve"}
-                      </button>
+                      {!isReviewed && (
+                        <>
+                          <button
+                            disabled={actionItemId === item.event_or_fest_id}
+                            onClick={() => { setRejectModal({ itemId: item.event_or_fest_id, type: item.type }); setRejectNote(""); }}
+                            className="px-3 py-1.5 text-sm rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Return
+                          </button>
+                          <button
+                            disabled={actionItemId === item.event_or_fest_id}
+                            onClick={() => handleAction(item, "approve")}
+                            className="px-3 py-1.5 text-sm rounded-lg bg-[#154CB3] text-white hover:bg-[#0f3a7a] disabled:opacity-50"
+                          >
+                            {actionItemId === item.event_or_fest_id ? "…" : "Approve"}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -278,7 +335,32 @@ export default function FinanceDashboard() {
                 </div>
               );
             })}
-          </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 py-3">
+                <span className="text-xs text-gray-500">
+                  Page {activePage} of {totalPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={activePage <= 1}
+                    onClick={() => activeTab === "pending" ? setPendingPage((p) => p - 1) : setReviewedPage((p) => p - 1)}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    disabled={activePage >= totalPages}
+                    onClick={() => activeTab === "pending" ? setPendingPage((p) => p + 1) : setReviewedPage((p) => p + 1)}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -137,7 +137,11 @@ function HodDashboard() {
           : [],
         _queue_role: safeLower(q?._queue_role),
       }));
-      setQueue(normalizedQueue.filter((q) => q._queue_role === "hod"));
+      setQueue(
+        normalizedQueue
+          .filter((q) => q._queue_role === "hod")
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      );
     } catch {
       toast.error("Network error");
     } finally {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { christCampuses } from "@/app/lib/eventFormSchema";
 import toast from "react-hot-toast";
@@ -123,8 +123,19 @@ function Counter({
 export default function BookStallPage() {
   const { session, userData, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [tab, setTab] = useState<Tab>("book");
+
+  function switchTab(next: Tab) {
+    setTab(next);
+    const p = new URLSearchParams(searchParams?.toString() || "");
+    if (next === "mine") p.set("tab", "mine");
+    else p.delete("tab");
+    const qs = p.toString();
+    router.replace(qs ? `?${qs}` : pathname, { scroll: false });
+  }
 
   // My Bookings state
   const [bookings, setBookings] = useState<StallBooking[]>([]);
@@ -142,6 +153,15 @@ export default function BookStallPage() {
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [prefilledEventFestId, setPrefilledEventFestId] = useState<string | null>(null);
+  const [lockedEventFest, setLockedEventFest] = useState<{ type: LinkedType; id: string; name: string } | null>(null);
+
+  // Keep active tab in sync with URL, e.g. /bookstall?tab=mine
+  useEffect(() => {
+    const tabParam = searchParams?.get("tab");
+    if (tabParam === "mine") setTab("mine");
+    else if (tabParam === "book") setTab("book");
+  }, [searchParams]);
 
   // ─── Auth Guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -207,9 +227,46 @@ export default function BookStallPage() {
     }
   }, [authLoading, userData, campus]);
 
+  // Pre-fill event/fest from URL query param
   useEffect(() => {
-    setEventFestId("");
-  }, [linkedType]);
+    const urlEventFestId = searchParams?.get("event_fest_id");
+    if (!urlEventFestId || eventFestId) return; // Don't override if already set
+
+    setPrefilledEventFestId(urlEventFestId);
+    setEventFestId(urlEventFestId);
+    
+    // Try to find in events first, then fests
+    const foundEvent = events.find(e => e.event_id === urlEventFestId);
+    if (foundEvent) {
+      setLinkedType("event");
+      setLockedEventFest({ type: "event", id: urlEventFestId, name: foundEvent.title });
+      return;
+    }
+    
+    const foundFest = fests.find(f => f.fest_id === urlEventFestId);
+    if (foundFest) {
+      setLinkedType("fest");
+      setLockedEventFest({ type: "fest", id: urlEventFestId, name: foundFest.fest_title });
+      return;
+    }
+
+    const urlType = searchParams?.get("event_fest_type");
+    const fallbackType: LinkedType =
+      urlType === "fest" ? "fest" :
+      urlType === "event" ? "event" :
+      urlEventFestId.toUpperCase().startsWith("EV-") ? "event" : "fest";
+    setLinkedType(fallbackType);
+    setLockedEventFest({ type: fallbackType, id: urlEventFestId, name: urlEventFestId });
+  }, [searchParams, events, fests, eventFestId]);
+
+  // Clear eventFestId when linkedType changes (unless coming from URL param)
+  useEffect(() => {
+    const urlEventFestId = searchParams?.get("event_fest_id");
+    // If changing linkedType manually (not from URL), clear the selection
+    if (!prefilledEventFestId && (!urlEventFestId || linkedType === "none")) {
+      setEventFestId("");
+    }
+  }, [linkedType, searchParams, prefilledEventFestId]);
 
   // ─── Submit Booking ──────────────────────────────────────────────────────────
   const stallsInvalid = Number(hardboardStalls) === 0 && Number(canopyStalls) === 0;
@@ -230,7 +287,7 @@ export default function BookStallPage() {
         canopy_stalls: Number(canopyStalls) || 0,
         campus,
       };
-      if (linkedType !== "none" && eventFestId) {
+      if (eventFestId) {
         body.event_fest_id = eventFestId;
       }
 
@@ -245,7 +302,21 @@ export default function BookStallPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to submit booking");
 
+      const urlEventFestId = searchParams?.get("event_fest_id");
+      const linkedTypeForRedirect: LinkedType =
+        linkedType !== "none"
+          ? linkedType
+          : (urlEventFestId || eventFestId || "").toUpperCase().startsWith("EV-")
+          ? "event"
+          : "fest";
+
       toast.success("Stall booking submitted!");
+
+      if (urlEventFestId) {
+        router.push(`/approvals/${urlEventFestId}?type=${linkedTypeForRedirect}`);
+        return;
+      }
+
       setDescription("");
       setHardboardStalls("0");
       setCanopyStalls("0");
@@ -253,7 +324,9 @@ export default function BookStallPage() {
       setCampus(userData && (userData as any).is_organiser ? ((userData as any).campus || "") : "");
       setLinkedType("none");
       setEventFestId("");
-      setTab("mine");
+      setPrefilledEventFestId(null);
+      setLockedEventFest(null);
+      switchTab("mine");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to submit booking");
     } finally {
@@ -293,7 +366,7 @@ export default function BookStallPage() {
           {([["book", "Book a Stall"], ["mine", "My Bookings"]] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setTab(key)}
+              onClick={() => switchTab(key)}
               className={`px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
                 tab === key
                   ? "bg-white text-[#154CB3] shadow-sm"
@@ -403,11 +476,18 @@ export default function BookStallPage() {
                   <button
                     type="button"
                     key={t}
-                    onClick={() => setLinkedType(t)}
+                     disabled={!!lockedEventFest && t !== linkedType}
+                      onClick={() => {
+                        if (!lockedEventFest || t === linkedType) {
+                          setLinkedType(t);
+                        }
+                      }}
                     className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
                       linkedType === t
                         ? "border-[#154CB3] bg-[#154CB3] text-white shadow-sm"
-                        : "border-gray-200 text-gray-500 hover:border-[#154CB3]/50 hover:text-[#154CB3] bg-gray-50"
+                          : lockedEventFest && t !== linkedType
+                          ? "border-gray-100 text-gray-300 bg-gray-50 cursor-not-allowed"
+                          : "border-gray-200 text-gray-500 hover:border-[#154CB3]/50 hover:text-[#154CB3] bg-gray-50"
                     }`}
                   >
                     {t === "none" ? "None" : t === "event" ? "Event" : "Fest"}
@@ -425,24 +505,34 @@ export default function BookStallPage() {
                   <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{optionsError}</p>
                 ) : (
                   <>
-                    <select
-                      value={eventFestId}
-                      onChange={(e) => setEventFestId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/20 focus:border-[#154CB3] bg-gray-50/50 text-gray-700"
-                    >
-                      <option value="">— Select {linkedType === "event" ? "event" : "fest"} —</option>
-                      {linkedType === "event"
-                        ? events.map((ev) => (
-                            <option key={ev.event_id} value={ev.event_id}>
-                              {ev.title} ({formatDate(ev.event_date)})
-                            </option>
-                          ))
-                        : fests.map((ft) => (
-                            <option key={ft.fest_id} value={ft.fest_id}>
-                              {ft.fest_title} ({formatDate(ft.opening_date)})
-                            </option>
-                          ))}
-                    </select>
+                      {lockedEventFest ? (
+                        <div className="w-full px-3.5 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-sm text-gray-700">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-gray-800">{lockedEventFest.name}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          value={eventFestId}
+                          onChange={(e) => setEventFestId(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/20 focus:border-[#154CB3] bg-gray-50/50 text-gray-700"
+                        >
+                          <option value="">— Select {linkedType === "event" ? "event" : "fest"} —</option>
+                          {linkedType === "event"
+                            ? events.map((ev) => (
+                                <option key={ev.event_id} value={ev.event_id}>
+                                  {ev.title} ({formatDate(ev.event_date)})
+                                </option>
+                              ))
+                            : fests.map((ft) => (
+                                <option key={ft.fest_id} value={ft.fest_id}>
+                                  {ft.fest_title} ({formatDate(ft.opening_date)})
+                                </option>
+                              ))}
+                        </select>
+                      )}
                     {linkedType === "event" && events.length === 0 && (
                       <p className="text-xs text-gray-400 mt-2">No events found. Create an event first from the Manage page.</p>
                     )}
@@ -494,7 +584,7 @@ export default function BookStallPage() {
                 <p className="text-base font-semibold text-gray-700">No stall bookings yet</p>
                 <p className="text-sm text-gray-400 mt-1">Switch to &ldquo;Book a Stall&rdquo; to submit a request</p>
                 <button
-                  onClick={() => setTab("book")}
+                  onClick={() => switchTab("book")}
                   className="mt-4 px-5 py-2 rounded-full bg-[#154CB3] text-white text-sm font-medium hover:bg-[#0d3a8a] transition-colors"
                 >
                   Book a Stall

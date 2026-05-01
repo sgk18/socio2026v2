@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { christCampuses } from "@/app/lib/eventFormSchema";
@@ -124,6 +124,12 @@ function bookingBarColor(status: string) {
   }
 }
 
+function getApprovalRedirectPath(entityId?: string | null, entityType?: string | null): string | null {
+  if (!entityId) return null;
+  const type = entityType || (entityId.toUpperCase().startsWith("EV-") ? "event" : "fest");
+  return `/approvals/${entityId}?type=${type}`;
+}
+
 // ─── SVG icons ────────────────────────────────────────────────────────────────
 
 const IconCalendar = () => (
@@ -177,13 +183,25 @@ const IconUsers = () => (
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BookVenuePage() {
+  return (
+    <Suspense>
+      <BookVenuePageInner />
+    </Suspense>
+  );
+}
+
+function BookVenuePageInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { session, userData, isLoading } = useAuth() as any;
+
+  const entityId   = searchParams.get("entity_id")   || null;
+  const entityType = searchParams.get("entity_type") || null;
 
   useEffect(() => {
     if (!isLoading && !session) router.replace("/auth");
     if (!isLoading && session && userData) {
-      // Block only pure students — anyone with any role can access
       const hasAnyRole =
         userData.is_organiser || userData.is_masteradmin || userData.is_support ||
         userData.is_hod || userData.is_dean || userData.is_cfo ||
@@ -194,6 +212,20 @@ export default function BookVenuePage() {
   }, [isLoading, session, userData, router]);
 
   const [tab, setTab] = useState<TabKey>("specific");
+
+  useEffect(() => {
+    const t = searchParams?.get("tab") as TabKey | null;
+    if (t === "mine" || t === "specific" || t === "any") setTab(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function switchTab(next: TabKey) {
+    setTab(next);
+    const p = new URLSearchParams(searchParams?.toString() || "");
+    if (next === "mine") p.set("tab", "mine");
+    else p.delete("tab");
+    const qs = p.toString();
+    router.replace(qs ? `?${qs}` : pathname, { scroll: false });
+  }
 
   if (isLoading) {
     return (
@@ -211,30 +243,53 @@ export default function BookVenuePage() {
         <div className="flex items-center gap-3 mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <Link href="/manage" className="hover:text-[#154CB3] transition-colors">Manage</Link>
-              <span>›</span>
+              {entityId ? (
+                <>
+                  <Link
+                    href={getApprovalRedirectPath(entityId, entityType)!}
+                    className="hover:text-[#154CB3] transition-colors"
+                  >
+                    Approvals
+                  </Link>
+                  <span>›</span>
+                </>
+              ) : (
+                <>
+                  <Link href="/manage" className="hover:text-[#154CB3] transition-colors">Manage</Link>
+                  <span>›</span>
+                </>
+              )}
               <span className="text-gray-600 font-medium">Venue Booking</span>
             </div>
+            {entityId && (
+              <p className="text-xs text-[#154CB3] mt-0.5 font-medium">
+                Booking will be linked to your {entityType || "event"}.
+              </p>
+            )}
           </div>
 
           {/* Compact tab strip */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 max-md:hidden">
-            <TabButton active={tab === "mine"}     onClick={() => setTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
-            <TabButton active={tab === "specific"} onClick={() => setTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
-            <TabButton active={tab === "any"}      onClick={() => setTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+            <TabButton active={tab === "mine"}     onClick={() => switchTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
+            <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
+            <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
           </div>
         </div>
 
         {/* Mobile tab strip */}
         <div className="hidden max-md:flex flex-col gap-1.5 mb-3">
-          <TabButton active={tab === "mine"}     onClick={() => setTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
-          <TabButton active={tab === "specific"} onClick={() => setTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
-          <TabButton active={tab === "any"}      onClick={() => setTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+          <TabButton active={tab === "mine"}     onClick={() => switchTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
+          <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
+          <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
         </div>
 
         {tab === "mine"     && <MyBookingsView session={session} />}
-        {tab === "specific" && <SpecificVenueView session={session} userData={userData} onBookingSuccess={() => setTab("mine")} />}
-        {tab === "any"      && <AnyAvailableView session={session} userData={userData} />}
+        {tab === "specific" && <SpecificVenueView session={session} userData={userData} entityId={entityId} entityType={entityType} onBookingSuccess={() => {
+          const redirect = getApprovalRedirectPath(entityId, entityType);
+          if (redirect) router.push(redirect);
+          else switchTab("mine");
+        }} />}
+        {tab === "any"      && <AnyAvailableView session={session} userData={userData} entityId={entityId} entityType={entityType} />}
       </div>
     </div>
   );
@@ -264,7 +319,8 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 // VIEW 1 — BOOK SPECIFIC VENUE
 // ══════════════════════════════════════════════════════════════════════════════
 
-function SpecificVenueView({ session, userData, onBookingSuccess }: { session: any; userData: any; onBookingSuccess?: () => void }) {
+function SpecificVenueView({ session, userData, entityId, entityType, onBookingSuccess }: { session: any; userData: any; entityId?: string | null; entityType?: string | null; onBookingSuccess?: () => void }) {
+  const router = useRouter();
   const [campuses,       setCampuses]       = useState<string[]>([]);
   const [selectedCampus, setSelectedCampus] = useState("");
   const [blocks,         setBlocks]         = useState<string[]>([]);
@@ -335,16 +391,17 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
     if (!selectedVenueId || !session?.access_token) { setBookings([]); return; }
     setLoadingCal(true);
     try {
-      const mid = addDays(weekStart, 3);
-      const monthStr = `${mid.getFullYear()}-${pad2(mid.getMonth() + 1)}`;
-      const r = await fetch(
-        `${API_URL}/api/venues/${selectedVenueId}/availability?month=${monthStr}`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
-      );
-      if (r.ok) {
-        const d = await r.json();
-        setBookings(Array.isArray(d.bookings) ? d.bookings : []);
-      }
+      const weekEnd = addDays(weekStart, 6);
+      const startMonth = `${weekStart.getFullYear()}-${pad2(weekStart.getMonth() + 1)}`;
+      const endMonth   = `${weekEnd.getFullYear()}-${pad2(weekEnd.getMonth() + 1)}`;
+      const months = startMonth === endMonth ? [startMonth] : [startMonth, endMonth];
+      const results = await Promise.all(months.map(m =>
+        fetch(`${API_URL}/api/venues/${selectedVenueId}/availability?month=${m}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).then(r => r.ok ? r.json() : { bookings: [] }).catch(() => ({ bookings: [] }))
+      ));
+      const combined = results.flatMap(d => Array.isArray(d.bookings) ? d.bookings : []);
+      setBookings(combined);
     } catch {}
     finally { setLoadingCal(false); }
   }, [selectedVenueId, session?.access_token, weekStart]);
@@ -479,8 +536,17 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
           userData={userData}
           venue={selectedVenue}
           initial={modal}
+          entityId={entityId}
+          entityType={entityType}
           onClose={() => setModal(null)}
-          onSuccess={() => { setModal(null); loadBookings(); loadOwnBookings(); onBookingSuccess?.(); }}
+          onSuccess={() => {
+            setModal(null);
+            loadBookings();
+            loadOwnBookings();
+            const redirectPath = getApprovalRedirectPath(entityId, entityType);
+            if (redirectPath) router.push(redirectPath);
+            else onBookingSuccess?.();
+          }}
         />
       )}
     </>
@@ -711,10 +777,12 @@ function WeekCalendar({
 // ─── Booking Modal ────────────────────────────────────────────────────────────
 
 function BookingModal({
-  session, userData, venue, initial, onClose, onSuccess,
+  session, userData, venue, initial, entityId, entityType, onClose, onSuccess,
 }: {
   session: any; userData: any; venue: Venue;
   initial: { date: string; start_time: string; end_time: string };
+  entityId?: string | null;
+  entityType?: string | null;
   onClose: () => void; onSuccess: () => void;
 }) {
   const [date,      setDate]      = useState(initial.date);
@@ -756,7 +824,8 @@ function BookingModal({
           title: title.trim(),
           headcount: hcNum,
           setup_notes: notes.trim() || null,
-          entity_type: "standalone",
+          entity_type: entityId && entityType ? entityType : "standalone",
+          entity_id: entityId || null,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -791,6 +860,9 @@ function BookingModal({
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-0.5">New booking</p>
             <p className="text-base font-semibold text-gray-900">{venue.name}</p>
+            {entityId && (
+              <p className="text-[11px] text-[#154CB3] mt-0.5">Linked to your {entityType || "event"}</p>
+            )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
             <IconX />
@@ -1004,7 +1076,8 @@ function MyBookingsView({ session }: { session: any }) {
 // VIEW 3 — FIND AVAILABLE VENUE
 // ══════════════════════════════════════════════════════════════════════════════
 
-function AnyAvailableView({ session, userData }: { session: any; userData: any }) {
+function AnyAvailableView({ session, userData, entityId, entityType }: { session: any; userData: any; entityId?: string | null; entityType?: string | null }) {
+  const router = useRouter();
   const [campuses, setCampuses] = useState<string[]>([]);
   const [campus,   setCampus]   = useState("");
   const [date,     setDate]     = useState(() => { const d = new Date(); d.setDate(d.getDate() + 2); return ymd(d); });
@@ -1212,8 +1285,15 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
           userData={userData}
           venue={picked}
           initial={{ date, start_time: startT, end_time: endT }}
+          entityId={entityId}
+          entityType={entityType}
           onClose={() => setPicked(null)}
-          onSuccess={() => { setPicked(null); search(); }}
+          onSuccess={() => {
+            setPicked(null);
+            const redirectPath = getApprovalRedirectPath(entityId, entityType);
+            if (redirectPath) router.push(redirectPath);
+            else search();
+          }}
         />
       )}
     </>

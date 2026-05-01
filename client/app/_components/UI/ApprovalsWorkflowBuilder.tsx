@@ -20,8 +20,8 @@ export interface BudgetItem {
 export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   { role: 'hod',      label: 'HOD',             desc: 'Head of Dept — matched by dept + campus',     blocking: true, required: true,  enabled: true },
   { role: 'dean',     label: 'Dean',             desc: 'Dean of School — matched by school + campus', blocking: true, required: true,  enabled: true },
-  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight',                  blocking: true, required: false, enabled: true },
-  { role: 'accounts', label: 'Finance Officer',  desc: 'Accounts Office — matched by campus',         blocking: true, required: false, enabled: true },
+  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight',                  blocking: true, required: false, enabled: false },
+  { role: 'accounts', label: 'Finance Officer',  desc: 'Accounts Office — matched by campus',         blocking: true, required: false, enabled: false },
 ];
 
 export interface ApprovalsWorkflowBuilderProps {
@@ -35,9 +35,12 @@ export interface ApprovalsWorkflowBuilderProps {
   festId?: string | null;
   approvalExists?: boolean | null;
   isSubmitting?: boolean;
+  isUpdatingFest?: boolean;
+  initialStages?: WorkflowStage[];
   initialBudgetItems?: BudgetItem[];
   onSubmitForApproval?: (customStages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
   onUpdateWorkflow?: (customStages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
+  onUpdateFest?: () => void;
   onBackToDetails?: () => void;
 }
 
@@ -49,12 +52,15 @@ export function ApprovalsWorkflowBuilder({
   festId,
   approvalExists,
   isSubmitting = false,
+  isUpdatingFest = false,
+  initialStages,
   initialBudgetItems,
   onSubmitForApproval,
   onUpdateWorkflow,
+  onUpdateFest,
   onBackToDetails,
 }: ApprovalsWorkflowBuilderProps) {
-  const [stages, setStages] = React.useState<WorkflowStage[]>(DEFAULT_WORKFLOW_STAGES);
+  const [stages, setStages] = React.useState<WorkflowStage[]>(initialStages && initialStages.length > 0 ? initialStages : DEFAULT_WORKFLOW_STAGES);
   const [draggedRole, setDraggedRole] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<{
     role: string | null;
@@ -62,6 +68,12 @@ export function ApprovalsWorkflowBuilder({
     section: 'pre' | 'post';
   } | null>(null);
   const [budgetItems, setBudgetItems] = React.useState<BudgetItem[]>(initialBudgetItems ?? []);
+
+  React.useEffect(() => {
+    if (initialStages && initialStages.length > 0) {
+      setStages(initialStages);
+    }
+  }, [initialStages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
     if (initialBudgetItems && initialBudgetItems.length > 0) {
@@ -428,6 +440,23 @@ export function ApprovalsWorkflowBuilder({
           >
             ← Back to Fest Details
           </button>
+
+          {onUpdateFest && (
+            <button
+              type="button"
+              onClick={onUpdateFest}
+              disabled={isUpdatingFest || isSubmitting}
+              className="w-full sm:w-auto px-5 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isUpdatingFest && (
+                <svg className="animate-spin h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              )}
+              {isUpdatingFest ? 'Saving...' : 'Update Fest'}
+            </button>
+          )}
 
           {approvalExists ? (
             <div className="flex flex-col sm:flex-row gap-2 flex-1">
