@@ -85,24 +85,28 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/create") ||
     pathname.startsWith("/edit") ||
     pathname.startsWith("/bookvenue") ||
-    pathname.startsWith("/bookcatering");
+    pathname.startsWith("/bookcatering") ||
+    pathname.startsWith("/bookstall");
 
-  const isHodRoute = pathname.startsWith("/hod");
-  const isDeanRoute = pathname.startsWith("/dean");
-  const isCfoRoute     = pathname.startsWith("/cfo");
-  const isAccountsRoute = pathname.startsWith("/accounts");
-  const isVenueRoute    = pathname.startsWith("/venue");
-  const isCateringRoute = pathname.startsWith("/catering");
-  const isItRoute       = pathname.startsWith("/it");
+  const isHodRoute         = pathname.startsWith("/hod");
+  const isDeanRoute        = pathname.startsWith("/dean");
+  const isCfoRoute         = pathname.startsWith("/cfo");
+  const isAccountsRoute    = pathname.startsWith("/accounts");
+  const isVenueRoute       = pathname.startsWith("/venue");
+  const isCateringRoute    = pathname.startsWith("/catering");
+  const isItRoute          = pathname.startsWith("/it");
+  const isStallsRoute      = pathname.startsWith("/stalls");
+  const isMasterAdminRoute = pathname.startsWith("/masteradmin");
+  const isVolunteerRoute   = pathname.startsWith("/volunteer");
 
-  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute)) {
+  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute || isStallsRoute || isMasterAdminRoute || isVolunteerRoute)) {
     if (!user.email) {
       return redirect("/error");
     }
 
     const { data: userData, error } = await supabase
       .from("users")
-      .select("is_organiser, is_masteradmin, is_hod, is_dean, is_cfo, is_accounts_office, is_venue_manager, is_it_support, caters")
+      .select("is_organiser, is_masteradmin, is_hod, is_dean, is_cfo, is_accounts_office, is_venue_manager, is_it_support, is_stalls, is_support, register_number, caters")
       .eq("email", user.email)
       .single();
 
@@ -198,6 +202,18 @@ export async function middleware(req: NextRequest) {
     }
 
     if (isItRoute && !(userData as any)?.is_it_support && !userData?.is_masteradmin) {
+      return redirect("/error?error=not_authorized");
+    }
+
+    if (isStallsRoute && !(userData as any)?.is_stalls && !userData?.is_masteradmin) {
+      return redirect("/error?error=not_authorized");
+    }
+
+    if (isMasterAdminRoute && !userData?.is_masteradmin) {
+      return redirect("/error?error=not_authorized");
+    }
+
+    if (isVolunteerRoute && !(userData as any)?.register_number) {
       return redirect("/error?error=not_authorized");
     }
   }

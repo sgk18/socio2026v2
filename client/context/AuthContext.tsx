@@ -47,6 +47,7 @@ type AuthContextType = {
   isMasterAdmin: boolean;
   isStudentOrganiser: boolean;
   subHeadFestIds: string[];
+  isVolunteer: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isStudentOrganiser, setIsStudentOrganiser] = useState(false);
   const [subHeadFestIds, setSubHeadFestIds] = useState<string[]>([]);
+  const [isVolunteer, setIsVolunteer] = useState(false);
   const [showOutsiderWarning, setShowOutsiderWarning] = useState(false);
   const [outsiderVisitorId, setOutsiderVisitorId] = useState<string | null>(null);
   const [outsiderNameInput, setOutsiderNameInput] = useState("");
@@ -528,9 +530,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [userData?.email, userData?.is_organiser]);
 
+  // Check if user has any active volunteer assignments
+  useEffect(() => {
+    const registerNumber = userData?.register_number;
+    if (!registerNumber || !supabase) {
+      setIsVolunteer(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("events")
+          .select("volunteers")
+          .not("volunteers", "is", null)
+          .neq("volunteers", "[]")
+          .eq("is_archived", false)
+          .limit(50);
+        const now = new Date();
+        const regUpper = String(registerNumber).toUpperCase();
+        const hasActive = (data || []).some((event: any) => {
+          const vols: any[] = Array.isArray(event.volunteers) ? event.volunteers : [];
+          return vols.some(
+            (v) =>
+              String(v?.register_number || "").toUpperCase() === regUpper &&
+              v?.expires_at &&
+              new Date(v.expires_at) > now
+          );
+        });
+        setIsVolunteer(hasActive);
+      } catch {
+        setIsVolunteer(false);
+      }
+    })();
+  }, [userData?.register_number]);
+
   return (
     <AuthContext.Provider
-      value={{ session, userData, isLoading, isSupport, isMasterAdmin, isStudentOrganiser, subHeadFestIds, signInWithGoogle, signOut }}
+      value={{ session, userData, isLoading, isSupport, isMasterAdmin, isStudentOrganiser, subHeadFestIds, isVolunteer, signInWithGoogle, signOut }}
     >
       {children}
 

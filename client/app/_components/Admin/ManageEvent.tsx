@@ -2492,72 +2492,6 @@ export default function EventForm({
                   />
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[#154CB3]">
-                        <UsersRound className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#154CB3]">
-                          Volunteer Access
-                        </p>
-                        <label
-                          htmlFor="needsVolunteers"
-                          className="block text-sm font-semibold text-slate-900 cursor-pointer mt-0.5"
-                        >
-                          Need volunteers
-                        </label>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Assign trusted students who can scan QR codes for this event.
-                        </p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                      <Controller
-                        name="needsVolunteers"
-                        control={control}
-                        render={({ field }) => (
-                          <input
-                            type="checkbox"
-                            id="needsVolunteers"
-                            checked={!!field.value}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              field.onChange(checked);
-                              if (!checked) {
-                                setValue("volunteers", [], {
-                                  shouldDirty: true,
-                                  shouldValidate: true,
-                                });
-                              }
-                            }}
-                            className="sr-only peer"
-                          />
-                        )}
-                      />
-                      <div className={toggleTrackClass}></div>
-                    </label>
-                  </div>
-
-                  {watchedNeedsVolunteers && (
-                    <Controller
-                      name="volunteers"
-                      control={control}
-                      render={({ field }) => (
-                        <VolunteerAssignmentSection
-                          value={Array.isArray(field.value) ? field.value : []}
-                          onChange={field.onChange}
-                          endDate={watchedEndDate}
-                          endTime={watchedEndTime}
-                          assignedByEmail={userData?.email || session?.user?.email || ""}
-                          disabled={isSubmittingProp || rhfIsSubmitting}
-                        />
-                      )}
-                    />
-                  )}
-                </div>
-
                 <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 sm:py-3.5">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-3">
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -3119,6 +3053,112 @@ export default function EventForm({
                     required
                     placeholder="10-digit mobile number"
                   />
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[#154CB3] flex-shrink-0">
+                        <UsersRound className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#154CB3]">
+                          Volunteer Access
+                        </p>
+                        <label
+                          htmlFor="needsVolunteers"
+                          className="block text-sm font-semibold text-slate-900 cursor-pointer mt-0.5"
+                        >
+                          Need volunteers
+                        </label>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Assign trusted students who can scan QR codes and mark attendance to students.
+                        </p>
+                      </div>
+                    </div>
+                    <Controller
+                      name="needsVolunteers"
+                      control={control}
+                      render={({ field }) => {
+                        const volunteersEnabled = Boolean(field.value);
+
+                        return (
+                          <div
+                            role="radiogroup"
+                            aria-label="Volunteer access"
+                            className="inline-flex items-center rounded-xl border border-gray-300 bg-white p-1 shadow-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              id="needsVolunteers"
+                              checked={volunteersEnabled}
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                field.onChange(checked);
+                                if (!checked) {
+                                  setValue("volunteers", [], {
+                                    shouldDirty: true,
+                                    shouldValidate: true,
+                                  });
+                                }
+                              }}
+                              className="sr-only"
+                            />
+
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={volunteersEnabled}
+                              onClick={() => field.onChange(true)}
+                              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                volunteersEnabled
+                                  ? "bg-green-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={!volunteersEnabled}
+                              onClick={() => {
+                                field.onChange(false);
+                                setValue("volunteers", [], {
+                                  shouldDirty: true,
+                                  shouldValidate: true,
+                                });
+                              }}
+                              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                !volunteersEnabled
+                                  ? "bg-red-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              No
+                            </button>
+                          </div>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  {watchedNeedsVolunteers && (
+                    <Controller
+                      name="volunteers"
+                      control={control}
+                      render={({ field }) => (
+                        <VolunteerAssignmentSection
+                          value={Array.isArray(field.value) ? field.value : []}
+                          onChange={field.onChange}
+                          endDate={watchedEndDate}
+                          endTime={watchedEndTime}
+                          assignedByEmail={userData?.email || session?.user?.email || ""}
+                          disabled={isSubmittingProp || rhfIsSubmitting}
+                        />
+                      )}
+                    />
+                  )}
                 </div>
 
                 {/* Custom Fields Section - Moved Up */}

@@ -983,16 +983,28 @@ function ManageDashboard() {
         const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
         const normalizedEvents = rawEvents.map((event: any) => {
           const rawCreatedBy = event?.created_by;
-          const festCreator =
-            typeof rawCreatedBy === "object" && rawCreatedBy !== null
-              ? (rawCreatedBy.fest_creator ?? null)
-              : null;
+          // Support three formats:
+          // 1. Array (new):  ["creator@...", "co_creator@..."]
+          // 2. JSONB object (legacy): { event_creator: "...", fest_creator: "..." }
+          // 3. Plain string (oldest): "creator@..."
+          let allCreatorEmails: string[] = [];
+          let festCreator: string | null = null;
+          if (Array.isArray(rawCreatedBy)) {
+            allCreatorEmails = rawCreatedBy.filter((e: any) => typeof e === "string" && e);
+          } else if (typeof rawCreatedBy === "object" && rawCreatedBy !== null) {
+            festCreator = rawCreatedBy.fest_creator ?? null;
+            if (rawCreatedBy.event_creator) allCreatorEmails.push(rawCreatedBy.event_creator);
+            if (rawCreatedBy.fest_creator) allCreatorEmails.push(rawCreatedBy.fest_creator);
+          } else if (typeof rawCreatedBy === "string" && rawCreatedBy) {
+            allCreatorEmails = [rawCreatedBy];
+          }
           return {
             ...event,
             title: safeText(event?.title, "Untitled event"),
             fest: safeText(event?.fest, ""),
             organizing_dept: safeText(event?.organizing_dept, "No Department"),
-            created_by: safeText(rawCreatedBy ?? event?.event_creator ?? event?.fest_creator, ""),
+            created_by: allCreatorEmails[0] ?? safeText(rawCreatedBy ?? event?.event_creator ?? event?.fest_creator, ""),
+            all_creator_emails: allCreatorEmails,
             fest_creator: festCreator,
             venue: safeText(event?.venue, "Venue TBA"),
           };
@@ -1124,14 +1136,18 @@ function ManageDashboard() {
   };
 
   const userSpecificContextEvents = (liveEvents.length > 0 ? liveEvents : contextAllEvents as ContextEvent[]).filter((e) => {
-    // Extract fest_creator from explicit field (liveEvents) or raw JSONB created_by (contextAllEvents)
+    // Extract all creator emails — supports array, JSONB object, and plain string formats
     const rawCreatedBy = (e as any).created_by;
-    const festCreator =
-      (e as any).fest_creator ??
-      (typeof rawCreatedBy === "object" && rawCreatedBy !== null ? rawCreatedBy?.fest_creator : null);
+    const allCreatorEmails: Array<string | null | undefined> = (e as any).all_creator_emails?.length
+      ? (e as any).all_creator_emails
+      : (() => {
+          const festCreator =
+            (e as any).fest_creator ??
+            (typeof rawCreatedBy === "object" && rawCreatedBy !== null ? rawCreatedBy?.fest_creator : null);
+          return [e.created_by, festCreator];
+        })();
     const isOwnerOrMaster = isOwnedByCurrentUser(
-      e.created_by,
-      festCreator,
+      ...allCreatorEmails,
       (e as any).organizer_email,
       (e as any).organiser_email
     );
@@ -2029,7 +2045,12 @@ function ManageDashboard() {
               {/* Events Mode Logic */}
               {reportMode === "events" && (() => {
                 const eventsForReport = liveEvents.length > 0 ? liveEvents : contextAllEvents;
-                const userEvents = isMasterAdmin ? eventsForReport : eventsForReport.filter(e => e.created_by === userData?.email);
+                const userEvents = isMasterAdmin ? eventsForReport : eventsForReport.filter(e => {
+                  const allEmails: string[] = (e as any).all_creator_emails?.length
+                    ? (e as any).all_creator_emails
+                    : [e.created_by, (e as any).fest_creator].filter(Boolean);
+                  return allEmails.some(em => em?.toLowerCase() === userData?.email?.toLowerCase());
+                });
                 const filteredEvents = userEvents.filter(e => 
                   safeLower(e.title).includes(safeLower(searchTermReport)) ||
                   safeLower(e.organizing_dept).includes(safeLower(searchTermReport))

@@ -39,8 +39,7 @@ export default function VolunteerDashboard() {
     }
 
     if (!userData?.register_number) {
-      setError("Only students with a register number can access the Volunteer Dashboard.");
-      setIsLoading(false);
+      router.replace("/error");
       return;
     }
 
@@ -60,7 +59,15 @@ export default function VolunteerDashboard() {
         }
 
         const data = await res.json();
-        setEvents(data.events || []);
+        const assignedEvents: VolunteerEvent[] = data.events || [];
+
+        // If no active assignments, redirect away — user has no business here
+        if (assignedEvents.length === 0) {
+          router.replace("/error");
+          return;
+        }
+
+        setEvents(assignedEvents);
       } catch (err: any) {
         console.error("Error fetching volunteer events:", err);
         setError(err.message || "An unexpected error occurred.");

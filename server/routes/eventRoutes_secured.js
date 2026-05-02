@@ -917,10 +917,10 @@ router.post(
       }
 
       const createdByValue = req.isSubHead
-        ? { event_creator: req.userInfo.email, fest_creator: matchedSubHeadFest.created_by, fest_id: matchedSubHeadFest.fest_id }
+        ? [req.userInfo.email, matchedSubHeadFest.created_by]
         : festCreatorEmail
-          ? { event_creator: req.userInfo?.email, fest_creator: festCreatorEmail, fest_id: resolvedFestId }
-          : { event_creator: req.userInfo?.email };
+          ? [req.userInfo?.email, festCreatorEmail]
+          : [req.userInfo?.email];
 
       console.log("✅ JSON fields parsed successfully");
       console.log("About to insert event into database with:", {
@@ -1118,12 +1118,7 @@ router.patch(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  (req, res, next) => {
-    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) {
-      return next();
-    }
-    return res.status(403).json({ error: "Access denied: Organiser privileges required" });
-  },
+  requireOrganiserOrSubHead,
   requireOwnership("events", "eventId", "auth_uuid"),
   async (req, res) => {
     try {
@@ -1210,8 +1205,8 @@ router.put(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
-  requireOwnership('events', 'eventId', 'auth_uuid'),  // Check ownership using auth_uuid (master admin bypass built-in)
+  requireOrganiserOrSubHead,
+  requireOwnership('events', 'eventId', 'auth_uuid'),
   async (req, res) => {
     try {
       const { eventId } = req.params;
@@ -1707,10 +1702,7 @@ router.post(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  (req, res, next) => {
-    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) return next();
-    return res.status(403).json({ error: "Access denied: Organiser privileges required." });
-  },
+  requireOrganiserOrSubHead,
   requireOwnership("events", "eventId", "auth_uuid"),
   async (req, res) => {
     try {
@@ -1773,12 +1765,7 @@ router.delete(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  (req, res, next) => {
-    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) {
-      return next();
-    }
-    return res.status(403).json({ error: "Access denied: Organiser privileges required" });
-  },
+  requireOrganiserOrSubHead,
   requireOwnership("events", "eventId", "auth_uuid"),
   async (req, res) => {
     try {
@@ -1829,8 +1816,8 @@ router.delete(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
-  requireOwnership('events', 'eventId', 'auth_uuid'),  // Master admin bypass built-in
+  requireOrganiserOrSubHead,
+  requireOwnership('events', 'eventId', 'auth_uuid'),
   async (req, res) => {
     try {
       const { eventId } = req.params;

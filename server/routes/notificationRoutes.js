@@ -1,6 +1,6 @@
 import express from "express";
 import { createClient } from '@supabase/supabase-js';
-import { authenticateUser, getUserInfo, checkRoleExpiration, requireMasterAdmin, requireOrganiser } from "../middleware/authMiddleware.js";
+import { authenticateUser, getUserInfo, checkRoleExpiration, requireMasterAdmin, requireOrganiserOrSubHead, extractCreatorEmails } from "../middleware/authMiddleware.js";
 import {
   savePushSubscription,
   disablePushSubscription,
@@ -179,7 +179,7 @@ router.post(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
+  requireOrganiserOrSubHead,
   async (req, res) => {
     try {
       const { event_id, template } = req.body;
@@ -199,7 +199,8 @@ router.post(
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (event.created_by !== req.userInfo.email) {
+      const creatorEmails = extractCreatorEmails(event.created_by).map(e => e.toLowerCase());
+      if (!creatorEmails.includes((req.userInfo.email || "").toLowerCase()) && !req.userInfo.is_masteradmin) {
         return res.status(403).json({ error: "You can only send reminders for events you created" });
       }
 

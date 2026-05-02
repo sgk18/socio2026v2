@@ -46,7 +46,7 @@ export default function StudentsPage() {
   const [eventTitle, setEventTitle] = useState<string>("");
   const [attendanceMap, setAttendanceMap] = useState<Record<string, string>>({});
   const [eventOnSpotEnabled, setEventOnSpotEnabled] = useState(false);
-  const [eventCreatedBy, setEventCreatedBy] = useState<string>("");
+  const [eventCreatedBy, setEventCreatedBy] = useState<string[]>([]);
   const [showOnSpotForm, setShowOnSpotForm] = useState(false);
   const [onSpotName, setOnSpotName] = useState("");
   const [onSpotRegisterId, setOnSpotRegisterId] = useState("");
@@ -64,9 +64,9 @@ export default function StudentsPage() {
   const isMasterAdmin = Boolean(userData?.is_masteradmin);
   const isOrganiser = Boolean(userData?.is_organiser);
   const isEventOwner =
-    Boolean(eventCreatedBy) &&
     Boolean(currentUserEmail) &&
-    String(eventCreatedBy).toLowerCase() === currentUserEmail;
+    eventCreatedBy.length > 0 &&
+    eventCreatedBy.some(e => e.toLowerCase() === currentUserEmail);
   const canUseOnSpot = eventOnSpotEnabled && (isMasterAdmin || (isOrganiser && isEventOwner));
 
   // Debounce search for better performance
@@ -101,7 +101,13 @@ export default function StudentsPage() {
               event.on_spot === "1" ||
               event.on_spot === "true"
           );
-          setEventCreatedBy(event.created_by || "");
+          const rawCb = event.created_by;
+          const creatorEmails: string[] = Array.isArray(rawCb)
+            ? rawCb.filter((e: unknown) => typeof e === "string" && e)
+            : typeof rawCb === "object" && rawCb !== null
+              ? [rawCb.event_creator, rawCb.fest_creator].filter(Boolean)
+              : typeof rawCb === "string" && rawCb ? [rawCb] : [];
+          setEventCreatedBy(creatorEmails);
           let fields: CustomField[] = [];
           if (event.custom_fields) {
             if (typeof event.custom_fields === 'string') {

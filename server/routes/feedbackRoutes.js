@@ -4,7 +4,8 @@ import {
   authenticateUser,
   getUserInfo,
   checkRoleExpiration,
-  requireOrganiser,
+  requireOrganiserOrSubHead,
+  extractCreatorEmails,
 } from "../middleware/authMiddleware.js";
 import { sendPushToEmail } from "../utils/webPushService.js";
 
@@ -15,15 +16,6 @@ const supabase = createClient(
 
 const router = express.Router();
 
-function resolveCreatedByEmail(createdBy) {
-  if (!createdBy) return null;
-  if (typeof createdBy === "string") return createdBy.trim();
-  if (typeof createdBy === "object" && createdBy.event_creator) {
-    return String(createdBy.event_creator).trim();
-  }
-  return null;
-}
-
 // ─── POST /api/feedbacks/:eventId/send ───────────────────────────────────────
 // Organiser sends feedback notifications to all registered participants.
 // Gated: event must have ended. One-shot per event.
@@ -33,7 +25,7 @@ router.post(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
+  requireOrganiserOrSubHead,
   async (req, res) => {
     try {
       const { eventId } = req.params;
@@ -48,8 +40,9 @@ router.post(
         return res.status(404).json({ error: "Event not found" });
       }
 
-      const ownerEmail = resolveCreatedByEmail(event.created_by);
-      if (ownerEmail !== req.userInfo.email && !req.userInfo.is_masteradmin) {
+      const creatorEmails = extractCreatorEmails(event.created_by).map(e => e.toLowerCase());
+      const isEventOwner = creatorEmails.includes((req.userInfo.email || "").toLowerCase());
+      if (!isEventOwner && !req.userInfo.is_masteradmin) {
         return res.status(403).json({ error: "You can only send feedback forms for events you created" });
       }
 
@@ -268,7 +261,7 @@ router.get(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
+  requireOrganiserOrSubHead,
   async (req, res) => {
     try {
       const { eventId } = req.params;
@@ -283,8 +276,9 @@ router.get(
         return res.status(404).json({ error: "Event not found" });
       }
 
-      const ownerEmail = resolveCreatedByEmail(event.created_by);
-      if (ownerEmail !== req.userInfo.email && !req.userInfo.is_masteradmin) {
+      const creatorEmails = extractCreatorEmails(event.created_by).map(e => e.toLowerCase());
+      const isEventOwner = creatorEmails.includes((req.userInfo.email || "").toLowerCase());
+      if (!isEventOwner && !req.userInfo.is_masteradmin) {
         return res.status(403).json({ error: "Access denied: you are not the organiser of this event" });
       }
 

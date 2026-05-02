@@ -75,7 +75,7 @@ type RoleAction = {
 };
 
 function NavigationBar() {
-  const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser } = useAuth();
+  const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser, isVolunteer } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -139,6 +139,7 @@ function NavigationBar() {
   if (isHod) roleActions.push({ key: "hod", label: "HOD", href: "/hod", variant: "hod" });
   if (isOrganiser) roleActions.push({ key: "organiser", label: "Organiser", href: "/manage", variant: "organiser" });
   if (!isOrganiser && isStudentOrganiser) roleActions.push({ key: "student_organiser", label: "Student Organiser", href: "/manage", variant: "student_organiser" });
+  if (isSupport) roleActions.push({ key: "support", label: "Support", href: "/support/inbox", variant: "support" });
   if (isVenueManager) roleActions.push({ key: "venue", label: "Venue", href: "/venue", variant: "venue" });
   if (isCaterer) roleActions.push({ key: "catering", label: "Catering", href: "/catering", variant: "catering" });
   if (isStalls) roleActions.push({ key: "stalls", label: "Stalls", href: "/stalls", variant: "stalls" });
@@ -551,13 +552,15 @@ function NavigationBar() {
                                   {roleAction.label}
                                 </Link>
                               ))}
-                              <Link
-                                href="/volunteer"
-                                onClick={() => setShowRoleDropdown(false)}
-                                className="block px-4 py-2.5 text-sm font-medium text-[#154CB3] hover:bg-gray-50 transition-colors duration-200"
-                              >
-                                Volunteer
-                              </Link>
+                              {isVolunteer && (
+                                <Link
+                                  href="/volunteer"
+                                  onClick={() => setShowRoleDropdown(false)}
+                                  className="block px-4 py-2.5 text-sm font-medium text-[#154CB3] hover:bg-gray-50 transition-colors duration-200"
+                                >
+                                  Volunteer
+                                </Link>
+                              )}
                             </div>
                           )}
                         </div>
