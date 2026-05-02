@@ -54,6 +54,7 @@ interface Fest {
   created_by?: string;
   contact_email?: string | null;
   event_heads?: Array<{ email?: string | null } | string>;
+  sub_heads?: Array<{ email: string; expiresAt?: string | null }>;
   campus_hosted_at?: string | null;
   is_archived?: boolean;
   is_draft?: boolean;
@@ -487,6 +488,200 @@ const VolunteerManagerModal = ({
   );
 };
 
+const VOL_PAGE_SIZE = 8;
+function paginate<T>(items: T[], page: number) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / VOL_PAGE_SIZE));
+  const p = Math.min(Math.max(1, page), totalPages);
+  return { items: items.slice((p - 1) * VOL_PAGE_SIZE, p * VOL_PAGE_SIZE), totalPages, hasPrev: p > 1, hasNext: p < totalPages, page: p, total };
+}
+
+function PagerBar({ page, totalPages, hasPrev, hasNext, onPrev, onNext }: { page: number; totalPages: number; hasPrev: boolean; hasNext: boolean; onPrev: () => void; onNext: () => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/60">
+      <button type="button" onClick={onPrev} disabled={!hasPrev} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        <ChevronLeft className="w-3.5 h-3.5" /> Prev
+      </button>
+      <span className="text-xs text-slate-500">Page {page} of {totalPages}</span>
+      <button type="button" onClick={onNext} disabled={!hasNext} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        Next <ChevronRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+const AddSubHeadModal = ({
+  fests, authToken, onClose, onAdded,
+}: {
+  fests: Fest[];
+  authToken: string | null;
+  onClose: () => void;
+  onAdded: (festId: string, newHead: { email: string; expiresAt?: string | null }) => void;
+}) => {
+  const [selectedFestId, setSelectedFestId] = React.useState(fests[0]?.fest_id || "");
+  const [email, setEmail] = React.useState("");
+  const [isAdding, setIsAdding] = React.useState(false);
+
+  const handleAdd = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !selectedFestId) return;
+    if (!authToken) { toast.error("Please sign in again."); return; }
+    setIsAdding(true);
+    try {
+      const fest = fests.find(f => f.fest_id === selectedFestId);
+      if (!fest) throw new Error("Fest not found");
+      const existing = fest.sub_heads || [];
+      if (existing.some(sh => sh.email === trimmed)) throw new Error("This person already has access to this fest.");
+      const updated = [...existing, { email: trimmed, expiresAt: null }];
+      const res = await fetch(`${API_URL}/api/fests/${encodeURIComponent(selectedFestId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ sub_heads: updated }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Failed to add organiser"); }
+      toast.success("Sub-organiser added.");
+      onAdded(selectedFestId, { email: trimmed, expiresAt: null });
+      setEmail("");
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to add sub-organiser.");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Add Sub-Organiser</h2>
+            <p className="text-xs text-slate-500 mt-0.5">They can add events to the selected fest</p>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Fest</label>
+            <select
+              value={selectedFestId}
+              onChange={e => setSelectedFestId(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3]"
+            >
+              {fests.map(f => <option key={f.fest_id} value={f.fest_id}>{f.fest_title}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Email address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="student@christuniversity.in"
+              disabled={isAdding}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3] disabled:opacity-50"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={isAdding || !email.trim() || !selectedFestId}
+            onClick={handleAdd}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#154CB3] text-white text-sm font-semibold rounded-lg hover:bg-[#0f3782] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <UserPlus className="w-4 h-4" />
+            {isAdding ? "Adding…" : "Add Sub-Organiser"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AddVolunteerModal = ({
+  events, authToken, onClose, onAdded,
+}: {
+  events: ContextEvent[];
+  authToken: string | null;
+  onClose: () => void;
+  onAdded: () => void;
+}) => {
+  const [selectedEventId, setSelectedEventId] = React.useState(events[0]?.event_id || "");
+  const [regInput, setRegInput] = React.useState("");
+  const [isAdding, setIsAdding] = React.useState(false);
+
+  const handleAdd = async () => {
+    const reg = normalizeRegisterNumber(regInput);
+    if (!reg || !selectedEventId) return;
+    if (!authToken) { toast.error("Please sign in again."); return; }
+    setIsAdding(true);
+    try {
+      const res = await fetch(`${API_URL}/api/events/${encodeURIComponent(selectedEventId)}/volunteers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ register_number: reg }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "Failed to add volunteer.");
+      toast.success("Volunteer added.");
+      setRegInput("");
+      onAdded();
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to add volunteer.");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Add Volunteer</h2>
+            <p className="text-xs text-slate-500 mt-0.5">They can mark attendance for the selected event</p>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Event</label>
+            <select
+              value={selectedEventId}
+              onChange={e => setSelectedEventId(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3]"
+            >
+              {events.map(e => <option key={e.event_id} value={e.event_id}>{e.title}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Register Number</label>
+            <input
+              type="text"
+              value={regInput}
+              onChange={e => setRegInput(e.target.value.toUpperCase())}
+              onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="e.g. 2541608"
+              maxLength={20}
+              disabled={isAdding}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3] disabled:opacity-50"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={isAdding || !regInput.trim() || !selectedEventId}
+            onClick={handleAdd}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#154CB3] text-white text-sm font-semibold rounded-lg hover:bg-[#0f3782] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <UserPlus className="w-4 h-4" />
+            {isAdding ? "Adding…" : "Add Volunteer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MappedEventCard = ({
   event,
   baseUrl,
@@ -743,7 +938,7 @@ export default function ManageDashboardPage() {
 function ManageDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  type ManageTab = "fests" | "events" | "report";
+  type ManageTab = "fests" | "events" | "report" | "volunteers";
   const activeTab = (searchParams.get("tab") as ManageTab) || "fests";
   const setActiveTab = (tab: ManageTab) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -761,6 +956,11 @@ function ManageDashboard() {
   const previousPagesRef = useRef({ eventsPage: 1, festsPage: 1 });
   const [volunteerRevokingIds, setVolunteerRevokingIds] = useState<Set<string>>(new Set());
   const [volunteerModalEvent, setVolunteerModalEvent] = useState<ContextEvent | null>(null);
+  const [subHeadRevokingKeys, setSubHeadRevokingKeys] = useState<Set<string>>(new Set());
+  const [subHeadPage, setSubHeadPage] = useState(1);
+  const [volPage, setVolPage] = useState(1);
+  const [showAddSubHead, setShowAddSubHead] = useState(false);
+  const [showAddVol, setShowAddVol] = useState(false);
   
   // Auth Context & Session
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -889,6 +1089,7 @@ function ManageDashboard() {
             ? fest.eventHeads
             : [],
         campus_hosted_at: fest.campus_hosted_at || fest.campus || null,
+        sub_heads: Array.isArray(fest.sub_heads) ? fest.sub_heads : [],
         is_draft: fest.is_draft === true,
         is_archived: fest.is_archived === true,
         archived_at: fest.archived_at || null,
@@ -1710,6 +1911,35 @@ function ManageDashboard() {
     }
   };
 
+  const handleRevokeFestSubHead = async (festId: string, email: string) => {
+    if (!authToken) { toast.error("Please sign in again."); return; }
+    const key = `${festId}:${email}`;
+    setSubHeadRevokingKeys(prev => new Set(prev).add(key));
+    try {
+      const fest = fests.find(f => f.fest_id === festId);
+      if (!fest) throw new Error("Fest not found");
+      const updatedSubHeads = (fest.sub_heads || []).filter(sh => sh.email !== email);
+      const res = await fetch(`${API_URL}/api/fests/${encodeURIComponent(festId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ sub_heads: updatedSubHeads }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to revoke access");
+      }
+      setFests(prev => prev.map(f => f.fest_id !== festId ? f : {
+        ...f,
+        sub_heads: (f.sub_heads || []).filter(sh => sh.email !== email),
+      }));
+      toast.success("Organiser access revoked.");
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to revoke access.");
+    } finally {
+      setSubHeadRevokingKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <div ref={topOfPageRef} />
@@ -1785,6 +2015,16 @@ function ManageDashboard() {
               }`}
             >
               Report
+            </button>
+            <button
+              onClick={() => setActiveTab("volunteers")}
+              className={`pb-4 transition-colors whitespace-nowrap -mb-[1px] cursor-pointer ${
+                activeTab === "volunteers"
+                  ? "text-[#154cb3] font-bold border-b-[3px] border-[#154cb3]"
+                  : "text-slate-500 font-medium hover:text-slate-800 border-b-[3px] border-transparent"
+              }`}
+            >
+              Volunteers
             </button>
           </div>
 
@@ -1920,20 +2160,6 @@ function ManageDashboard() {
                         );
                     })}
                 </div>
-                {paginatedEvents.items.some((event) => normalizeVolunteerRecords((event as any).volunteers).length > 0) && (
-                  <div className="mt-8 space-y-5">
-                    {paginatedEvents.items.map((event) => (
-                      <ActiveVolunteersTable
-                        key={`volunteers-${event.event_id}`}
-                        event={event}
-                        onRevoke={handleRevokeVolunteer}
-                        isRevoking={(eventId, registerNumber) =>
-                          volunteerRevokingIds.has(`${eventId}:${normalizeRegisterNumber(registerNumber)}`)
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
                 </>
               )}
             </>
@@ -2145,7 +2371,157 @@ function ManageDashboard() {
             </div>
         )}
 
-        {/* 5. Pagination */}
+        {/* 5. Volunteers Tab */}
+        {activeTab === "volunteers" && (() => {
+          const allSubHeads = fests.flatMap(f => (f.sub_heads || []).map(sh => ({ ...sh, festId: f.fest_id, festTitle: f.fest_title })));
+          const allVolRows = userSpecificContextEvents.flatMap(e => normalizeVolunteerRecords((e as any).volunteers).map(v => ({ ...v, eventId: e.event_id, eventTitle: e.title })));
+
+          const pagedSubHeads = paginate(allSubHeads, subHeadPage);
+          const pagedVols = paginate(allVolRows, volPage);
+
+          return (
+            <div className="space-y-8 max-w-5xl">
+
+              {/* ── Sub-Organisers ── */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+                  <UserPlus className="w-4 h-4 text-[#154cb3] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-bold text-slate-900">Sub-Organisers</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Can add events to fests you created</p>
+                  </div>
+                  <span className="text-xs text-slate-400 shrink-0">{allSubHeads.length} total</span>
+                  {fests.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSubHead(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#154CB3] text-white text-xs font-semibold rounded-lg hover:bg-[#0f3782] transition-colors shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  )}
+                </div>
+                {allSubHeads.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">No sub-organisers yet. Click Add to grant access.</div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[580px]">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Email</th>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Fest</th>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Access Expires</th>
+                            <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {pagedSubHeads.items.map(sh => {
+                            const expiresDate = sh.expiresAt ? new Date(sh.expiresAt) : null;
+                            const isActive = !expiresDate || new Date() < expiresDate;
+                            const revoking = subHeadRevokingKeys.has(`${sh.festId}:${sh.email}`);
+                            return (
+                              <tr key={`${sh.festId}-${sh.email}`} className="hover:bg-slate-50/70">
+                                <td className="px-5 py-3 text-xs text-slate-700 font-medium">{sh.email}</td>
+                                <td className="px-5 py-3 text-xs text-slate-600 max-w-[200px] truncate">{sh.festTitle}</td>
+                                <td className="px-5 py-3">
+                                  {expiresDate ? (
+                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                                      {isActive ? expiresDate.toLocaleDateString() : "Expired"}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700">Permanent</span>
+                                  )}
+                                </td>
+                                <td className="px-5 py-3 text-right">
+                                  <button type="button" disabled={revoking} onClick={() => handleRevokeFestSubHead(sh.festId, sh.email)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <Trash2 className="w-3.5 h-3.5" />{revoking ? "Revoking…" : "Revoke"}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <PagerBar {...pagedSubHeads} onPrev={() => setSubHeadPage(p => p - 1)} onNext={() => setSubHeadPage(p => p + 1)} />
+                  </>
+                )}
+              </div>
+
+              {/* ── Event Volunteers ── */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+                  <UsersRound className="w-4 h-4 text-[#154cb3] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-bold text-slate-900">Event Volunteers</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Can mark attendance for events you created</p>
+                  </div>
+                  <span className="text-xs text-slate-400 shrink-0">{allVolRows.length} total</span>
+                  {userSpecificContextEvents.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddVol(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#154CB3] text-white text-xs font-semibold rounded-lg hover:bg-[#0f3782] transition-colors shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  )}
+                </div>
+                {allVolRows.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">No volunteers yet. Click Add to assign one.</div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[640px]">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Register No.</th>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Event</th>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Status</th>
+                            <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Assigned By</th>
+                            <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-500">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {pagedVols.items.map(v => {
+                            const expires = new Date(v.expires_at);
+                            const isActive = !Number.isNaN(expires.getTime()) && new Date() < expires;
+                            const revoking = volunteerRevokingIds.has(`${v.eventId}:${normalizeRegisterNumber(v.register_number)}`);
+                            return (
+                              <tr key={`${v.eventId}-${v.register_number}`} className="hover:bg-slate-50/70">
+                                <td className="px-5 py-3">
+                                  <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-mono text-xs font-bold text-slate-800">{v.register_number}</span>
+                                </td>
+                                <td className="px-5 py-3 text-xs text-slate-600 font-medium max-w-[200px] truncate">{v.eventTitle}</td>
+                                <td className="px-5 py-3">
+                                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                                    {isActive ? "Active" : "Expired"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 text-xs text-slate-500">{v.assigned_by}</td>
+                                <td className="px-5 py-3 text-right">
+                                  <button type="button" disabled={revoking} onClick={() => handleRevokeVolunteer(v.eventId, v.register_number)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <Trash2 className="w-3.5 h-3.5" />{revoking ? "Revoking…" : "Revoke"}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <PagerBar {...pagedVols} onPrev={() => setVolPage(p => p - 1)} onNext={() => setVolPage(p => p + 1)} />
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 6. Pagination */}
         {(activeTab === "fests" || activeTab === "events") && (
           <div className="mt-10 flex justify-center items-center gap-1.5 pb-8">
             <button
@@ -2183,6 +2559,25 @@ function ManageDashboard() {
           authToken={authToken}
           onClose={() => setVolunteerModalEvent(null)}
           onVolunteersChanged={refreshLiveEvents}
+        />
+      )}
+      {showAddSubHead && (
+        <AddSubHeadModal
+          fests={fests}
+          authToken={authToken}
+          onClose={() => setShowAddSubHead(false)}
+          onAdded={(festId, newHead) => {
+            setFests(prev => prev.map(f => f.fest_id !== festId ? f : { ...f, sub_heads: [...(f.sub_heads || []), newHead] }));
+            setShowAddSubHead(false);
+          }}
+        />
+      )}
+      {showAddVol && (
+        <AddVolunteerModal
+          events={userSpecificContextEvents}
+          authToken={authToken}
+          onClose={() => setShowAddVol(false)}
+          onAdded={() => { refreshLiveEvents(); setShowAddVol(false); }}
         />
       )}
     </div>
