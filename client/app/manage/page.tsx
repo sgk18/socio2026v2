@@ -2382,8 +2382,8 @@ function ManageDashboard() {
           return (
             <div className="space-y-8 max-w-5xl">
 
-              {/* ── Sub-Organisers ── */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              {/* ── Sub-Organisers (only for organiser-owners, not sub-heads) ── */}
+              {!isStudentOrganiser && <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
                   <UserPlus className="w-4 h-4 text-[#154cb3] shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -2448,7 +2448,7 @@ function ManageDashboard() {
                     <PagerBar {...pagedSubHeads} onPrev={() => setSubHeadPage(p => p - 1)} onNext={() => setSubHeadPage(p => p + 1)} />
                   </>
                 )}
-              </div>
+              </div>}
 
               {/* ── Event Volunteers ── */}
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">

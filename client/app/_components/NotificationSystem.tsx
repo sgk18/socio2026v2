@@ -343,12 +343,13 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
 
   const formatRelativeTime = (dateString: string) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Supabase may return timestamps without a timezone suffix; treat them as UTC
+    const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(dateString) ? dateString : dateString + "Z";
+    const date = new Date(normalized);
     if (isNaN(date.getTime())) return "";
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (diffInSeconds < 0) return "Just now";
     if (diffInSeconds < 60) return "Just now";
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hr ago`;
