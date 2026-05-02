@@ -50,9 +50,12 @@ const EditPage = () => {
             }
           );
           if (!response.ok) {
-            const errData = await response.json();
+            const errData = await response.json().catch(() => null);
+            if (response.status === 404) {
+              throw new Error("Fest not found.");
+            }
             throw new Error(
-              errData.error || `Failed to fetch fest (${response.status})`
+              errData?.error || `Failed to fetch fest (${response.status})`
             );
           }
           const data = await response.json();
@@ -84,11 +87,11 @@ const EditPage = () => {
             setExistingBannerFileUrl(data.fest.banner_url || null);
             setExistingPdfFileUrl(data.fest.pdf_url || null);
           } else {
-            throw new Error("Fest data not found in response.");
+            throw new Error("Fest not found.");
           }
         } catch (e: any) {
           console.error("Error fetching fest data:", e);
-          setErrorMessage(`Error fetching fest: ${e.message}`);
+          setErrorMessage(e.message === "Fest not found." ? "Fest not found." : `Error fetching fest: ${e.message}`);
         } finally {
           setIsLoading(false);
         }
@@ -112,9 +115,7 @@ const EditPage = () => {
 
   if (!festData && festId && !isLoading) {
     return (
-      <div className="p-8 text-center">
-        Fest not found or there was an issue loading its data.
-      </div>
+      <div className="p-8 text-center">Fest not found.</div>
     );
   }
 

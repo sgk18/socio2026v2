@@ -88,6 +88,23 @@ const EVENT_STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }>
 const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 const MANUAL_UNARCHIVE_OVERRIDE = "system:manual_unarchive_override";
 
+const toDateTimeLocalInputValue = (value: string | null | undefined): string => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 16);
+};
+
+const getDefaultSubHeadExpiry = (fest?: Fest): string => {
+  if (fest?.closing_date) {
+    return toDateTimeLocalInputValue(fest.closing_date);
+  }
+
+  const oneMonthFromNow = new Date();
+  oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+  return toDateTimeLocalInputValue(oneMonthFromNow.toISOString());
+};
+
 const safeText = (value: unknown, fallback = ""): string => {
   if (value == null) return fallback;
   if (typeof value === "string") {
@@ -521,19 +538,34 @@ const AddSubHeadModal = ({
 }) => {
   const [selectedFestId, setSelectedFestId] = React.useState(fests[0]?.fest_id || "");
   const [email, setEmail] = React.useState("");
+  const [expiresAt, setExpiresAt] = React.useState(() => getDefaultSubHeadExpiry(fests[0]));
   const [isAdding, setIsAdding] = React.useState(false);
+
+  const selectedFest = fests.find((fest) => fest.fest_id === selectedFestId);
+
+  useEffect(() => {
+    setExpiresAt(getDefaultSubHeadExpiry(selectedFest));
+  }, [selectedFest]);
 
   const handleAdd = async () => {
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !selectedFestId) return;
+    if (!trimmed || !selectedFestId || !expiresAt) return;
     if (!authToken) { toast.error("Please sign in again."); return; }
+
+    const parsedExpiry = new Date(expiresAt);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      toast.error("Please choose a valid expiry date and time.");
+      return;
+    }
+
     setIsAdding(true);
     try {
       const fest = fests.find(f => f.fest_id === selectedFestId);
       if (!fest) throw new Error("Fest not found");
       const existing = fest.sub_heads || [];
       if (existing.some(sh => sh.email === trimmed)) throw new Error("This person already has access to this fest.");
-      const updated = [...existing, { email: trimmed, expiresAt: null }];
+      const expiryIso = parsedExpiry.toISOString();
+      const updated = [...existing, { email: trimmed, expiresAt: expiryIso }];
       const res = await fetch(`${API_URL}/api/fests/${encodeURIComponent(selectedFestId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
@@ -541,8 +573,9 @@ const AddSubHeadModal = ({
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Failed to add organiser"); }
       toast.success("Sub-organiser added.");
-      onAdded(selectedFestId, { email: trimmed, expiresAt: null });
+      onAdded(selectedFestId, { email: trimmed, expiresAt: expiryIso });
       setEmail("");
+      setExpiresAt(getDefaultSubHeadExpiry(fest));
     } catch (err: any) {
       toast.error(err?.message || "Unable to add sub-organiser.");
     } finally {
@@ -583,9 +616,22 @@ const AddSubHeadModal = ({
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3] disabled:opacity-50"
             />
           </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Access expiry</label>
+            <input
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              disabled={isAdding}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3] disabled:opacity-50"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">
+              Defaults to the fest closing date when available.
+            </p>
+          </div>
           <button
             type="button"
-            disabled={isAdding || !email.trim() || !selectedFestId}
+            disabled={isAdding || !email.trim() || !selectedFestId || !expiresAt}
             onClick={handleAdd}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#154CB3] text-white text-sm font-semibold rounded-lg hover:bg-[#0f3782] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >

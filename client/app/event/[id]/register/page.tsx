@@ -273,7 +273,7 @@ const Page = () => {
         setIsIndividualEvent(teamSize <= 1);
       } else {
         setSelectedEvent(null);
-        setEventPageError(`Event with ID "${eventId}" not found.`);
+        setEventPageError("Event not found.");
       }
       setEventLoading(false);
     }

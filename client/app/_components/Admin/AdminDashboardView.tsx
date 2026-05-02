@@ -113,6 +113,24 @@ const PRICING_COLOR_CLASSES = ["bg-[#154cb3]", "bg-[#e2e8f0]"];
 const ROLE_COLOR_CLASSES = ["bg-[#154cb3]", "bg-[#10b981]", "bg-[#f59e0b]", "bg-[#8b5cf6]"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function extractCreatorEmails(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.flatMap(extractCreatorEmails);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try { return extractCreatorEmails(JSON.parse(trimmed)); } catch { /* fall through */ }
+    }
+    return [trimmed.toLowerCase()];
+  }
+  if (typeof value === "object") {
+    const r = value as Record<string, unknown>;
+    return [...extractCreatorEmails(r.event_creator), ...extractCreatorEmails(r.fest_creator), ...extractCreatorEmails(r.email)];
+  }
+  return [];
+}
+
 function getDateCutoff(range: DateRange): Date {
   if (range === "all") return new Date(0); // Epoch
   const now = new Date();
@@ -261,7 +279,7 @@ export default function AdminDashboardView({
       
       const matchCampus = campusFilter === "all" || (() => {
         const campusUsers = new Set(users.filter((u) => u.campus === campusFilter).map((u) => u.email));
-        return campusUsers.has(e.created_by);
+        return extractCreatorEmails(e.created_by).some(email => campusUsers.has(email));
       })();
 
       const matchDept = deptFilter === "all" || e.organizing_dept === deptFilter;
@@ -375,7 +393,9 @@ export default function AdminDashboardView({
   // Top organisers
   const topOrganisers = useMemo(() => {
     const map: Record<string, number> = {};
-    events.forEach((e) => e.created_by && (map[e.created_by] = (map[e.created_by] || 0) + 1));
+    events.forEach((e) => extractCreatorEmails(e.created_by).forEach(email => {
+      map[email] = (map[email] || 0) + 1;
+    }));
     return Object.entries(map)
       .map(([email, count]) => ({ email, initials: email.slice(0, 2).toUpperCase(), count }))
       .sort((a, b) => b.count - a.count)
@@ -383,7 +403,7 @@ export default function AdminDashboardView({
   }, [events]);
 
   const organiserOptions = useMemo(() => {
-    return Array.from(new Set(events.map((e) => e.created_by).filter(Boolean))).sort();
+    return Array.from(new Set(events.flatMap((e) => extractCreatorEmails(e.created_by)))).sort();
   }, [events]);
 
   // Recent activity

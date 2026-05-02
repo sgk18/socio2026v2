@@ -358,7 +358,7 @@ export default function EditEventPage() {
           setExistingBannerFileUrl(data.banner_url || null);
           setExistingPdfFileUrl(data.pdf_url || null);
         } else {
-          setErrorMessage("Event data not found in API response.");
+          setErrorMessage("Event not found.");
           setInitialData(undefined);
         }
       } catch (e: any) {
@@ -375,7 +375,11 @@ export default function EditEventPage() {
         } else if (response && !response.ok) {
           detailedMessage = `An error occurred (Status: ${response.status}): ${e.message}`;
         }
-        setErrorMessage(`Failed to load event data: ${detailedMessage}`);
+        if (response?.status === 404 || /not found/i.test(String(e?.message || ""))) {
+          setErrorMessage("Event not found.");
+        } else {
+          setErrorMessage(`Failed to load event data: ${detailedMessage}`);
+        }
         setInitialData(undefined);
       } finally {
         setIsLoading(false);
@@ -866,7 +870,7 @@ export default function EditEventPage() {
   if (!initialData && !isLoading && !errorMessage && session && userData) {
     return (
       <div className="p-8 text-center">
-        <p className="text-lg">Event not found or could not be loaded.</p>
+        <p className="text-lg">Event not found.</p>
         <button
           onClick={() => router.push("/manage")}
           className="mt-6 px-4 py-2 bg-[#154CB3] text-white rounded hover:bg-[#154cb3df]"

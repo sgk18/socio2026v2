@@ -245,6 +245,41 @@ const getOrganiserTagText = (meta: OrganiserTagMeta) => {
   return meta.value;
 };
 
+const extractCreatorEmails = (value: unknown): string[] => {
+  if (value == null) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractCreatorEmails(entry));
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try {
+        return extractCreatorEmails(JSON.parse(trimmed));
+      } catch {
+        // fall back to plain string handling
+      }
+    }
+
+    return [trimmed.toLowerCase()];
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return [
+      ...extractCreatorEmails(record.event_creator),
+      ...extractCreatorEmails(record.fest_creator),
+      ...extractCreatorEmails(record.created_by),
+      ...extractCreatorEmails(record.email),
+    ];
+  }
+
+  return [];
+};
+
 export default function OrganiserHistoryModal({
   isOpen,
   organiserIdentifier,
@@ -285,19 +320,28 @@ export default function OrganiserHistoryModal({
     async (identifier: string) => {
       await applyAuthenticatedSession();
 
+      const normalizedIdentifier = identifier.trim().toLowerCase();
+      if (!normalizedIdentifier) {
+        return [] as OrganiserEvent[];
+      }
+
       const { data, error: fetchError } = await supabase
         .from("events")
         .select(
           "event_id, title, event_date, event_time, venue, category, registration_fee, registration_deadline, fest_id, fest, organizing_dept, created_by, created_at"
         )
-        .eq("created_by", identifier)
         .order("created_at", { ascending: false });
 
       if (fetchError) {
         throw fetchError;
       }
 
-      return (data ?? []) as OrganiserEvent[];
+      const filtered = (data ?? []).filter((event: any) => {
+        const creators = extractCreatorEmails(event?.created_by);
+        return creators.includes(normalizedIdentifier);
+      });
+
+      return filtered as OrganiserEvent[];
     },
     [applyAuthenticatedSession, supabase]
   );

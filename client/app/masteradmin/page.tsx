@@ -1281,7 +1281,7 @@ function MasterAdminPageInner() {
       if (!res.ok) return;
       const data = await res.json();
       const all: User[] = data.users || data || [];
-      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls));
+      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls || u.is_venue_manager));
     } catch { /* non-critical */ }
     finally { setRoleHoldersLoading(false); }
   };
@@ -1294,6 +1294,7 @@ function MasterAdminPageInner() {
         organiser: "is_organiser", support: "is_support", masteradmin: "is_masteradmin",
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
         director: "is_campus_director", accounts: "is_accounts_office", it_support: "is_it_support", stalls: "is_stalls",
+        venue_manager: "is_venue_manager",
       };
       const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(user.email)}/roles`, {
         method: "PUT",
@@ -1306,7 +1307,7 @@ function MasterAdminPageInner() {
         if (u.email !== user.email) return u;
         const updated = { ...u, [fieldMap[roleKey]]: false };
         return updated;
-      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls));
+      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls || u.is_venue_manager));
       toast.success("Role removed");
     } catch { toast.error("Failed to remove role"); }
     finally { setRoleRemoving(null); }
@@ -4117,7 +4118,9 @@ function MasterAdminPageInner() {
                           cfo:         "bg-amber-100 text-amber-700",
                           director:    "bg-cyan-100 text-cyan-700",
                           accounts:    "bg-green-100 text-green-700",
+                          it_support:  "bg-sky-100 text-sky-700",
                           stalls:      "bg-orange-100 text-orange-700",
+                          venue_manager: "bg-violet-100 text-violet-700",
                         };
                         return filteredRows.map(({ user, roles }, i) => (
                           <tr key={user.email} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}>
