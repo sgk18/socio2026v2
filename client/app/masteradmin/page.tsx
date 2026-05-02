@@ -295,6 +295,8 @@ function MasterAdminPageInner() {
   const [selectedEventForBookings, setSelectedEventForBookings] = useState<Event | null>(null);
   const [eventBookings, setEventBookings] = useState<Registration[]>([]);
   const [eventBookingsLoading, setEventBookingsLoading] = useState(false);
+  const eventBookingsPanelRef = useRef<HTMLDivElement>(null);
+  const [eventBookingsHighlight, setEventBookingsHighlight] = useState(false);
   const [eventPage, setEventPage] = useState(1);
   const [eventStatusFilter, setEventStatusFilter] = useState<"all" | "live" | "upcoming" | "thisweek" | "past">("all");
   const [eventSortKey, setEventSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
@@ -857,6 +859,11 @@ function MasterAdminPageInner() {
 
     setSelectedEventForBookings(event);
     setEventBookingsLoading(true);
+    setTimeout(() => {
+      eventBookingsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setEventBookingsHighlight(true);
+      setTimeout(() => setEventBookingsHighlight(false), 1400);
+    }, 0);
     try {
       const token = await getFreshToken();
       const headers: Record<string, string> = token
@@ -2516,7 +2523,14 @@ function MasterAdminPageInner() {
                     </table>
                   </div>
                   {selectedEventForBookings && (
-                    <div className="border-t border-gray-200 p-6 bg-gray-50">
+                    <div
+                      ref={eventBookingsPanelRef}
+                      className={`border-t p-6 transition-all duration-300 ${
+                        eventBookingsHighlight
+                          ? "border-2 border-[#154CB3] bg-blue-50 ring-4 ring-blue-100"
+                          : "border-gray-200 bg-gray-50"
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-4 mb-4">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900">
