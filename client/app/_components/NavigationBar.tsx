@@ -5,6 +5,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import Logo from "@/app/logo.svg";
 import { useAuth } from "@/context/AuthContext";
+import supabase from "@/lib/supabaseClient";
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
@@ -71,7 +72,7 @@ type RoleAction = {
   key: string;
   label: string;
   href: string;
-  variant: "admin" | "cfo" | "dean" | "hod" | "accounts" | "organiser" | "student_organiser" | "venue" | "support" | "catering" | "stalls" | "it";
+  variant: "admin" | "cfo" | "dean" | "hod" | "accounts" | "organiser" | "student_organiser" | "venue" | "support" | "catering" | "stalls" | "it" | "clubs";
 };
 
 function NavigationBar() {
@@ -92,6 +93,7 @@ function NavigationBar() {
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
   const [expandedDesktopSection, setExpandedDesktopSection] = useState<string | null>(null);
   const [expandedDesktopSubSection, setExpandedDesktopSubSection] = useState<string | null>(null);
+  const [clubEditorDashboardHref, setClubEditorDashboardHref] = useState<string | null>(null);
   const navContainerRef = useRef<HTMLElement | null>(null);
   const logoRef = useRef<HTMLDivElement | null>(null);
   const rightControlsRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +125,53 @@ function NavigationBar() {
   })();
   const isCaterer = catersList.some((c: any) => c?.is_catering);
 
+  useEffect(() => {
+    let isMounted = true;
+    const email = String(userData?.email || "").trim().toLowerCase();
+
+    if (!email) {
+      setClubEditorDashboardHref(null);
+      return;
+    }
+
+    const resolveClubEditorDashboard = async () => {
+      const { data, error } = await supabase
+        .from("clubs")
+        .select("club_id, club_name, club_editors")
+        .order("club_name", { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Failed to resolve club editor dashboard:", error.message);
+        setClubEditorDashboardHref(null);
+        return;
+      }
+
+      const clubs = Array.isArray(data) ? data : [];
+      const matchedClub = clubs.find((club) => {
+        const editors = Array.isArray((club as any)?.club_editors)
+          ? ((club as any).club_editors as unknown[])
+          : [];
+        return editors.some(
+          (editor) => String(editor || "").trim().toLowerCase() === email
+        );
+      });
+
+      setClubEditorDashboardHref(
+        matchedClub?.club_id
+          ? `/clubeditor/${encodeURIComponent(String(matchedClub.club_id))}`
+          : null
+      );
+    };
+
+    void resolveClubEditorDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userData?.email]);
+
   const isNavLinkActive = (href: string) => {
     if (href === "/") {
       return pathname === "/";
@@ -144,6 +193,7 @@ function NavigationBar() {
   if (isCaterer) roleActions.push({ key: "catering", label: "Catering", href: "/catering", variant: "catering" });
   if (isStalls) roleActions.push({ key: "stalls", label: "Stalls", href: "/stalls", variant: "stalls" });
   if (isItSupport) roleActions.push({ key: "it", label: "IT", href: "/it", variant: "it" });
+  if (clubEditorDashboardHref) roleActions.push({ key: "clubs", label: "Clubs", href: clubEditorDashboardHref, variant: "clubs" });
 
   const visibleRoleActions = roleActions.length > 2 ? roleActions.slice(0, 1) : roleActions;
   const dashboardDropdownRoles = roleActions.length > 2 ? roleActions.slice(1) : [];
@@ -163,6 +213,7 @@ function NavigationBar() {
     catering:  "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
     stalls:    "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
     it:        "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    clubs:     "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
   };
 
   const roleQuickActionMap: Record<RoleAction["variant"], string> = {
@@ -178,6 +229,7 @@ function NavigationBar() {
     catering:  "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
     stalls:    "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
     it:        "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    clubs:     "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
   };
 
   const getRolePillClasses = (variant: RoleAction["variant"]) => rolePillMap[variant];

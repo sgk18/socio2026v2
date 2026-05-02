@@ -42,6 +42,7 @@ import cateringRoutes from "./routes/cateringRoutes.js";
 import stallBookingRoutes from "./routes/stallBookingRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
+import clubRoutes from "./routes/clubRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -193,6 +194,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/hod-analytics", hodAnalyticsRoutes);
 app.use("/api/dean-analytics", deanAnalyticsRoutes);
 app.use("/api/volunteer", volunteerRoutes);
+app.use("/api/clubs", clubRoutes);
 
 // Sentry error handler - must be before other error handlers
 try {

@@ -1,12 +1,59 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import supabase from "@/lib/supabaseClient";
 import { ClubRecord } from "@/app/actions/clubs";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/app/_components/Home/Footer";
+import { getClubBannerCandidates } from "@/app/lib/clubBannerUrl";
+import { toClubCategories } from "@/app/lib/clubCategory";
+import toast from "react-hot-toast";
+
+const normalizeRoleOptions = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const options: string[] = [];
+
+  for (const item of value) {
+    const role = String(item ?? "").trim();
+    if (!role) continue;
+    const key = role.toLowerCase();
+    if (key === "member" || seen.has(key)) continue;
+    seen.add(key);
+    options.push(role);
+  }
+
+  return options;
+};
+
+const readApiBodySafely = async (response: Response): Promise<any> => {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+};
+
+const parseClubApplicants = (value: unknown): Array<{ regno?: string; email?: string }> => {
+  const parsed =
+    typeof value === "string"
+      ? (() => {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return [];
+          }
+        })()
+      : value;
+
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === "object") return [parsed];
+  return [];
+};
 
 const ClubDetailsPage = () => {
   const params = useParams();
@@ -15,9 +62,19 @@ const ClubDetailsPage = () => {
 
   const [club, setClub] = useState<ClubRecord | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [applicantRegisterNumber, setApplicantRegisterNumber] = useState("");
+  const [applicantName, setApplicantName] = useState("");
+  const [applicantEmail, setApplicantEmail] = useState("");
+  const [currentUserRegisterNumber, setCurrentUserRegisterNumber] = useState("");
+  const [selectedRole, setSelectedRole] = useState("");
+  const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
+  const currentEmail = String(userData?.email || session?.user?.email || "")
+    .trim()
+    .toLowerCase();
 
   useEffect(() => {
     let isMounted = true;
@@ -62,6 +119,46 @@ const ClubDetailsPage = () => {
     };
   }, [id]);
 
+  useEffect(() => {
+    setImageError(false);
+    setImageCandidateIndex(0);
+  }, [club?.club_banner_url]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fallbackRegisterNumber = String(userData?.register_number ?? "").trim();
+    if (fallbackRegisterNumber) {
+      setCurrentUserRegisterNumber(fallbackRegisterNumber);
+    }
+
+    const hydrateUserRegisterNumber = async () => {
+      if (!currentEmail) {
+        if (isMounted) setCurrentUserRegisterNumber("");
+        return;
+      }
+
+      const { data, error: userError } = await supabase
+        .from("users")
+        .select("register_number")
+        .eq("email", currentEmail)
+        .maybeSingle();
+
+      if (!isMounted || userError) return;
+
+      const nextRegisterNumber = String(
+        data?.register_number ?? fallbackRegisterNumber ?? ""
+      ).trim();
+      setCurrentUserRegisterNumber(nextRegisterNumber);
+    };
+
+    void hydrateUserRegisterNumber();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentEmail, userData?.register_number]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -95,29 +192,196 @@ const ClubDetailsPage = () => {
   const description = club.club_description || "";
   const bannerUrl = club.club_banner_url || "";
   const website = club.club_web_link || "";
-  const category = club.category || "Uncategorized";
-  const currentEmail = String(userData?.email || session?.user?.email || "")
-    .trim()
-    .toLowerCase();
+  const categories = toClubCategories(club.category);
+  const category = categories[0] || "Uncategorized";
+  const bannerCandidates = getClubBannerCandidates(bannerUrl);
+  const activeBannerUrl = bannerCandidates[imageCandidateIndex] ?? bannerUrl;
   const editors = Array.isArray(club.club_editors) ? club.club_editors : [];
   const canEditClub =
     Boolean(userData?.is_masteradmin) ||
     editors.some((editor) => String(editor || "").trim().toLowerCase() === currentEmail);
+  const availableRoles = normalizeRoleOptions(club.club_roles_available);
+  const clubApplicants = parseClubApplicants(
+    club.clubs_applicants ?? club.clubs_applicant
+  );
+  const normalizedCurrentRegisterNumber = currentUserRegisterNumber.trim().toUpperCase();
+  const isAlreadyApplicant =
+    Boolean(currentEmail) &&
+    clubApplicants.some((entry) => {
+      const applicantEmail = String(entry?.email ?? "").trim().toLowerCase();
+      const applicantRegno = String(entry?.regno ?? "").trim().toUpperCase();
+      if (applicantEmail && applicantEmail === currentEmail) return true;
+      if (normalizedCurrentRegisterNumber && applicantRegno === normalizedCurrentRegisterNumber) {
+        return true;
+      }
+      return false;
+    });
 
-  const handleJoinClick = () => {
-    setJoinMessage(club.club_registrations ? "Coming soon" : "Registrations closed");
+  const handleJoinClick = async () => {
+    if (isAlreadyApplicant) {
+      toast.error("You are already an applicant.", { duration: 3000 });
+      return;
+    }
+
+    if (!club.club_registrations) {
+      toast.error("Registrations are currently closed.", { duration: 3000 });
+      return;
+    }
+
+    if (!currentEmail) {
+      toast.error("Please log in to apply.", { duration: 3000 });
+      return;
+    }
+
+    if (availableRoles.length === 0) {
+      toast.error("No roles are currently available for this club.", { duration: 3000 });
+      return;
+    }
+
+    const { data: latestUser, error: latestUserError } = await supabase
+      .from("users")
+      .select("name,email,register_number")
+      .eq("email", currentEmail)
+      .maybeSingle();
+
+    if (latestUserError) {
+      toast.error("Could not verify your profile right now.", { duration: 3000 });
+      return;
+    }
+
+    const registerNumber = String(
+      latestUser?.register_number ?? userData?.register_number ?? ""
+    ).trim();
+
+    if (!registerNumber) {
+      toast.error("Register number is missing from your profile.", { duration: 3000 });
+      return;
+    }
+
+    if (registerNumber.toUpperCase().startsWith("VIS")) {
+      toast.error("Please login through your university email to apply.", { duration: 3000 });
+      return;
+    }
+
+    setCurrentUserRegisterNumber(registerNumber);
+    setApplicantRegisterNumber(registerNumber);
+    setApplicantName(
+      String(
+        latestUser?.name ??
+          userData?.name ??
+          session?.user?.user_metadata?.full_name ??
+          session?.user?.user_metadata?.name ??
+          ""
+      ).trim()
+    );
+    setApplicantEmail(String(latestUser?.email ?? currentEmail).trim().toLowerCase());
+    setSelectedRole("");
+    setIsApplyModalOpen(true);
+  };
+
+  const handleApplySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selectedRole) {
+      toast.error("Please select a role to apply.", { duration: 3000 });
+      return;
+    }
+
+    if (!availableRoles.some((role) => role.toLowerCase() === selectedRole.toLowerCase())) {
+      toast.error("Please choose a valid role.", { duration: 3000 });
+      return;
+    }
+
+    if (!session?.access_token) {
+      toast.error("Please log in again and retry.", { duration: 3000 });
+      return;
+    }
+
+    setIsSubmittingApplication(true);
+
+    try {
+      const response = await fetch(
+        `/api/clubs/${encodeURIComponent(club.club_id)}/apply`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ role: selectedRole }),
+        }
+      );
+
+      const body = await readApiBodySafely(response);
+      if (!response.ok) {
+        toast.error(body?.error || body?.message || "Failed to submit application.", {
+          duration: 3000,
+        });
+        return;
+      }
+
+      const appliedRole =
+        availableRoles.find((role) => role.toLowerCase() === selectedRole.toLowerCase()) ||
+        selectedRole;
+      const nextApplicant = {
+        regno: applicantRegisterNumber,
+        name: applicantName,
+        email: applicantEmail,
+        role_applied_for: appliedRole,
+        applied_at:
+          typeof body?.applicant?.applied_at === "string"
+            ? body.applicant.applied_at
+            : new Date().toISOString(),
+      };
+      setClub((prev) => {
+        if (!prev) return prev;
+        const existingApplicants = Array.isArray(prev.clubs_applicants)
+          ? prev.clubs_applicants
+          : Array.isArray(prev.clubs_applicant)
+          ? prev.clubs_applicant
+          : [];
+        const alreadyExists = existingApplicants.some((entry) => {
+          const regno = String(entry?.regno ?? "").trim().toUpperCase();
+          const email = String(entry?.email ?? "").trim().toLowerCase();
+          return (
+            regno === String(nextApplicant.regno).trim().toUpperCase() ||
+            (email && email === String(nextApplicant.email).trim().toLowerCase())
+          );
+        });
+        if (alreadyExists) return prev;
+        return {
+          ...prev,
+          clubs_applicants: [...existingApplicants, nextApplicant],
+          clubs_applicant: [...existingApplicants, nextApplicant],
+        };
+      });
+
+      toast.success("Application submitted successfully.");
+      setIsApplyModalOpen(false);
+    } catch {
+      toast.error("Failed to submit application. Please try again.", { duration: 3000 });
+    } finally {
+      setIsSubmittingApplication(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-white">
       <section className="relative h-[260px] w-full overflow-hidden sm:h-[320px]">
         <div className="absolute inset-0">
-          {bannerUrl && !imageError ? (
+          {activeBannerUrl && !imageError ? (
             <img
-              src={bannerUrl}
+              src={activeBannerUrl}
               alt={name}
-              className="h-full w-full object-cover"
-              onError={() => setImageError(true)}
+              className="h-full w-full object-cover object-center"
+              referrerPolicy="no-referrer"
+              onError={() => {
+                if (imageCandidateIndex < bannerCandidates.length - 1) {
+                  setImageCandidateIndex((prev) => prev + 1);
+                  return;
+                }
+                setImageError(true);
+              }}
             />
           ) : (
             <div className="h-full w-full bg-gradient-to-b from-[#9ea2a8] to-[#46484d]" />
@@ -184,37 +448,124 @@ const ClubDetailsPage = () => {
                 </a>
               ) : null}
 
-              <Link
-                href="/clubs"
-                className="block w-full rounded-[10px] border-2 border-[#2253b5] px-4 py-3 text-center text-[17px] font-medium text-[#2253b5] transition-colors duration-200 hover:bg-[#e9effb]"
-              >
-                Browse all centres
-              </Link>
-
               <button
                 type="button"
                 onClick={handleJoinClick}
-                className="block w-full rounded-[10px] border-2 border-[#133f86] px-4 py-3 text-center text-[17px] font-medium text-[#133f86] transition-colors duration-200 hover:bg-[#edf2fb]"
+                className={`block w-full rounded-[10px] border-2 px-4 py-3 text-center text-[17px] font-medium transition-colors duration-200 ${
+                  isAlreadyApplicant
+                    ? "border-[#16a34a] text-[#16a34a] hover:bg-[#ecfdf3]"
+                    : "border-[#133f86] text-[#133f86] hover:bg-[#edf2fb]"
+                }`}
               >
-                Join {name}
+                {isAlreadyApplicant ? "Applied" : `Join ${name}`}
               </button>
             </div>
 
-            {joinMessage ? (
-              <p className="mt-3 rounded-md border border-[#d7e3f9] bg-white px-3 py-2 text-sm text-[#133f86]">
-                {joinMessage}
-              </p>
-            ) : null}
           </div>
 
           <div className="rounded-xl bg-[#f3f6fc] p-6">
             <h3 className="text-3xl font-bold text-[#1f57c3]">Category</h3>
-            <span className="mt-4 inline-flex rounded-full border border-[#2253b5] px-4 py-2 text-base font-medium text-[#2253b5]">
-              {category}
-            </span>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(categories.length > 0 ? categories : [category]).map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex rounded-full border border-[#2253b5] px-4 py-2 text-base font-medium text-[#2253b5]"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
         </aside>
       </main>
+
+      {isApplyModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => {
+            if (!isSubmittingApplication) {
+              setIsApplyModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#d7e3f9] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-[#e3ebfa] px-6 py-4">
+              <h3 className="text-xl font-bold text-[#063168]">Application form</h3>
+              <p className="mt-1 text-sm text-[#4f6482]">{`Apply to ${name}`}</p>
+            </div>
+
+            <form onSubmit={handleApplySubmit} className="space-y-4 px-6 py-5">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#4f6482]">
+                  Register number
+                </label>
+                <input
+                  value={applicantRegisterNumber}
+                  disabled
+                  readOnly
+                  className="h-11 w-full rounded-xl border border-[#c6d5ee] bg-[#f3f6fc] px-3 text-sm font-semibold text-[#123a7a] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="club-role-select"
+                  className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#4f6482]"
+                >
+                  Role
+                </label>
+                <select
+                  id="club-role-select"
+                  value={selectedRole}
+                  onChange={(event) => setSelectedRole(event.target.value)}
+                  required
+                  className="h-11 w-full rounded-xl border border-[#c6d5ee] bg-white px-3 text-sm font-medium text-[#123a7a] focus:outline-none focus:ring-2 focus:ring-[#154CB3]"
+                >
+                  <option value="">Select role</option>
+                  {availableRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="rounded-xl border border-[#e3ebfa] bg-[#f8fbff] px-3 py-2 text-xs text-[#4f6482]">
+                <p>
+                  <span className="font-semibold text-[#063168]">Name:</span>{" "}
+                  {applicantName || "Not available"}
+                </p>
+                <p className="mt-1 break-all">
+                  <span className="font-semibold text-[#063168]">Email:</span>{" "}
+                  {applicantEmail || "Not available"}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsApplyModalOpen(false)}
+                  disabled={isSubmittingApplication}
+                  className="rounded-lg border border-[#b8c8e6] px-4 py-2 text-sm font-semibold text-[#33507f] transition-colors hover:bg-[#eef3fd] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingApplication}
+                  className="rounded-lg bg-[#154CB3] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0f3f95] disabled:cursor-not-allowed disabled:bg-[#8aa8de]"
+                >
+                  {isSubmittingApplication ? "Submitting..." : "Submit"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <Footer />
     </div>
   );

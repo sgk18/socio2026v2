@@ -87,6 +87,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/bookvenue") ||
     pathname.startsWith("/bookcatering") ||
     pathname.startsWith("/bookstall");
+  const isClubEditorDashboardRoute = pathname.startsWith("/clubeditor/");
 
   const isHodRoute         = pathname.startsWith("/hod");
   const isDeanRoute        = pathname.startsWith("/dean");
@@ -99,7 +100,7 @@ export async function middleware(req: NextRequest) {
   const isMasterAdminRoute = pathname.startsWith("/masteradmin");
   const isVolunteerRoute   = pathname.startsWith("/volunteer");
 
-  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute || isStallsRoute || isMasterAdminRoute || isVolunteerRoute)) {
+  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute || isStallsRoute || isMasterAdminRoute || isVolunteerRoute || isClubEditorDashboardRoute)) {
     if (!user.email) {
       return redirect("/error");
     }
@@ -114,14 +115,12 @@ export async function middleware(req: NextRequest) {
       return redirect("/error");
     }
 
-    if (pathname.startsWith("/edit/clubs/")) {
-      if (Boolean(userData.is_masteradmin)) {
-        return res;
-      }
-
-      const requestedId = decodeURIComponent(pathname.split("/")[3] || "").trim();
+    const canAccessClubEditorRoute = async (
+      requestedId: string,
+      allowMasterAdminBypass: boolean
+    ) => {
       if (!requestedId) {
-        return redirect("/error");
+        return false;
       }
 
       const byId = await supabase
@@ -138,7 +137,7 @@ export async function middleware(req: NextRequest) {
             .maybeSingle();
 
       if (resolvedClub.error || !resolvedClub.data) {
-        return redirect("/error");
+        return false;
       }
 
       const editors = Array.isArray((resolvedClub.data as any).club_editors)
@@ -148,7 +147,30 @@ export async function middleware(req: NextRequest) {
         (editor) => String(editor || "").trim().toLowerCase() === user.email!.toLowerCase()
       );
 
-      if (!isClubEditor) {
+      if (isClubEditor) {
+        return true;
+      }
+
+      if (allowMasterAdminBypass && Boolean(userData.is_masteradmin)) {
+        return true;
+      }
+
+      return false;
+    };
+
+    if (pathname.startsWith("/edit/clubs/")) {
+      const requestedId = decodeURIComponent(pathname.split("/")[3] || "").trim();
+      const hasAccess = await canAccessClubEditorRoute(requestedId, true);
+      if (!hasAccess) {
+        return redirect("/error");
+      }
+      return res;
+    }
+
+    if (isClubEditorDashboardRoute) {
+      const requestedId = decodeURIComponent(pathname.split("/")[2] || "").trim();
+      const hasAccess = await canAccessClubEditorRoute(requestedId, false);
+      if (!hasAccess) {
         return redirect("/error");
       }
       return res;
