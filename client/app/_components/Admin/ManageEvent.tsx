@@ -3379,7 +3379,7 @@ export default function EventForm({
                           </svg>
                         </button>
                         {isActionsDropdownOpen && (
-                          <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                          <div className="absolute right-0 mt-1 w-48 max-h-[50vh] overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 z-10">
                             {onToggleArchive && !isDraft && (
                               <button
                                 type="button"

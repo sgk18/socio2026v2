@@ -535,7 +535,7 @@ const AddSubHeadModal = ({
       if (existing.some(sh => sh.email === trimmed)) throw new Error("This person already has access to this fest.");
       const updated = [...existing, { email: trimmed, expiresAt: null }];
       const res = await fetch(`${API_URL}/api/fests/${encodeURIComponent(selectedFestId)}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({ sub_heads: updated }),
       });
@@ -1920,7 +1920,7 @@ function ManageDashboard() {
       if (!fest) throw new Error("Fest not found");
       const updatedSubHeads = (fest.sub_heads || []).filter(sh => sh.email !== email);
       const res = await fetch(`${API_URL}/api/fests/${encodeURIComponent(festId)}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({ sub_heads: updatedSubHeads }),
       });
