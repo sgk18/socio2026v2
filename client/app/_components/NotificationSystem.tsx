@@ -1,17 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, memo, useCallback } from "react";
+import React, { useState, useEffect, memo, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
+import supabase from "@/lib/supabaseClient";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 
 // ─── LOCAL STORAGE + COOKIES HELPERS ───────────────────────────────────────
-// Store read notifications locally so they persist across refreshes
 
 const STORAGE_KEY = "socio_read_notifications";
-const DISMISSED_KEY = "socio_dismissed_notifications"; // Track dismissed/cleared notifications
+const DISMISSED_KEY = "socio_dismissed_notifications";
 
-// Get all read notification IDs from localStorage
 const getReadNotificationsFromStorage = (): Set<string> => {
   if (typeof window === "undefined") return new Set();
   try {
@@ -22,7 +21,6 @@ const getReadNotificationsFromStorage = (): Set<string> => {
   }
 };
 
-// Get all dismissed notification IDs from localStorage
 const getDismissedNotificationsFromStorage = (): Set<string> => {
   if (typeof window === "undefined") return new Set();
   try {
@@ -33,23 +31,18 @@ const getDismissedNotificationsFromStorage = (): Set<string> => {
   }
 };
 
-// Save read notification ID to localStorage
-const addReadNotification = (notificationId: string, email?: string): void => {
+const addReadNotification = (notificationId: string): void => {
   if (typeof window === "undefined") return;
-  
   try {
     const readIds = getReadNotificationsFromStorage();
     readIds.add(notificationId);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(readIds)));
-    
-    // Also set cookie as backup (30 day expiry)
     document.cookie = `notif_${notificationId}=read; max-age=2592000; path=/`;
   } catch (error) {
     console.error("Error saving to localStorage:", error);
   }
 };
 
-// Add notification ID to dismissed list (for clear all)
 const addDismissedNotification = (notificationId: string): void => {
   if (typeof window === "undefined") return;
   try {
@@ -61,16 +54,6 @@ const addDismissedNotification = (notificationId: string): void => {
   }
 };
 
-// Mark all as read locally
-const markAllReadLocally = (): void => {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([])); // Will be rebuilt below
-  } catch (error) {
-    console.error("Error marking all as read:", error);
-  }
-};
-
 export interface Notification {
   id: string;
   title: string;
@@ -78,21 +61,36 @@ export interface Notification {
   type: "info" | "success" | "warning" | "error" | "feedback_form";
   eventId?: string;
   eventTitle?: string;
-  read: boolean; // Changed from isRead to read to match backend
+  read: boolean;
   createdAt: string;
   actionUrl?: string;
+  isBroadcast?: boolean;
 }
 
 interface NotificationSystemProps {
   className?: string;
 }
 
-// OPTIMIZATION: Memoize NotificationSystem to prevent unnecessary re-renders
-const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({ 
-  className = "" 
+// Map a raw Supabase INSERT payload to the Notification shape used by the UI
+function mapRawToNotification(raw: Record<string, unknown>): Notification {
+  return {
+    id: raw.id as string,
+    title: raw.title as string,
+    message: raw.message as string,
+    type: (raw.type as Notification["type"]) || "info",
+    eventId: (raw.event_id as string) || undefined,
+    eventTitle: (raw.event_title as string) || undefined,
+    read: false,
+    createdAt: raw.created_at as string,
+    actionUrl: (raw.action_url as string) || undefined,
+    isBroadcast: (raw.is_broadcast as boolean) || false,
+  };
+}
+
+const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
+  className = "",
 }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -100,210 +98,199 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const { userData, session } = useAuth();
 
-  // OPTIMIZATION: Memoize fetchNotifications with useCallback
-  const fetchNotifications = useCallback(async (page = 1, append = false) => {
-    if (!session?.access_token || !userData?.email) return;
+  // Derived — no separate state needed
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
 
-    setLoading(true);
-    try {
-      const email = userData.email;
-      const response = await fetch(
-        `${API_URL}/api/notifications?email=${encodeURIComponent(email)}&page=${page}&limit=20`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
+  const fetchNotifications = useCallback(
+    async (page = 1, append = false) => {
+      if (!session?.access_token || !userData?.email) return;
 
-      if (response.ok) {
-        const data = await response.json();
-        const newNotifications = data.notifications || [];
-        
-        // ─── APPLY LOCALSTORAGE FILTERING ───
-        // Filter out dismissed notifications and mark read ones
-        const readIds = getReadNotificationsFromStorage();
-        const dismissedIds = getDismissedNotificationsFromStorage();
-        
-        const filteredNotifications = newNotifications
-          .filter((n: Notification) => !dismissedIds.has(n.id)) // Remove dismissed
-          .map((n: Notification) => ({
-            ...n,
-            read: n.read || readIds.has(n.id) // Mark as read if in localStorage
-          }));
-        
-        if (append) {
-          setNotifications(prev => [...prev, ...filteredNotifications]);
-        } else {
-          setNotifications(filteredNotifications);
+      setLoading(true);
+      try {
+        const email = userData.email;
+        const response = await fetch(
+          `${API_URL}/api/notifications?email=${encodeURIComponent(email)}&page=${page}&limit=20`,
+          { headers: { Authorization: `Bearer ${session.access_token}` } }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const incoming = (data.notifications || []) as Notification[];
+
+          const readIds = getReadNotificationsFromStorage();
+          const dismissedIds = getDismissedNotificationsFromStorage();
+
+          const filtered = incoming
+            .filter((n) => !dismissedIds.has(n.id))
+            .map((n) => ({ ...n, read: n.read || readIds.has(n.id) }));
+
+          if (append) {
+            setNotifications((prev) => {
+              const existingIds = new Set(prev.map((n) => n.id));
+              return [...prev, ...filtered.filter((n) => !existingIds.has(n.id))];
+            });
+          } else {
+            setNotifications(filtered);
+          }
+
+          setHasMore(data.pagination?.hasMore || false);
+          setTotalPages(data.pagination?.totalPages || 1);
+          setCurrentPage(page);
         }
-        
-        // Calculate unread count from filtered list
-        const unreadFromFiltered = filteredNotifications.filter((n: Notification) => !n.read).length;
-        setUnreadCount(unreadFromFiltered);
-        
-        setHasMore(data.pagination?.hasMore || false);
-        setTotalPages(data.pagination?.totalPages || 1);
-        setCurrentPage(page);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [session?.access_token, userData?.email]);
+    },
+    [session?.access_token, userData?.email]
+  );
 
   const loadMore = useCallback(() => {
-    if (!loading && hasMore) {
-      fetchNotifications(currentPage + 1, true);
-    }
+    if (!loading && hasMore) fetchNotifications(currentPage + 1, true);
   }, [loading, hasMore, currentPage, fetchNotifications]);
 
+  // ─── REALTIME SUBSCRIPTION (replaces 30-second polling) ──────────────────
+  // Requires Realtime enabled on the `notifications` table in Supabase Dashboard.
   useEffect(() => {
-    if (userData?.email) {
-      fetchNotifications();
-      // Set up polling for new notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
-    }
+    if (!userData?.email) return;
+
+    fetchNotifications();
+
+    const email = userData.email;
+
+    // Handler shared by both individual and broadcast insert events
+    const handleInsert = (payload: { new: Record<string, unknown> }) => {
+      const newNotif = mapRawToNotification(payload.new);
+      const dismissedIds = getDismissedNotificationsFromStorage();
+      if (dismissedIds.has(newNotif.id)) return;
+
+      setNotifications((prev) => {
+        // Deduplicate in case the initial fetch and realtime fire close together
+        if (prev.some((n) => n.id === newNotif.id)) return prev;
+        return [newNotif, ...prev];
+      });
+    };
+
+    const channel = supabase
+      .channel(`notifications:${email}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_email=eq.${email}`,
+        },
+        handleInsert
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: "is_broadcast=eq.true",
+        },
+        handleInsert
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userData?.email, fetchNotifications]);
 
-  // OPTIMIZATION: Memoize markAsRead with useCallback
-  const markAsRead = useCallback((notificationId: string) => {
-    // ─── SAVE TO LOCAL STORAGE IMMEDIATELY ───
-    // No need to wait for backend, mark locally first
-    addReadNotification(notificationId, userData?.email);
-    
-    // Update UI immediately (instant feedback)
-    setNotifications(prev =>
-      prev.map(n =>
-        n.id === notificationId ? { ...n, read: true } : n
-      )
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
-    
-    // Also sync to backend (non-blocking, optional)
-    if (session?.access_token && userData?.email) {
-      fetch(
-        `${API_URL}/api/notifications/${notificationId}/read`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ email: userData.email })
-        }
-      ).catch(err => console.error("Backend sync failed:", err));
-    }
-  }, [session?.access_token, userData?.email]);
+  // ─── READ / DISMISS ACTIONS (localStorage-only, no backend round-trips) ──
 
-  // OPTIMIZATION: Memoize markAllAsRead with useCallback
+  const markAsRead = useCallback((notificationId: string) => {
+    addReadNotification(notificationId);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+    );
+  }, []);
+
   const markAllAsRead = useCallback(() => {
     if (notifications.length === 0) return;
-
-    // ─── SAVE ALL TO LOCAL STORAGE ───
-    notifications.forEach(n => {
-      addReadNotification(n.id, userData?.email);
-    });
-
-    // Update UI immediately
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    setUnreadCount(0);
-
-    // Sync to backend (non-blocking)
-    // Next polling cycle will confirm state from server
-    if (session?.access_token && userData?.email) {
-      fetch(
-        `${API_URL}/api/notifications/mark-read`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ email: userData.email })
-        }
-      ).catch(err => console.error("Backend sync failed:", err));
-    }
-  }, [notifications, session?.access_token, userData?.email]);
+    notifications.forEach((n) => addReadNotification(n.id));
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, [notifications]);
 
   const clearAllNotifications = useCallback(() => {
-    // ─── MARK ALL AS DISMISSED IN LOCAL STORAGE ───
-    // This ensures they won't show on refresh even if backend deletion is delayed
-    if (typeof window !== "undefined") {
-      const allIds = notifications.map(n => n.id);
-      if (allIds.length > 0) {
-        allIds.forEach(id => addDismissedNotification(id));
-      }
-    }
+    notifications.forEach((n) => {
+      addDismissedNotification(n.id);
+      addReadNotification(n.id);
+    });
 
-    // Optimistically clear UI immediately for instant feedback
     setNotifications([]);
-    setUnreadCount(0);
     setCurrentPage(1);
     setTotalPages(1);
     setHasMore(false);
 
-    // Sync to backend (non-blocking)
-    // Next polling cycle will confirm state from server
-    if (session?.access_token && userData?.email) {
+    // Only need to clean up individual rows from DB (broadcasts are shared rows)
+    const hasIndividual = notifications.some((n) => !n.isBroadcast);
+    if (session?.access_token && userData?.email && hasIndividual) {
       fetch(
         `${API_URL}/api/notifications/clear-all?email=${encodeURIComponent(userData.email)}`,
         {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         }
-      ).catch(err => console.error("Backend sync failed:", err));
+      ).catch((err) => console.error("Clear-all backend sync failed:", err));
     }
   }, [notifications, session?.access_token, userData?.email]);
 
-  const deleteNotification = async (notificationId: string) => {
-    if (!session?.access_token) return;
+  const deleteNotification = useCallback(
+    async (notificationId: string) => {
+      const notif = notifications.find((n) => n.id === notificationId);
 
-    // Optimistically remove from UI immediately
-    const removedNotification = notifications.find(n => n.id === notificationId);
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    if (removedNotification && !removedNotification.read) {
-      setUnreadCount(count => Math.max(0, count - 1));
-    }
+      // Optimistically remove from UI and persist locally
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+      addDismissedNotification(notificationId);
 
-    try {
-      const emailParam = userData?.email ? `?email=${encodeURIComponent(userData.email)}` : '';
-      await fetch(
-        `${API_URL}/api/notifications/${notificationId}${emailParam}`,
-        {
+      if (notif?.isBroadcast) {
+        // Broadcasts are shared rows — dismiss locally only, nothing to delete in DB
+        return;
+      }
+
+      // Individual notifications can be deleted from DB
+      if (!session?.access_token) return;
+      try {
+        const emailParam = userData?.email
+          ? `?email=${encodeURIComponent(userData.email)}`
+          : "";
+        await fetch(`${API_URL}/api/notifications/${notificationId}${emailParam}`, {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-    } catch (error) {
-      console.error("Error deleting notification:", error);
-      // Refetch on failure to restore
-      fetchNotifications();
-    }
-  };
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+      } catch (error) {
+        console.error("Error deleting notification:", error);
+        fetchNotifications();
+      }
+    },
+    [notifications, session?.access_token, userData?.email, fetchNotifications]
+  );
+
+  // ─── NAVIGATION ──────────────────────────────────────────────────────────
 
   const handleNotificationClick = (notification: Notification) => {
-    if (!notification.read) {
-      markAsRead(notification.id);
-    }
-    
+    if (!notification.read) markAsRead(notification.id);
     setIsOpen(false);
 
     if (notification.actionUrl) {
       window.location.href = notification.actionUrl;
     } else if (notification.eventId) {
-      // Fallback: navigate using eventId directly
-      // Check if it looks like a fest or event based on notification title
-      const isFest = notification.title?.toLowerCase().includes('fest');
-      window.location.href = isFest ? `/fest/${notification.eventId}` : `/event/${notification.eventId}`;
+      const isFest = notification.title?.toLowerCase().includes("fest");
+      window.location.href = isFest
+        ? `/fest/${notification.eventId}`
+        : `/event/${notification.eventId}`;
     }
   };
+
+  // ─── UI HELPERS ───────────────────────────────────────────────────────────
 
   const getNotificationIcon = (type: Notification["type"]) => {
     const baseClasses = "w-4 h-4 flex-shrink-0";
@@ -343,8 +330,9 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
 
   const formatRelativeTime = (dateString: string) => {
     if (!dateString) return "";
-    // Supabase may return timestamps without a timezone suffix; treat them as UTC
-    const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(dateString) ? dateString : dateString + "Z";
+    const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(dateString)
+      ? dateString
+      : dateString + "Z";
     const date = new Date(normalized);
     if (isNaN(date.getTime())) return "";
     const now = new Date();
@@ -353,9 +341,12 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
     if (diffInSeconds < 60) return "Just now";
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hr ago`;
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} day${Math.floor(diffInSeconds / 86400) > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)} day${Math.floor(diffInSeconds / 86400) > 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
   };
+
+  // ─── RENDER ───────────────────────────────────────────────────────────────
 
   return (
     <div className={`relative ${className}`}>
@@ -383,11 +374,8 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-          />
-          
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+
           {/* Notification Panel */}
           <div className="absolute right-0 top-full mt-3 w-[340px] sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-gray-100/80 z-20 max-h-[34rem] overflow-hidden flex flex-col">
             {/* Header */}
@@ -444,29 +432,30 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
                     <div
                       key={notification.id}
                       className={`group relative px-5 py-4 cursor-pointer transition-all duration-150 ${
-                        !notification.read 
-                          ? "bg-blue-50/30 hover:bg-blue-50/60" 
+                        !notification.read
+                          ? "bg-blue-50/30 hover:bg-blue-50/60"
                           : "hover:bg-gray-50/60"
                       }`}
                       onClick={() => handleNotificationClick(notification)}
                     >
-                      {/* Unread indicator bar */}
                       {!notification.read && (
                         <div className="absolute left-0 top-3 bottom-3 w-[3px] bg-[#154CB3] rounded-r-full" />
                       )}
-                      
+
                       <div className="flex items-start gap-3.5">
-                        {/* Icon with background circle */}
                         <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                           {getNotificationIcon(notification.type)}
                         </div>
-                        
-                        {/* Content */}
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
-                            <p className={`text-[13px] leading-snug ${
-                              !notification.read ? "font-semibold text-gray-900" : "font-medium text-gray-700"
-                            }`}>
+                            <p
+                              className={`text-[13px] leading-snug ${
+                                !notification.read
+                                  ? "font-semibold text-gray-900"
+                                  : "font-medium text-gray-700"
+                              }`}
+                            >
                               {notification.title}
                             </p>
                             <button
@@ -482,11 +471,11 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
                               </svg>
                             </button>
                           </div>
-                          
+
                           <p className="text-[12px] text-gray-500 mt-1.5 leading-relaxed line-clamp-2">
                             {notification.message}
                           </p>
-                          
+
                           <div className="flex items-center flex-wrap gap-2 mt-2.5">
                             {notification.eventTitle && (
                               <span className="inline-flex items-center text-[11px] text-[#154CB3] bg-blue-50 px-2.5 py-1 rounded-md font-medium">
@@ -517,7 +506,7 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
                     disabled={loading}
                     className="text-[11px] text-[#154CB3] hover:text-[#0e3a8a] font-semibold disabled:opacity-50 transition-colors"
                   >
-                    {loading ? 'Loading...' : 'Load more →'}
+                    {loading ? "Loading..." : "Load more →"}
                   </button>
                 ) : (
                   <span className="text-[11px] text-gray-300">End of notifications</span>
@@ -544,14 +533,12 @@ export const createEventNotification = async (
     cancelled: `Event "${eventTitle}" has been cancelled. Sorry for any inconvenience.`,
     reminder: `Reminder: Event "${eventTitle}" is happening soon. Don't forget to attend!`,
   };
-
   const titles = {
     created: "New Event Available",
-    updated: "Event Updated", 
+    updated: "Event Updated",
     cancelled: "Event Cancelled",
     reminder: "Event Reminder",
   };
-
   const notificationTypes = {
     created: "info" as const,
     updated: "warning" as const,
@@ -562,9 +549,7 @@ export const createEventNotification = async (
   try {
     const response = await fetch(`${API_URL}/api/notifications/bulk`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: titles[type],
         message: messages[type],
@@ -575,16 +560,11 @@ export const createEventNotification = async (
         actionUrl: `/event/${eventId}`,
       }),
     });
-
-    if (!response.ok) {
-      throw new Error("Failed to send notifications");
-    }
+    if (!response.ok) throw new Error("Failed to send notifications");
   } catch (error) {
     console.error("Error creating event notifications:", error);
   }
 };
 
-// OPTIMIZATION: Export memoized component
 export const NotificationSystem = memo(NotificationSystemComponent);
 export default NotificationSystem;
-

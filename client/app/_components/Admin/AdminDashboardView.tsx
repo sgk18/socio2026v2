@@ -393,7 +393,7 @@ export default function AdminDashboardView({
   // Top organisers
   const topOrganisers = useMemo(() => {
     const map: Record<string, number> = {};
-    events.forEach((e) => extractCreatorEmails(e.created_by).forEach(email => {
+    events.forEach((e) => extractCreatorEmails(e.created_by).filter(v => v.includes("@")).forEach(email => {
       map[email] = (map[email] || 0) + 1;
     }));
     return Object.entries(map)
@@ -403,7 +403,8 @@ export default function AdminDashboardView({
   }, [events]);
 
   const organiserOptions = useMemo(() => {
-    return Array.from(new Set(events.flatMap((e) => extractCreatorEmails(e.created_by)))).sort();
+    const emails = events.flatMap((e) => extractCreatorEmails(e.created_by)).filter(v => v.includes("@"));
+    return Array.from(new Set(emails)).sort();
   }, [events]);
 
   // Recent activity
