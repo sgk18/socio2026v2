@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>graphify visualization</title>
+  <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+  <link href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css" rel="stylesheet" />
+  <style>body{margin:0;font-family:Arial;} #mynetwork{width:100vw;height:100vh;border:0}</style>
+</head>
+<body>
+  <div id="mynetwork"></div>
+  <script>
+    async function loadAndRender(){
+      const res = await fetch('graph.json');
+      const data = await res.json();
+      const nodes = (data.nodes||[]).map(n=>({id:n.id||n.label,label:n.label}));
+      const edges = (data.links||data.edges||[]).map(e=>({from:e.source||e.from,to:e.target||e.to}));
+      const container = document.getElementById('mynetwork');
+      const visData = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+      const options = { physics: { stabilization: true, barnesHut: {gravitationalConstant:-30000}} };
+      new vis.Network(container, visData, options);
+    }
+    loadAndRender().catch(err=>{document.body.innerText='Failed to load graph.json: '+err});
+  </script>
+</body>
+</html>
