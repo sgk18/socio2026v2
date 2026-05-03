@@ -33,6 +33,7 @@ export interface CampusScopedItem {
   allowed_campuses?: string[] | string | null;
   venue?: string | null;
   location?: string | null;
+  allow_outsiders?: boolean | null;
 }
 
 interface EventsContextType {
@@ -162,6 +163,10 @@ export const matchesSelectedCampus = (
 ): boolean => {
   if (!selectedCampus) return true;
 
+  if (item.allow_outsiders === true) {
+    return true;
+  }
+
   const campusMatchers = getCampusMatchers(selectedCampus);
   if (campusMatchers.length === 0) return true;
 
@@ -277,6 +282,7 @@ export const buildDiscoverCampusDatasets = (
         campus_hosted_at: event.campus_hosted_at,
         allowed_campuses: event.allowed_campuses,
         venue: event.venue,
+        allow_outsiders: event.allow_outsiders,
       },
       selectedCampus
     )
