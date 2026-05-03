@@ -48,6 +48,7 @@ type AuthContextType = {
   isStudentOrganiser: boolean;
   subHeadFestIds: string[];
   isVolunteer: boolean;
+  clubEditorHref: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isStudentOrganiser, setIsStudentOrganiser] = useState(false);
   const [subHeadFestIds, setSubHeadFestIds] = useState<string[]>([]);
   const [isVolunteer, setIsVolunteer] = useState(false);
+  const [clubEditorHref, setClubEditorHref] = useState<string | null>(null);
   const [showOutsiderWarning, setShowOutsiderWarning] = useState(false);
   const [outsiderVisitorId, setOutsiderVisitorId] = useState<string | null>(null);
   const [outsiderNameInput, setOutsiderNameInput] = useState("");
@@ -530,6 +532,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [userData?.email, userData?.is_organiser]);
 
+  useEffect(() => {
+    const email = String(userData?.email || "").trim().toLowerCase();
+    if (!email || !supabase) {
+      setClubEditorHref(null);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("clubs")
+          .select("club_id")
+          .contains("club_editors", [email])
+          .limit(1)
+          .maybeSingle();
+        if (!isMounted) return;
+        setClubEditorHref(
+          data?.club_id
+            ? `/clubeditor/${encodeURIComponent(String(data.club_id))}`
+            : null
+        );
+      } catch {
+        if (isMounted) setClubEditorHref(null);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [userData?.email]);
+
   // Check if user has any active volunteer assignments
   useEffect(() => {
     const registerNumber = userData?.register_number;
@@ -566,7 +596,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, userData, isLoading, isSupport, isMasterAdmin, isStudentOrganiser, subHeadFestIds, isVolunteer, signInWithGoogle, signOut }}
+      value={{ session, userData, isLoading, isSupport, isMasterAdmin, isStudentOrganiser, subHeadFestIds, isVolunteer, clubEditorHref, signInWithGoogle, signOut }}
     >
       {children}
 

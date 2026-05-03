@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const FALLBACK_REMOTE_BACKEND = "https://sociodevserver.vercel.app";
-
 const normalizeBackendBase = (value: string) =>
   String(value || "").trim().replace(/\/api\/?$/, "").replace(/\/+$/, "");
 
-const getBackendBaseUrl = (request: NextRequest) => {
+const getBackendBaseUrl = (request: NextRequest): string | null => {
   const configured = normalizeBackendBase(
     process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || ""
   );
@@ -13,21 +11,15 @@ const getBackendBaseUrl = (request: NextRequest) => {
   const hostname = request.nextUrl.hostname.toLowerCase();
   const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
 
-  // On localhost, prefer the local backend unless a local API URL is explicitly configured.
   if (isLocalHost) {
     const configuredIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured);
-    if (configured && configuredIsLocal) {
-      return configured;
-    }
+    if (configured && configuredIsLocal) return configured;
     return "http://localhost:8000";
   }
 
-  // Guard against misconfigured NEXT_PUBLIC_API_URL that points back to the frontend host.
-  if (configured && configured !== requestOrigin) {
-    return configured;
-  }
+  if (configured && configured !== requestOrigin) return configured;
 
-  return FALLBACK_REMOTE_BACKEND;
+  return null;
 };
 
 export async function POST(
@@ -44,6 +36,9 @@ export async function POST(
     const contentType = request.headers.get("content-type");
     const body = await request.text();
     const backendBase = getBackendBaseUrl(request);
+    if (!backendBase) {
+      return NextResponse.json({ error: "API URL not configured" }, { status: 500 });
+    }
 
     const upstream = await fetch(
       `${backendBase}/api/clubs/${encodeURIComponent(clubId)}/apply`,

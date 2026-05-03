@@ -115,40 +115,9 @@ const normalizeRoles = (value: unknown): string[] => {
   return roles;
 };
 
-const validateRemoteImageUrl = async (
-  imageUrl: string
-): Promise<{ ok: boolean; error?: string }> => {
-  try {
-    const response = await fetch(imageUrl, {
-      method: "HEAD",
-      redirect: "follow",
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: `Banner URL is not reachable (status ${response.status}).`,
-      };
-    }
-
-    const contentType = (response.headers.get("content-type") || "").toLowerCase();
-    if (!contentType.startsWith("image/")) {
-      return {
-        ok: false,
-        error: "Banner URL must point to a valid image resource.",
-      };
-    }
-
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "Banner URL could not be reached." };
-  }
-};
-
-const normalizeAndValidateBannerUrl = async (
+const normalizeAndValidateBannerUrl = (
   bannerUrl: string | null
-): Promise<{ ok: boolean; url: string | null; error?: string }> => {
+): { ok: boolean; url: string | null; error?: string } => {
   if (!bannerUrl) return { ok: true, url: null };
 
   const candidates = getClubBannerCandidates(bannerUrl);
@@ -156,18 +125,7 @@ const normalizeAndValidateBannerUrl = async (
     return { ok: false, url: null, error: "Banner URL is invalid." };
   }
 
-  for (const candidate of candidates) {
-    const validation = await validateRemoteImageUrl(candidate);
-    if (validation.ok) {
-      return { ok: true, url: candidate };
-    }
-  }
-
-  return {
-    ok: false,
-    url: null,
-    error: "Banner URL is not reachable or is not a valid image.",
-  };
+  return { ok: true, url: candidates[0] };
 };
 
 export async function createClub(input: CreateClubInput): Promise<{
@@ -209,7 +167,7 @@ export async function createClub(input: CreateClubInput): Promise<{
       return { ok: false, error: "Banner URL must be a valid https:// URL." };
     }
 
-    const validatedBanner = await normalizeAndValidateBannerUrl(bannerInput);
+    const validatedBanner = normalizeAndValidateBannerUrl(bannerInput);
     if (!validatedBanner.ok) {
       return { ok: false, error: validatedBanner.error };
     }
@@ -295,7 +253,7 @@ export async function updateClub(
       return { ok: false, error: "Banner URL must be a valid https:// URL." };
     }
 
-    const validatedBanner = await normalizeAndValidateBannerUrl(bannerInput);
+    const validatedBanner = normalizeAndValidateBannerUrl(bannerInput);
     if (!validatedBanner.ok) {
       return { ok: false, error: validatedBanner.error };
     }
