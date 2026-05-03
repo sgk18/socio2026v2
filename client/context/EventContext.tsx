@@ -163,11 +163,6 @@ export const matchesSelectedCampus = (
 ): boolean => {
   if (!selectedCampus) return true;
 
-  // Boolean() handles both boolean true and integer 1 from the DB
-  if (Boolean(item.allow_outsiders)) {
-    return true;
-  }
-
   const campusMatchers = getCampusMatchers(selectedCampus);
   if (campusMatchers.length === 0) return true;
 
