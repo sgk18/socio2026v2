@@ -318,6 +318,8 @@ export default function CreateClubForm({
     }
     if (selectedCategories.length === 0) {
       nextErrors.category = "Select at least one category.";
+    } else if (selectedCategories.length > 3) {
+      nextErrors.category = "You can select a maximum of 3 categories.";
     }
     if (!normalize(description)) nextErrors.description = "Description is required.";
 
@@ -589,9 +591,15 @@ export default function CreateClubForm({
                     <input
                       type="checkbox"
                       checked={selectedCategories.includes(item)}
-                      onChange={() =>
-                        toggleFromArray(item, selectedCategories, setSelectedCategories)
-                      }
+                      onChange={() => {
+                        if (selectedCategories.includes(item)) {
+                          setSelectedCategories(selectedCategories.filter((c) => c !== item));
+                        } else if (selectedCategories.length >= 3) {
+                          showValidationToast("You can only select up to 3 categories.");
+                        } else {
+                          setSelectedCategories([...selectedCategories, item]);
+                        }
+                      }}
                       className="h-3.5 w-3.5 accent-[#1f57c3]"
                     />
                     {item}

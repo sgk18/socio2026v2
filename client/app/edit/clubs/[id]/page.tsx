@@ -9,52 +9,6 @@ import supabase from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/app/_components/Home/Footer";
 
-type ClubApplicantEntry = {
-  regno: string;
-  name: string;
-  email: string;
-  role_applied_for: string;
-  applied_at?: string;
-};
-
-const parseClubApplicants = (value: unknown): ClubApplicantEntry[] => {
-  const parsed =
-    typeof value === "string"
-      ? (() => {
-          try {
-            return JSON.parse(value);
-          } catch {
-            return [];
-          }
-        })()
-      : value;
-
-  if (!Array.isArray(parsed)) return [];
-
-  const applicants: ClubApplicantEntry[] = [];
-
-  for (const item of parsed) {
-    if (!item || typeof item !== "object") continue;
-    const entry = item as Record<string, unknown>;
-    const regno = String(entry.regno ?? "").trim();
-    const name = String(entry.name ?? "").trim();
-    const email = String(entry.email ?? "").trim();
-    const roleApplied = String(entry.role_applied_for ?? "").trim();
-    const appliedAt = String(entry.applied_at ?? "").trim();
-
-    if (!regno || !roleApplied) continue;
-
-    applicants.push({
-      regno,
-      name,
-      email,
-      role_applied_for: roleApplied,
-      applied_at: appliedAt || undefined,
-    });
-  }
-
-  return applicants;
-};
 
 export default function EditClubPage() {
   const params = useParams();
@@ -162,9 +116,6 @@ export default function EditClubPage() {
     club.type === "centre" ? "Centre" : club.type === "cell" ? "Cell" : "Club";
   const entityLabelLower = entityLabel.toLowerCase();
   const publicClubHref = `/club/${club.slug ?? club.club_id}`;
-  const applicants = parseClubApplicants(
-    club.clubs_applicants ?? club.clubs_applicant
-  );
 
   return (
     <div className="min-h-screen bg-[#f3f5f9]">
@@ -180,44 +131,6 @@ export default function EditClubPage() {
 
       <div className="pb-12">
         <CreateClubForm mode="edit" initialClub={club} hideHeader embedded />
-
-        <section className="mx-auto mt-8 w-full max-w-5xl px-3 sm:px-4">
-          <div className="rounded-xl border border-[#ced6e0] bg-[#f8fafc] p-4 sm:p-6">
-            <h2 className="text-2xl font-bold text-[#0e3f84]">Applications</h2>
-            <p className="mt-1 text-sm text-[#56657a]">
-              Requests submitted through the Join button appear here for club editors.
-            </p>
-
-            {applicants.length === 0 ? (
-              <p className="mt-4 rounded-md border border-dashed border-[#c7d3e7] bg-white px-4 py-3 text-sm text-[#4f6482]">
-                No applications received yet.
-              </p>
-            ) : (
-              <div className="mt-4 overflow-x-auto rounded-lg border border-[#d7e3f9] bg-white">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-[#f1f6ff] text-left text-[#23467f]">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">Reg. no</th>
-                      <th className="px-4 py-2.5 font-semibold">Name</th>
-                      <th className="px-4 py-2.5 font-semibold">Email</th>
-                      <th className="px-4 py-2.5 font-semibold">Role</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applicants.map((entry) => (
-                      <tr key={`${entry.regno}-${entry.role_applied_for}`} className="border-t border-[#edf2fb]">
-                        <td className="px-4 py-2.5 font-semibold text-[#163c77]">{entry.regno}</td>
-                        <td className="px-4 py-2.5 text-[#344a6a]">{entry.name || "-"}</td>
-                        <td className="px-4 py-2.5 text-[#344a6a]">{entry.email || "-"}</td>
-                        <td className="px-4 py-2.5 text-[#344a6a]">{entry.role_applied_for}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
       </div>
       <Footer />
     </div>

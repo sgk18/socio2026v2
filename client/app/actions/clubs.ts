@@ -84,6 +84,23 @@ export async function removeClubApplicant(
   }
 }
 
+export async function setClubRegistrations(
+  clubId: string,
+  open: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("clubs")
+      .update({ club_registrations: open })
+      .eq("club_id", clubId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Failed to update application toggle" };
+  }
+}
+
 const slugify = (value: string): string =>
   value
     .toLowerCase()
