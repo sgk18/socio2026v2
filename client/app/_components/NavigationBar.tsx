@@ -5,8 +5,8 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import Logo from "@/app/logo.svg";
 import { useAuth } from "@/context/AuthContext";
-import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, memo } from "react";
+import { useRouter, usePathname } from "next/navigation";
 
 const NotificationSystem = dynamic(
   () => import("./NotificationSystem").then((mod) => mod.NotificationSystem),
@@ -78,9 +78,7 @@ function NavigationBar() {
   const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser, isVolunteer, clubEditorHref } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const isEventsPage = pathname === "/events";
-  const searchParam = searchParams.get("search") || "";
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -190,14 +188,21 @@ function NavigationBar() {
     setAvatarLoadError(false);
   }, [displayAvatar]);
 
+  // Sync the search input with the URL whenever we land on (or leave) the events page.
+  // Uses window.location.search so NavigationBar needs no useSearchParams / Suspense.
   useEffect(() => {
-    if (isEventsPage) {
-      setSearchQuery(searchParam);
+    if (!isEventsPage) {
+      setSearchQuery("");
       return;
     }
-
-    setSearchQuery("");
-  }, [isEventsPage, searchParam]);
+    const sync = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSearchQuery(params.get("search") ?? "");
+    };
+    sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, [isEventsPage, pathname]);
 
   const closeDesktopMenu = useCallback(() => {
     setIsDesktopMenuOpen(false);
@@ -233,7 +238,9 @@ function NavigationBar() {
     }
   }, [closeDesktopMenu]);
 
-  useEffect(() => {
+  // useLayoutEffect so the compact/non-compact decision is applied before the
+  // browser paints — prevents the "navbar renders huge then shrinks" flash.
+  useLayoutEffect(() => {
     measureDesktopOverlap();
 
     const onResize = () => measureDesktopOverlap();
@@ -360,7 +367,7 @@ function NavigationBar() {
     const params = new URLSearchParams();
 
     if (isEventsPage) {
-      const activeCategory = searchParams.get("category");
+      const activeCategory = new URLSearchParams(window.location.search).get("category");
       if (activeCategory) {
         params.set("category", activeCategory);
       }
@@ -372,7 +379,7 @@ function NavigationBar() {
 
     const queryString = params.toString();
     router.push(queryString ? `/events?${queryString}` : "/events");
-  }, [isEventsPage, searchParams, searchQuery, router]);
+  }, [isEventsPage, searchQuery, router]);
 
   const handleDropdownHover = useCallback((linkName: string | null) => {
     if (dropdownTimerRef.current) {

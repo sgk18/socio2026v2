@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import CampusDetectionModal, { isCampusDismissedRecently } from "../app/_components/CampusDetectionModal";
@@ -114,9 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Restore session + userData from localStorage on mount — eliminates the
-  // loading flash for returning users by skipping the async Supabase round-trip.
-  useEffect(() => {
+  // Restore session + userData from localStorage synchronously before paint so
+  // returning users see the correct navbar state on the very first frame.
+  useLayoutEffect(() => {
     const storedSession = localStorage.getItem('socio_session');
     const storedUserData = localStorage.getItem('socio_user_data');
     if (storedSession && storedUserData) {
