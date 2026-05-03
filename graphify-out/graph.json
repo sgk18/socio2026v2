@@ -29113,9 +29113,9 @@
       "source_file": "client\\app\\_components\\NavigationBar.tsx",
       "source_location": "L198",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "client_app_components_navigationbar_tsx",
-      "target": "components_navigationbar_sync",
-      "confidence_score": 1.0
+      "target": "components_navigationbar_sync"
     },
     {
       "relation": "contains",
