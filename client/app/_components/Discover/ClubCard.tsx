@@ -157,7 +157,7 @@ export const CentreClubCard = ({
             <div className="rounded-full bg-[#063168]/90 px-2 py-1 text-xs font-bold uppercase text-white">
               {type === "center" ? "Centre" : type === "cell" ? "Cell" : "Club"}
             </div>
-            {categories.slice(0, 2).map((category) => (
+            {categories.slice(0, 3).map((category) => (
               <div
                 key={category}
                 className="rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#0f2f63]"

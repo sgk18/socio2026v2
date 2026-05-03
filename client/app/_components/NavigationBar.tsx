@@ -5,6 +5,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import Logo from "@/app/logo.svg";
 import { useAuth } from "@/context/AuthContext";
+import supabase from "@/lib/supabaseClient";
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, memo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -75,7 +76,7 @@ type RoleAction = {
 };
 
 function NavigationBar() {
-  const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser, isVolunteer, clubEditorHref } = useAuth();
+  const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser, isVolunteer } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isEventsPage = pathname === "/events";
@@ -90,6 +91,9 @@ function NavigationBar() {
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
   const [expandedDesktopSection, setExpandedDesktopSection] = useState<string | null>(null);
   const [expandedDesktopSubSection, setExpandedDesktopSubSection] = useState<string | null>(null);
+  const [clubEditorClubs, setClubEditorClubs] = useState<Array<{club_id: string; club_name: string}>>([]);
+  const [showClubSelectionModal, setShowClubSelectionModal] = useState(false);
+  const [selectedClubId, setSelectedClubId] = useState<string>("");
   const navContainerRef = useRef<HTMLElement | null>(null);
   const logoRef = useRef<HTMLDivElement | null>(null);
   const rightControlsRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +125,53 @@ function NavigationBar() {
   })();
   const isCaterer = catersList.some((c: any) => c?.is_catering);
 
+  useEffect(() => {
+    let isMounted = true;
+    const email = String(userData?.email || "").trim().toLowerCase();
+
+    if (!email) {
+      setClubEditorClubs([]);
+      return;
+    }
+
+    const resolveClubEditorDashboard = async () => {
+      const { data, error } = await supabase
+        .from("clubs")
+        .select("club_id, club_name, club_editors")
+        .order("club_name", { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Failed to resolve club editor dashboard:", error.message);
+        setClubEditorClubs([]);
+        return;
+      }
+
+      const clubs = Array.isArray(data) ? data : [];
+      const matchedClubs = clubs.filter((club) => {
+        if (isMasterAdmin) return true;
+        const editors = Array.isArray((club as any)?.club_editors)
+          ? ((club as any).club_editors as unknown[])
+          : [];
+        return editors.some(
+          (editor) => String(editor || "").trim().toLowerCase() === email
+        );
+      }).map(club => ({ club_id: club.club_id, club_name: club.club_name }));
+
+      setClubEditorClubs(matchedClubs);
+      if (matchedClubs.length > 0) {
+        setSelectedClubId(String(matchedClubs[0].club_id));
+      }
+    };
+
+    void resolveClubEditorDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userData?.email, isMasterAdmin]);
+
   const isNavLinkActive = (href: string) => {
     if (href === "/") {
       return pathname === "/";
@@ -142,7 +193,7 @@ function NavigationBar() {
   if (isCaterer) roleActions.push({ key: "catering", label: "Catering", href: "/catering", variant: "catering" });
   if (isStalls) roleActions.push({ key: "stalls", label: "Stalls", href: "/stalls", variant: "stalls" });
   if (isItSupport) roleActions.push({ key: "it", label: "IT", href: "/it", variant: "it" });
-  if (clubEditorHref) roleActions.push({ key: "clubs", label: "Clubs", href: clubEditorHref, variant: "clubs" });
+  if (clubEditorClubs.length > 0) roleActions.push({ key: "clubs", label: "Clubs", href: clubEditorClubs.length === 1 ? `/clubeditor/${encodeURIComponent(String(clubEditorClubs[0].club_id))}` : "#clubs-modal", variant: "clubs" });
 
   const visibleRoleActions = roleActions.length > 2 ? roleActions.slice(0, 1) : roleActions;
   const dashboardDropdownRoles = roleActions.length > 2 ? roleActions.slice(1) : [];
@@ -520,7 +571,14 @@ function NavigationBar() {
                   {!isDesktopCompact && (
                     <div className="flex items-center gap-2">
                       {visibleRoleActions.map((roleAction) => (
-                        <Link key={`desktop-role-${roleAction.key}`} href={roleAction.href}>
+                        <Link key={`desktop-role-${roleAction.key}`} href={roleAction.href}
+                           onClick={(e) => {
+                             if (roleAction.href === "#clubs-modal") {
+                               e.preventDefault();
+                               setShowClubSelectionModal(true);
+                             }
+                           }}
+                        >
                           <button
                             className={`cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out ${getRolePillClasses(roleAction.variant)}`}
                           >
@@ -556,7 +614,15 @@ function NavigationBar() {
                                 <Link
                                   key={`desktop-dashboard-${roleAction.key}`}
                                   href={roleAction.href}
-                                  onClick={() => setShowRoleDropdown(false)}
+                                  onClick={(e) => {
+                                    if (roleAction.href === "#clubs-modal") {
+                                      e.preventDefault();
+                                      setShowRoleDropdown(false);
+                                      setShowClubSelectionModal(true);
+                                    } else {
+                                      setShowRoleDropdown(false);
+                                    }
+                                  }}
                                   className={`block px-4 py-2.5 text-sm font-medium transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
                                 >
                                   {roleAction.label}
@@ -857,7 +923,15 @@ function NavigationBar() {
                     <Link
                       key={`drawer-role-${roleAction.key}`}
                       href={roleAction.href}
-                      onClick={closeDesktopMenu}
+                      onClick={(e) => {
+                        if (roleAction.href === "#clubs-modal") {
+                          e.preventDefault();
+                          closeDesktopMenu();
+                          setShowClubSelectionModal(true);
+                        } else {
+                          closeDesktopMenu();
+                        }
+                      }}
                       className={`block rounded-lg border px-3 py-2 text-sm font-semibold transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
                     >
                       {roleAction.label}
@@ -901,6 +975,12 @@ function NavigationBar() {
               <Link
                 key={`mobile-role-${roleAction.key}`}
                 href={roleAction.href}
+                onClick={(e) => {
+                  if (roleAction.href === "#clubs-modal") {
+                    e.preventDefault();
+                    setShowClubSelectionModal(true);
+                  }
+                }}
                 className={`inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm font-semibold transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
               >
                 {roleAction.label}
@@ -940,6 +1020,50 @@ function NavigationBar() {
           }}
           onDecline={() => setShowTermsModal(false)}
         />
+      )}
+      {showClubSelectionModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100">
+            <h3 className="text-xl font-bold text-[#154CB3] mb-2">Select Club</h3>
+            <p className="text-sm text-gray-500 mb-6">Choose which club dashboard you want to access.</p>
+            
+            <div className="space-y-4">
+              <div className="w-full">
+                <label htmlFor="club-select" className="sr-only">Select Club</label>
+                <select
+                  id="club-select"
+                  value={selectedClubId}
+                  onChange={(e) => setSelectedClubId(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent text-gray-700 transition-all duration-200"
+                >
+                  {clubEditorClubs.map((club) => (
+                    <option key={club.club_id} value={club.club_id}>
+                      {club.club_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => setShowClubSelectionModal(false)}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowClubSelectionModal(false);
+                    router.push(`/clubeditor/${encodeURIComponent(selectedClubId)}`);
+                  }}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#154CB3] hover:bg-[#0d3a8a] rounded-lg shadow-sm transition-all duration-200 cursor-pointer"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
