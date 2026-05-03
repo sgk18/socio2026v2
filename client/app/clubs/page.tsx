@@ -439,7 +439,7 @@ const CentresPageContent = () => {
                         }
                         showEditButton={canEditOrganization(centre)}
                         editHref={`/edit/clubs/${centre.club_id}`}
-                        showManageButton={isClubEditor(centre)}
+                        showManageButton={isMasterAdmin || isClubEditor(centre)}
                         manageHref={`/clubeditor/${centre.club_id}`}
                       />
                     </div>

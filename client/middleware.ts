@@ -169,7 +169,7 @@ export async function middleware(req: NextRequest) {
 
     if (isClubEditorDashboardRoute) {
       const requestedId = decodeURIComponent(pathname.split("/")[2] || "").trim();
-      const hasAccess = await canAccessClubEditorRoute(requestedId, false);
+      const hasAccess = await canAccessClubEditorRoute(requestedId, true);
       if (!hasAccess) {
         return redirect("/error");
       }

@@ -42,12 +42,12 @@ const parseClubApplicants = (value: unknown): Array<{ regno?: string; email?: st
   const parsed =
     typeof value === "string"
       ? (() => {
-          try {
-            return JSON.parse(value);
-          } catch {
-            return [];
-          }
-        })()
+        try {
+          return JSON.parse(value);
+        } catch {
+          return [];
+        }
+      })()
       : value;
 
   if (Array.isArray(parsed)) return parsed;
@@ -268,10 +268,10 @@ const ClubDetailsPage = () => {
     setApplicantName(
       String(
         latestUser?.name ??
-          userData?.name ??
-          session?.user?.user_metadata?.full_name ??
-          session?.user?.user_metadata?.name ??
-          ""
+        userData?.name ??
+        session?.user?.user_metadata?.full_name ??
+        session?.user?.user_metadata?.name ??
+        ""
       ).trim()
     );
     setApplicantEmail(String(latestUser?.email ?? currentEmail).trim().toLowerCase());
@@ -338,8 +338,8 @@ const ClubDetailsPage = () => {
         const existingApplicants = Array.isArray(prev.clubs_applicants)
           ? prev.clubs_applicants
           : Array.isArray(prev.clubs_applicant)
-          ? prev.clubs_applicant
-          : [];
+            ? prev.clubs_applicant
+            : [];
         const alreadyExists = existingApplicants.some((entry) => {
           const regno = String(entry?.regno ?? "").trim().toUpperCase();
           const email = String(entry?.email ?? "").trim().toLowerCase();
@@ -404,7 +404,7 @@ const ClubDetailsPage = () => {
           </Link>
         </div>
         {canEditClub ? (
-          <div className="absolute right-6 top-6 z-20">
+          <div className="absolute right-6 top-6 z-20 flex flex-col items-end gap-2">
             <Link
               href={`/edit/clubs/${club.club_id}`}
               className="inline-flex items-center gap-2 rounded-full bg-[#154CB3] px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-[#0f3f95]"
@@ -413,10 +413,19 @@ const ClubDetailsPage = () => {
                 <path d="M17.414 2.586a2 2 0 010 2.828l-8.9 8.9a1 1 0 01-.39.242l-3 1a1 1 0 01-1.266-1.266l1-3a1 1 0 01.242-.39l8.9-8.9a2 2 0 012.828 0z" />
                 <path d="M4 16a1 1 0 100 2h12a1 1 0 100-2H4z" />
               </svg>
-               {`Edit ${entityLabel.toLowerCase()}`}
-             </Link>
-           </div>
-         ) : null}
+              {`Edit ${entityLabel.toLowerCase()}`}
+            </Link>
+            <Link
+              href={`/clubeditor/${club.slug ?? club.club_id}`}
+              className="inline-flex items-center gap-2 rounded-full bg-[#154CB3] px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-[#0f3f95]"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              </svg>
+              Manage
+            </Link>
+          </div>
+        ) : null}
 
         <div className="absolute bottom-10 left-1/2 w-full max-w-6xl -translate-x-1/2 px-6 text-white">
           <span className="inline-flex rounded-full bg-[#1f57c3] px-4 py-1 text-xs font-bold uppercase tracking-wide text-white">
@@ -448,17 +457,22 @@ const ClubDetailsPage = () => {
                 </a>
               ) : null}
 
-              <button
-                type="button"
-                onClick={handleJoinClick}
-                className={`block w-full rounded-[10px] border-2 px-4 py-3 text-center text-[17px] font-medium transition-colors duration-200 ${
-                  isAlreadyApplicant
+              {club.club_registrations ? (
+                <button
+                  type="button"
+                  onClick={handleJoinClick}
+                  className={`block w-full rounded-[10px] border-2 px-4 py-3 text-center text-[17px] font-medium transition-colors duration-200 ${isAlreadyApplicant
                     ? "border-[#16a34a] text-[#16a34a] hover:bg-[#ecfdf3]"
                     : "border-[#133f86] text-[#133f86] hover:bg-[#edf2fb]"
-                }`}
-              >
-                {isAlreadyApplicant ? "Applied" : `Join ${name}`}
-              </button>
+                    }`}
+                >
+                  {isAlreadyApplicant ? "Applied" : `Join ${name}`}
+                </button>
+              ) : (
+                <div className="rounded-[10px] border-2 border-red-200 bg-red-50 px-4 py-3 text-center">
+                  <p className="text-[15px] font-semibold text-red-700">Applications Closed</p>
+                </div>
+              )}
             </div>
 
           </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ClubRecord, removeClubApplicant } from "@/app/actions/clubs";
+import { ClubRecord, removeClubApplicant, setClubRegistrations } from "@/app/actions/clubs";
 import Footer from "@/app/_components/Home/Footer";
 import { useAuth } from "@/context/AuthContext";
 import supabase from "@/lib/supabaseClient";
@@ -181,12 +181,9 @@ export default function ClubEditorDashboardPage() {
 
     try {
       setIsUpdatingToggle(true);
-      const { error: updateError } = await supabase
-        .from("clubs")
-        .update({ club_registrations: nextValue })
-        .eq("club_id", club.club_id);
+      const { ok, error: updateError } = await setClubRegistrations(club.club_id, nextValue);
 
-      if (updateError) throw new Error(updateError.message);
+      if (!ok) throw new Error(updateError || "Failed to update application toggle.");
 
       setClub((prev) => (prev ? { ...prev, club_registrations: nextValue } : prev));
       toast.success(`Applications ${nextValue ? "opened" : "closed"}.`);
@@ -270,15 +267,15 @@ export default function ClubEditorDashboardPage() {
   }
 
   const editors = Array.isArray(club.club_editors) ? club.club_editors : [];
-  const canAccessDashboard = editors.some(
-    (editor) => String(editor || "").trim().toLowerCase() === currentEmail
-  );
+  const canAccessDashboard =
+    Boolean(userData?.is_masteradmin) ||
+    editors.some((editor) => String(editor || "").trim().toLowerCase() === currentEmail);
 
   if (!canAccessDashboard) {
     return (
       <div className="min-h-screen bg-white px-4 py-20 text-center">
         <h1 className="text-3xl font-bold text-[#063168]">Access denied</h1>
-        <p className="mt-3 text-gray-600">Only assigned club editors can access this dashboard.</p>
+        <p className="mt-3 text-gray-600">Only assigned club editors or masteradmins can access this dashboard.</p>
         <Link href="/clubs" className="mt-6 inline-flex rounded-md bg-[#154CB3] px-5 py-2 text-white">
           Back to clubs
         </Link>

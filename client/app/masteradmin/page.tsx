@@ -2842,7 +2842,21 @@ function MasterAdminPageInner() {
                               <div className="text-xs text-gray-500 mt-1 uppercase font-medium">TYPE: {club.type}</div>
                             </td>
                             <td className="px-6 py-5 text-sm text-gray-600 font-medium leading-6 align-top break-words">
-                              {club.category || "Uncategorized"}
+                              {(() => {
+                                const cat = club.category;
+                                if (!cat) return "Uncategorized";
+                                if (Array.isArray(cat)) return cat.join(", ");
+                                if (typeof cat === "string") {
+                                  if (cat.startsWith("[")) {
+                                    try {
+                                      const parsed = JSON.parse(cat);
+                                      if (Array.isArray(parsed)) return parsed.join(", ");
+                                    } catch {}
+                                  }
+                                  return cat;
+                                }
+                                return String(cat);
+                              })()}
                             </td>
                             <td className="px-6 py-5 align-top">
                               <button
@@ -2869,6 +2883,12 @@ function MasterAdminPageInner() {
                             </td>
                             <td className="px-6 py-5 text-right align-top">
                               <div className="flex flex-wrap items-center justify-end gap-2">
+                                <a
+                                  href={`/clubeditor/${club.club_id}`}
+                                  className="px-3.5 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 hover:-translate-y-0.5 transition-all"
+                                >
+                                  Manage
+                                </a>
                                 <a
                                   href={`/edit/clubs/${club.club_id}`}
                                   className="px-3.5 py-1.5 bg-[#154CB3] text-white text-xs font-semibold rounded-lg hover:bg-[#0f3f96] hover:-translate-y-0.5 transition-all"
