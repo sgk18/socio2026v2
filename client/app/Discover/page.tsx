@@ -31,6 +31,7 @@ interface Fest {
   fest_image_url: string | null;
   organizing_dept: string | null;
   campus_hosted_at?: string | null;
+  allowed_campuses?: string[] | string | null;
   venue?: string | null;
   allow_outsiders?: boolean | null;
   is_archived?: boolean;
