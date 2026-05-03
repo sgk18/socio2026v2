@@ -1682,15 +1682,8 @@ router.put(
         console.error("🔴 Supabase-specific error detected - checking connectivity...");
       }
       
-      return res.status(500).json({ 
-        error: "Internal server error while updating event.",
-        details: error.message,
-        context: {
-          endpoint: `/api/events/${req.params.eventId}`,
-          method: "PUT",
-          userId: req.userId,
-          timestamp: new Date().toISOString()
-        }
+      return res.status(500).json({
+        error: "Event could not be updated. Please try again.",
       });
     }
   }

@@ -98,6 +98,13 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const { userData, session } = useAuth();
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen]);
+
   // Derived — no separate state needed
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
@@ -374,7 +381,7 @@ const NotificationSystemComponent: React.FC<NotificationSystemProps> = ({
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="fixed inset-0 z-10" role="presentation" onClick={() => setIsOpen(false)} />
 
           {/* Notification Panel */}
           <div className="absolute right-0 top-full mt-3 w-[340px] sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-gray-100/80 z-20 max-h-[34rem] overflow-hidden flex flex-col">

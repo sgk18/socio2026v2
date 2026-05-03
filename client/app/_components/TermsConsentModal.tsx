@@ -10,8 +10,13 @@ interface TermsConsentModalProps {
 
 export default function TermsConsentModal({ onAccept, onDecline }: TermsConsentModalProps) {
   const [hasConsented, setHasConsented] = useState(false);
-  
-  // Function to handle checkbox change
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onDecline(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onDecline]);
+
   const handleConsentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setHasConsented(e.target.checked);
   };

@@ -353,17 +353,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
-      const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`);
+      const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         if (response.status === 404) {
-          console.warn(
-            `User data not found for ${email}. User might need to be created.`
-          );
+          console.warn(`User not found for ${email}.`);
           setUserData(null);
           persistUserData(null);
-        } else {
-          throw new Error(`Failed to fetch user data: ${response.statusText}`);
         }
         return null;
       }
@@ -373,8 +376,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       persistUserData(user);
       return user;
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error("Error fetching user data:", error);
-      setUserData(null);
+      // Preserve cached userData on network errors — don't wipe the session
       return null;
     }
   };
