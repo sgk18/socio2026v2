@@ -7882,7 +7882,7 @@
       "label": "parseComparableDate()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L193",
+      "source_location": "L188",
       "id": "context_eventcontext_parsecomparabledate",
       "community": 6,
       "norm_label": "parsecomparabledate()"
@@ -7891,7 +7891,7 @@
       "label": "getTodayBoundary()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L211",
+      "source_location": "L206",
       "id": "context_eventcontext_gettodayboundary",
       "community": 6,
       "norm_label": "gettodayboundary()"
@@ -7900,7 +7900,7 @@
       "label": "isUpcomingEventDate()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L217",
+      "source_location": "L212",
       "id": "context_eventcontext_isupcomingeventdate",
       "community": 6,
       "norm_label": "isupcomingeventdate()"
@@ -7909,7 +7909,7 @@
       "label": "deriveTags()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L223",
+      "source_location": "L218",
       "id": "context_eventcontext_derivetags",
       "community": 6,
       "norm_label": "derivetags()"
@@ -7918,7 +7918,7 @@
       "label": "toEventCard()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L241",
+      "source_location": "L236",
       "id": "context_eventcontext_toeventcard",
       "community": 6,
       "norm_label": "toeventcard()"
@@ -7927,7 +7927,7 @@
       "label": "toCarouselImage()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L263",
+      "source_location": "L258",
       "id": "context_eventcontext_tocarouselimage",
       "community": 6,
       "norm_label": "tocarouselimage()"
@@ -7936,7 +7936,7 @@
       "label": "buildDiscoverCampusDatasets()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L276",
+      "source_location": "L271",
       "id": "context_eventcontext_builddiscovercampusdatasets",
       "community": 6,
       "norm_label": "builddiscovercampusdatasets()"
@@ -7945,7 +7945,7 @@
       "label": "EventsProvider()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L336",
+      "source_location": "L331",
       "id": "context_eventcontext_eventsprovider",
       "community": 14,
       "norm_label": "eventsprovider()"
@@ -7954,7 +7954,7 @@
       "label": "useEvents()",
       "file_type": "code",
       "source_file": "client\\context\\EventContext.tsx",
-      "source_location": "L374",
+      "source_location": "L369",
       "id": "context_eventcontext_useevents",
       "community": 6,
       "norm_label": "useevents()"
@@ -33493,9 +33493,9 @@
       "source_file": "client\\context\\EventContext.tsx",
       "source_location": "L176",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "context_eventcontext_matchesselectedcampus",
-      "target": "context_eventcontext_normalizecampustext",
-      "confidence_score": 1.0
+      "target": "context_eventcontext_normalizecampustext"
     },
     {
       "relation": "contains",
