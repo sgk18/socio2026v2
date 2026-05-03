@@ -124,9 +124,13 @@ data, hard-to-reproduce bugs, and broken user sessions.
   browser client in `lib/api.ts`.
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` to the client. It belongs only in
   the server environment.
-- Never hardcode URLs. Use `NEXT_PUBLIC_API_URL` on the client and
-  `SUPABASE_URL` on the server. A hardcoded Vercel or production URL is an
-  automatic rejection.
+- **Never hardcode any URL, hostname, port, API key, secret, or environment-
+  specific value anywhere in the codebase.** This is a zero-tolerance rule.
+  Every value that can differ between development, staging, and production must
+  live in an environment variable.
+- Use `NEXT_PUBLIC_API_URL` on the client and `SUPABASE_URL` on the server.
+  A hardcoded domain, IP address, Vercel URL, or localhost string found in
+  committed code is an automatic rejection — no exceptions.
 
 ---
 
@@ -149,8 +153,11 @@ Error responses shown to users must be helpful, not diagnostic.
 
 - **No SSRF**: Do not make server-side `fetch()` calls to user-supplied URLs.
   Validate image/file URLs by format only, never by fetching them.
-- **No secrets in source**: `.env` files, API keys, and service role keys must
-  never be committed. Add any new secret file patterns to `.gitignore`
+- **No hardcoded values of any kind**: API keys, secrets, URLs, hostnames,
+  ports, feature flags, and environment-specific strings must all come from
+  environment variables. If a value would need to change between dev and
+  production, it is not allowed in source code — period. `.env` files must
+  never be committed; add any new secret file patterns to `.gitignore`
   immediately.
 - **CORS**: New origins must be added to `DEFAULT_ALLOWED_ORIGINS` or
   `DEFAULT_ALLOWED_ORIGIN_PATTERNS` in `server/index.js` with a comment
