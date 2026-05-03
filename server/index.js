@@ -209,17 +209,17 @@ try {
 app.use((err, req, res, next) => {
   console.error('Global error:', err);
   setCorsHeaders(req, res);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
 const PORT = process.env.PORT || 8000;
 const isVercelRuntime = process.env.VERCEL === '1';
 
 if (!isVercelRuntime) {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on port ${PORT}`);
     console.log(`📁 Upload directory: ${path.join(__dirname, 'uploads')}`);
-    console.log(`🗄️  Database: Supabase (${process.env.SUPABASE_URL || 'https://vkappuaapscvteexogtp.supabase.co'})`);
+    console.log(`🗄️  Database: Supabase (${process.env.SUPABASE_URL ? 'configured' : 'MISSING — set SUPABASE_URL'})`);
   });
 }
 

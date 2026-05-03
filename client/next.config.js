@@ -1,5 +1,18 @@
-const fallbackAppUrl = "https://sociodev.vercel.app";
-const fallbackApiUrl = "https://sociodevserver.vercel.app/api";
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction && !process.env.NEXT_PUBLIC_API_URL) {
+  throw new Error(
+    "NEXT_PUBLIC_API_URL is not set. The build would silently point to the dev server. Set it in your .env or deployment config."
+  );
+}
+if (isProduction && !process.env.NEXT_PUBLIC_APP_URL) {
+  throw new Error(
+    "NEXT_PUBLIC_APP_URL is not set. Auth redirects and email links will break."
+  );
+}
+
+const fallbackAppUrl = "http://localhost:3000";
+const fallbackApiUrl = "http://localhost:8000/api";
 
 const remoteImageHosts = (process.env.NEXT_PUBLIC_REMOTE_IMAGE_HOSTS || "")
   .split(",")
