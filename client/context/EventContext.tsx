@@ -163,26 +163,27 @@ export const matchesSelectedCampus = (
 ): boolean => {
   if (!selectedCampus) return true;
 
-  if (item.allow_outsiders === true) {
+  // Boolean() handles both boolean true and integer 1 from the DB
+  if (Boolean(item.allow_outsiders)) {
     return true;
   }
 
   const campusMatchers = getCampusMatchers(selectedCampus);
   if (campusMatchers.length === 0) return true;
 
+  const allowedCampuses = parseCampusField(item.allowed_campuses);
+  const hasCampusData =
+    Boolean(normalizeCampusText(item.campus_hosted_at)) ||
+    allowedCampuses.length > 0;
+
+  // No explicit campus restriction set — treat as visible to everyone
+  if (!hasCampusData) return true;
+
   if (matchesCampusText(item.campus_hosted_at, campusMatchers)) {
     return true;
   }
 
-  const allowedCampuses = parseCampusField(item.allowed_campuses);
   if (allowedCampuses.some((campus) => matchesCampusText(campus, campusMatchers))) {
-    return true;
-  }
-
-  if (
-    matchesCampusText(item.venue, campusMatchers) ||
-    matchesCampusText(item.location, campusMatchers)
-  ) {
     return true;
   }
 
