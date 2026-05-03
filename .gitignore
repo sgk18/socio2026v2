@@ -58,3 +58,11 @@ system-architecture-prd.md
 socio_module_11.html
 sociomodule11.html
 .sixth/
+
+# Auto-generated knowledge graph output (tooling artifact, not source)
+graphify-out/
+**/graphify-out/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
