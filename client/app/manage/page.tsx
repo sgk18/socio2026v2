@@ -366,6 +366,7 @@ const VolunteerManagerModal = ({
   const [volunteers, setVolunteers] = React.useState<VolunteerRecord[]>(
     normalizeVolunteerRecords((event as any).volunteers)
   );
+  const [volPage, setVolPage] = React.useState(1);
 
   const handleAdd = async () => {
     const reg = normalizeRegisterNumber(input);
@@ -468,7 +469,7 @@ const VolunteerManagerModal = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {volunteers.map((v) => {
+                {paginate(volunteers, volPage).items.map((v) => {
                   const expiresAt = new Date(v.expires_at);
                   const isActive = !Number.isNaN(expiresAt.getTime()) && new Date() < expiresAt;
                   const isRevoking = revokingIds.has(v.register_number);
@@ -500,12 +501,20 @@ const VolunteerManagerModal = ({
             </table>
           )}
         </div>
+        <PagerBar
+          page={paginate(volunteers, volPage).page}
+          totalPages={paginate(volunteers, volPage).totalPages}
+          hasPrev={paginate(volunteers, volPage).hasPrev}
+          hasNext={paginate(volunteers, volPage).hasNext}
+          onPrev={() => setVolPage((p) => Math.max(1, p - 1))}
+          onNext={() => setVolPage((p) => p + 1)}
+        />
       </div>
     </div>
   );
 };
 
-const VOL_PAGE_SIZE = 8;
+const VOL_PAGE_SIZE = 5;
 function paginate<T>(items: T[], page: number) {
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / VOL_PAGE_SIZE));
