@@ -4003,7 +4003,7 @@ function MasterAdminPageInner() {
               {/* ── Assign form (compact) ── */}
               <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
-                <div className="flex gap-3 items-center flex-wrap">
+                <div className="flex flex-row items-stretch gap-2">
                   {/* Email */}
                   <div className="relative min-w-[220px] flex-1">
                     <input
@@ -4011,7 +4011,7 @@ function MasterAdminPageInner() {
                       value={roleEmailInput}
                       onChange={(e) => { setRoleEmailInput(e.target.value); setRoleSelectedEmail(""); searchRoleEmails(e.target.value); }}
                       placeholder="Email or name…"
-                      className="w-full h-10 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full h-10 box-border border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                     {roleEmailSuggestions.length > 0 && !roleSelectedEmail && (
                       <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
@@ -4034,22 +4034,17 @@ function MasterAdminPageInner() {
                   </div>
 
                   {/* Role dropdown */}
-                  <div className="min-w-[180px] relative">
+                  <div className="min-w-[180px]">
                     <select
                       value={roleSelectedRole}
                       onChange={e => { setRoleSelectedRole(e.target.value as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
-                      className="w-full h-10 border border-gray-300 rounded-lg px-3 py-1.5 pr-8 text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full h-10 box-border border border-gray-300 rounded-lg px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
                     >
                       <option value="">Select role…</option>
                       {ASSIGN_ROLE_DEFS.map(r => (
                         <option key={r.key} value={r.key}>{r.label}</option>
                       ))}
                     </select>
-                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-400">
-                        <path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
                   </div>
                 </div>
 
