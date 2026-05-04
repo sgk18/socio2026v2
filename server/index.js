@@ -75,6 +75,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 const DEFAULT_ALLOWED_ORIGIN_PATTERNS = [
+  '^http://(localhost|127\\.0\\.0\\.1)(:\\d+)?$',
   '^https://.*\\.vercel\\.app$',
   '^https://.*\\.christuniversity\\.in$'
 ];

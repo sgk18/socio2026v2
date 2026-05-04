@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/?$/, "");
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/api\/?$/, "");
 
 export type AnalyticsKpi = {
   key: string;

@@ -130,6 +130,7 @@ const DataExplorerDashboard = dynamic(
   }
 );
 
+
 type User = {
   id: number;
   email: string;
@@ -660,7 +661,9 @@ function MasterAdminPageInner() {
   const debouncedClubSearch = useDebounce(clubSearchQuery, 300);
 
   useEffect(() => {
-    const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     if (!authIsLoading && !isMasterAdmin && !isLocalhost) {
       router.push("/");
     }
@@ -670,12 +673,19 @@ function MasterAdminPageInner() {
   const [isLocalhostDev, setIsLocalhostDev] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setIsLocalhostDev(window.location.hostname === 'localhost');
+      setIsLocalhostDev(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     }
   }, []);
 
   useEffect(() => {
-    if (!isMasterAdmin || !authToken) return;
+    // Allow localhost users to open the admin shell even without masteradmin role.
+    if (isLocalhostDev && !isMasterAdmin) {
+      setIsLoading(false);
+    }
+  }, [isLocalhostDev, isMasterAdmin]);
+
+  useEffect(() => {
+    if ((!isMasterAdmin && !isLocalhostDev) || !authToken) return;
     
     if (activeTab === "users") {
       fetchUsers();
@@ -699,7 +709,7 @@ function MasterAdminPageInner() {
     } else if (activeTab === "caterers") {
       fetchAllCaterers();
     }
-  }, [activeTab, isMasterAdmin, authToken]);
+  }, [activeTab, isMasterAdmin, isLocalhostDev, authToken]);
 
   // Fetch existing location suggestions when campus changes (add form) or edit modal opens
   const fetchLocationSuggestions = (campus: string) => {
@@ -1508,7 +1518,7 @@ function MasterAdminPageInner() {
     </div>
   );
 
-  if (isLoading || !authToken) {
+  if (isLoading || (!authToken && !isLocalhostDev)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
@@ -1519,7 +1529,7 @@ function MasterAdminPageInner() {
     );
   }
 
-  if (!isMasterAdmin) {
+  if (!isMasterAdmin && !isLocalhostDev) {
     return null;
   }
 
@@ -1717,9 +1727,6 @@ function MasterAdminPageInner() {
         {/* Data Explorer Tab */}
         {activeTab === "dataExplorer" && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-1">Advanced Analytics Data Explorer</h2>
-            </div>
             <DataExplorerDashboard />
           </div>
         )}

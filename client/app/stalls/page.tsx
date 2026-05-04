@@ -169,7 +169,7 @@ export default function StallsDashboardPage() {
               </svg>
             </div>
             <div>
-              <h1 className="text-base font-bold text-[#0f2a6b] leading-none">Stall Booking Requests</h1>
+              <h1 className="text-base font-bold text-[#0f2a6b] leading-none">Stall Requests</h1>
               {campus && (
                 <p className="text-[11px] text-slate-400 font-medium mt-0.5 uppercase tracking-wider">{campus}</p>
               )}
@@ -250,7 +250,7 @@ export default function StallsDashboardPage() {
                   type="text"
                   value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
-                  placeholder="Search by requester, campus…"
+                  placeholder="Search requester, campus, event"
                   className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#154CB3]/25 focus:border-[#154CB3] w-56 transition-all"
                 />
               </div>
@@ -271,8 +271,8 @@ export default function StallsDashboardPage() {
                   {q
                     ? `No results for "${searchQuery}". Try a different keyword.`
                     : activeTab === "pending"
-                    ? "All caught up! Check the Reviewed tab for past decisions."
-                    : "Requests you accept or decline will appear here."}
+                    ? "All caught up."
+                    : "Accepted and declined requests appear here."}
                 </p>
               </div>
             )}

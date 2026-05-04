@@ -304,10 +304,10 @@ export default function DataExplorerDashboard() {
 
   return (
     <div className="space-y-7">
-      <div className="sticky top-3 z-20 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-200/40 backdrop-blur">
+      <div className="rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-200/40 backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-base font-bold tracking-tight text-slate-900">Socio Engagement Intelligence</p>
+            <p className="text-base font-bold tracking-tight text-slate-900">Analytics Data Explorer</p>
             <p className="mt-1 text-xs text-slate-500">Master admin data explorer for participation, performance, behavior, and growth planning.</p>
           </div>
 
@@ -435,7 +435,7 @@ export default function DataExplorerDashboard() {
         </SectionCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         <SectionCard>
           <div className="mb-4">
             <h3 className="text-sm font-bold text-slate-900">Event Category Performance</h3>
@@ -456,58 +456,6 @@ export default function DataExplorerDashboard() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </SectionCard>
-
-        <SectionCard>
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-900">Student Segmentation</h3>
-            <p className="text-xs text-slate-500">Active vs inactive students, with top engaged and at-risk cohorts.</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={segmentationData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={82}>
-                    {segmentationData.map((entry, index) => (
-                      <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => value.toLocaleString()} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Top Engaged Students</p>
-                <div className="mt-2 space-y-1.5">
-                  {bundle.students.topEngaged.slice(0, 5).map((student) => (
-                    <div key={student.studentId} className="rounded-md border border-slate-200 bg-slate-50 p-2">
-                      <p className="text-xs font-semibold text-slate-800">{student.name}</p>
-                      <p className="text-[11px] text-slate-600">
-                        {student.department} • Score {student.engagementScore.toFixed(1)}
-                      </p>
-                    </div>
-                  ))}
-                  {bundle.students.topEngaged.length === 0 && <p className="text-xs text-slate-400">No engaged students found.</p>}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">At-Risk Students</p>
-                <div className="mt-2 space-y-1.5">
-                  {bundle.students.atRisk.slice(0, 5).map((student) => (
-                    <div key={student.studentId} className="rounded-md border border-red-200 bg-red-50 p-2">
-                      <p className="text-xs font-semibold text-red-800">{student.name}</p>
-                      <p className="text-[11px] text-red-700">{student.atRiskReason || "Low engagement risk"}</p>
-                    </div>
-                  ))}
-                  {bundle.students.atRisk.length === 0 && <p className="text-xs text-slate-400">No at-risk students detected.</p>}
-                </div>
-              </div>
-            </div>
-          </div>
         </SectionCard>
       </div>
 

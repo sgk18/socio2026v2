@@ -325,7 +325,7 @@ export default function VenueDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Venue Requests</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Review and action venue booking requests for your campus.
+            Review venue requests for your campus.
           </p>
         </div>
 
@@ -398,7 +398,7 @@ export default function VenueDashboard() {
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                   </svg>
                 </div>
-                <p className="text-sm font-medium text-gray-500">All clear — no pending requests</p>
+                <p className="text-sm font-medium text-gray-500">No pending requests</p>
               </div>
             ) : (
               <>
@@ -487,8 +487,8 @@ export default function VenueDashboard() {
               </p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {notesModal.action === "rejected"
-                  ? "Provide a reason so the organiser knows why."
-                  : "Explain what needs to be corrected before re-submission."}
+                  ? "Add a reason for the organiser."
+                  : "Say what to fix before resubmitting."}
               </p>
             </div>
             <div className="px-5 py-4">
