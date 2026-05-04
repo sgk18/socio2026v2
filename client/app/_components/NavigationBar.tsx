@@ -94,6 +94,10 @@ function NavigationBar() {
   const [clubEditorClubs, setClubEditorClubs] = useState<Array<{club_id: string; club_name: string}>>([]);
   const [showClubSelectionModal, setShowClubSelectionModal] = useState(false);
   const [selectedClubId, setSelectedClubId] = useState<string>("");
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
   const navContainerRef = useRef<HTMLElement | null>(null);
   const logoRef = useRef<HTMLDivElement | null>(null);
   const rightControlsRef = useRef<HTMLDivElement | null>(null);
@@ -109,7 +113,7 @@ function NavigationBar() {
   const displayName = userData?.name || sessionDisplayName;
   const displayAvatar = userData?.avatar_url || session?.user?.user_metadata?.avatar_url || null;
   const avatarInitial = (displayName || "U").charAt(0).toUpperCase();
-  const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const isLocalhost = hasMounted && typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
   const isMasterAdmin = Boolean((userData as any)?.is_masteradmin);
   const canAccessAdmin = isMasterAdmin || isLocalhost;
   const isAccountsOffice = Boolean((userData as any)?.is_accounts_office);
