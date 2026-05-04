@@ -188,7 +188,7 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'SOCIO API Server',
     status: 'running',
-    version: '2.0.1',
+    version: '2.0.2-cors-fix',
     timestamp: new Date().toISOString(),
     endpoints: {
       users: '/api/users',
