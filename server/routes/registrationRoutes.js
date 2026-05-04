@@ -150,7 +150,7 @@ router.get(
         const { data, error } = await supabase
           .from("registrations")
           .select("*")
-          .or(`individual_register_number.eq.${id},team_leader_register_number.eq.${id},individual_email.eq.${id},team_leader_email.eq.${id},user_email.eq.${id}`)
+          .or(`individual_register_number.eq."${id}",team_leader_register_number.eq."${id}",individual_email.eq."${id}",team_leader_email.eq."${id}",user_email.eq."${id}"`)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
