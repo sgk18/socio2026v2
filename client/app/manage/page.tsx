@@ -1192,14 +1192,6 @@ function ManageDashboard() {
   const [volPage, setVolPage] = useState(1);
   const [showAddSubHead, setShowAddSubHead] = useState(false);
   const [showAddVol, setShowAddVol] = useState(false);
-  const [editingSubHead, setEditingSubHead] = useState<{ festId: string; festTitle: string; email: string; expiresAt?: string | null } | null>(null);
-  const [editingSubHeadDate, setEditingSubHeadDate] = useState("");
-  const [isSavingSubHeadEdit, setIsSavingSubHeadEdit] = useState(false);
-  const [subHeadEditError, setSubHeadEditError] = useState<string | null>(null);
-  const [editingTabVol, setEditingTabVol] = useState<{ eventId: string; eventTitle: string; register_number: string; expires_at: string } | null>(null);
-  const [editingTabVolDate, setEditingTabVolDate] = useState("");
-  const [isSavingTabVolEdit, setIsSavingTabVolEdit] = useState(false);
-  const [tabVolEditError, setTabVolEditError] = useState<string | null>(null);
   
   // Auth Context & Session
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -2179,104 +2171,6 @@ function ManageDashboard() {
     }
   };
 
-<<<<<<< Updated upstream
-  const handleOpenEditSubHead = (sh: { festId: string; festTitle: string; email: string; expiresAt?: string | null }) => {
-    setEditingSubHead(sh);
-    setEditingSubHeadDate(toDateInputValue(sh.expiresAt ?? null));
-    setSubHeadEditError(null);
-  };
-
-  const handleCloseEditSubHead = () => {
-    if (isSavingSubHeadEdit) return;
-    setEditingSubHead(null);
-    setEditingSubHeadDate("");
-    setSubHeadEditError(null);
-  };
-
-  const handleSaveEditSubHead = async () => {
-    if (!authToken) { toast.error("Please sign in again."); return; }
-    if (!editingSubHead) return;
-    const today = getTodayDateInputValue();
-    if (!editingSubHeadDate) { setSubHeadEditError("Select an expiration date."); return; }
-    if (editingSubHeadDate < today) { setSubHeadEditError("Past dates are not allowed."); return; }
-
-    setIsSavingSubHeadEdit(true);
-    setSubHeadEditError(null);
-    try {
-      const fest = fests.find(f => f.fest_id === editingSubHead.festId);
-      if (!fest) throw new Error("Fest not found");
-      const newExpiryIso = new Date(`${editingSubHeadDate}T23:59:59`).toISOString();
-      const updatedSubHeads = (fest.sub_heads || []).map(sh =>
-        sh.email === editingSubHead.email ? { ...sh, expiresAt: newExpiryIso } : sh
-      );
-      const res = await fetch(`${API_URL}/api/fests/${encodeURIComponent(editingSubHead.festId)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ sub_heads: updatedSubHeads }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to update expiration.");
-      }
-      setFests(prev => prev.map(f => f.fest_id !== editingSubHead.festId ? f : {
-        ...f,
-        sub_heads: (f.sub_heads || []).map(sh =>
-          sh.email === editingSubHead.email ? { ...sh, expiresAt: newExpiryIso } : sh
-        ),
-      }));
-      toast.success("Sub-organiser expiration updated.");
-      handleCloseEditSubHead();
-    } catch (err: any) {
-      toast.error(err?.message || "Unable to update expiration.");
-    } finally {
-      setIsSavingSubHeadEdit(false);
-    }
-  };
-
-  const handleOpenEditTabVol = (v: { eventId: string; eventTitle: string; register_number: string; expires_at: string }) => {
-    setEditingTabVol(v);
-    setEditingTabVolDate(toDateInputValue(v.expires_at));
-    setTabVolEditError(null);
-  };
-
-  const handleCloseEditTabVol = () => {
-    if (isSavingTabVolEdit) return;
-    setEditingTabVol(null);
-    setEditingTabVolDate("");
-    setTabVolEditError(null);
-  };
-
-  const handleSaveEditTabVol = async () => {
-    if (!authToken) { toast.error("Please sign in again."); return; }
-    if (!editingTabVol) return;
-    const today = getTodayDateInputValue();
-    if (!editingTabVolDate) { setTabVolEditError("Select an expiration date."); return; }
-    if (editingTabVolDate < today) { setTabVolEditError("Past dates are not allowed."); return; }
-
-    setIsSavingTabVolEdit(true);
-    setTabVolEditError(null);
-    try {
-      const reg = normalizeRegisterNumber(editingTabVol.register_number);
-      const res = await fetch(
-        `${API_URL}/api/events/${encodeURIComponent(editingTabVol.eventId)}/volunteers/${encodeURIComponent(reg)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ expires_on: editingTabVolDate }),
-        }
-      );
-      const payload = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(payload?.error || "Failed to update expiration.");
-      toast.success("Volunteer expiration updated.");
-      await refreshLiveEvents();
-      handleCloseEditTabVol();
-    } catch (err: any) {
-      toast.error(err?.message || "Unable to update expiration.");
-    } finally {
-      setIsSavingTabVolEdit(false);
-    }
-  };
-=======
   const openSubHeadExpiryEdit = (festId: string, email: string, expiresAt: string | null) => {
     setExpiryEditTarget({ kind: "subHead", festId, email, label: email });
     setExpiryEditDate(toDateInputValue(expiresAt));
@@ -2413,7 +2307,6 @@ function ManageDashboard() {
       </div>
     </div>
   ) : null;
->>>>>>> Stashed changes
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -2909,17 +2802,12 @@ function ManageDashboard() {
                                   )}
                                 </td>
                                 <td className="px-5 py-3 text-right">
-<<<<<<< Updated upstream
-                                  <button type="button" disabled={revoking || isSavingSubHeadEdit} onClick={() => handleOpenEditSubHead({ festId: sh.festId, festTitle: sh.festTitle, email: sh.email, expiresAt: sh.expiresAt })}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mr-2">
-=======
                                   <button
                                     type="button"
-                                    disabled={revoking}
+                                    disabled={revoking || expiryEditSaving}
                                     onClick={() => openSubHeadExpiryEdit(sh.festId, sh.email, sh.expiresAt || null)}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mr-2"
                                   >
->>>>>>> Stashed changes
                                     <Pencil className="w-3.5 h-3.5" />Edit
                                   </button>
                                   <button type="button" disabled={revoking} onClick={() => handleRevokeFestSubHead(sh.festId, sh.email)}
@@ -2990,17 +2878,12 @@ function ManageDashboard() {
                                 </td>
                                 <td className="px-5 py-3 text-xs text-slate-500">{v.assigned_by}</td>
                                 <td className="px-5 py-3 text-right">
-<<<<<<< Updated upstream
-                                  <button type="button" disabled={revoking || isSavingTabVolEdit} onClick={() => handleOpenEditTabVol({ eventId: v.eventId, eventTitle: v.eventTitle, register_number: v.register_number, expires_at: v.expires_at })}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mr-2">
-=======
                                   <button
                                     type="button"
-                                    disabled={revoking}
+                                    disabled={revoking || expiryEditSaving}
                                     onClick={() => openEventVolunteerExpiryEdit(v.eventId, v.register_number, v.expires_at)}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mr-2"
                                   >
->>>>>>> Stashed changes
                                     <Pencil className="w-3.5 h-3.5" />Edit
                                   </button>
                                   <button type="button" disabled={revoking} onClick={() => handleRevokeVolunteer(v.eventId, v.register_number)}
@@ -3084,91 +2967,6 @@ function ManageDashboard() {
         />
       )}
 
-      {editingSubHead && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-          onClick={(e) => { if (e.target === e.currentTarget) handleCloseEditSubHead(); }}
-        >
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Edit expiration date</h3>
-                <p className="text-xs text-slate-500 mt-0.5">{editingSubHead.email} · {editingSubHead.festTitle}</p>
-              </div>
-              <button type="button" onClick={handleCloseEditSubHead} disabled={isSavingSubHeadEdit}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Expiration Date</label>
-                <input
-                  type="date"
-                  value={editingSubHeadDate}
-                  min={getTodayDateInputValue()}
-                  onChange={(e) => { setEditingSubHeadDate(e.target.value); if (subHeadEditError) setSubHeadEditError(null); }}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3]"
-                />
-              </div>
-              {subHeadEditError && <p className="text-xs text-red-600">{subHeadEditError}</p>}
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={handleCloseEditSubHead} disabled={isSavingSubHeadEdit}
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
-                  Cancel
-                </button>
-                <button type="button" onClick={handleSaveEditSubHead} disabled={isSavingSubHeadEdit || !editingSubHeadDate}
-                  className="inline-flex items-center justify-center rounded-lg bg-[#154CB3] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0f3782] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  {isSavingSubHeadEdit ? "Saving…" : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingTabVol && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-          onClick={(e) => { if (e.target === e.currentTarget) handleCloseEditTabVol(); }}
-        >
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Edit expiration date</h3>
-                <p className="text-xs text-slate-500 mt-0.5 font-mono">{editingTabVol.register_number} · {editingTabVol.eventTitle}</p>
-              </div>
-              <button type="button" onClick={handleCloseEditTabVol} disabled={isSavingTabVolEdit}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Expiration Date</label>
-                <input
-                  type="date"
-                  value={editingTabVolDate}
-                  min={getTodayDateInputValue()}
-                  onChange={(e) => { setEditingTabVolDate(e.target.value); if (tabVolEditError) setTabVolEditError(null); }}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3]"
-                />
-              </div>
-              {tabVolEditError && <p className="text-xs text-red-600">{tabVolEditError}</p>}
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={handleCloseEditTabVol} disabled={isSavingTabVolEdit}
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
-                  Cancel
-                </button>
-                <button type="button" onClick={handleSaveEditTabVol} disabled={isSavingTabVolEdit || !editingTabVolDate}
-                  className="inline-flex items-center justify-center rounded-lg bg-[#154CB3] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0f3782] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  {isSavingTabVolEdit ? "Saving…" : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
