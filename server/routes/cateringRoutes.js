@@ -557,6 +557,8 @@ router.get(
     try {
       const allowed = req.catering_ids || [];
       const requested = (req.query.catering_id || "").trim();
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 20;
       let scopeIds;
 
       if (requested) {
@@ -572,16 +574,21 @@ router.get(
         return res.status(400).json({ error: "No catering_id associated with this user" });
       }
 
-      const { data: bookings, error } = await supabase
+      // Calculate range for pagination
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Fetch bookings with count
+      const { data: bookings, error, count } = await supabase
         .from("cater_bookings")
-        .select("*")
+        .select("*", { count: "exact" })
         .in("catering_id", scopeIds)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
 
-      // Enrich with event/fest title/date and vendor name (vendor name needed when
-      // a user belongs to multiple shops and the UI groups orders by vendor).
+      // Enrich with event/fest title/date and vendor name
       const eventIds  = Array.from(new Set((bookings || []).filter(b => b.event_fest_type === "event" && b.event_fest_id).map(b => b.event_fest_id)));
       const festIds   = Array.from(new Set((bookings || []).filter(b => b.event_fest_type === "fest"  && b.event_fest_id).map(b => b.event_fest_id)));
       const vendorIds = Array.from(new Set((bookings || []).map(b => b.catering_id).filter(Boolean)));
@@ -611,14 +618,24 @@ router.get(
         catering_name:     b.catering_id                                    ? vendorsById.get(b.catering_id)?.catering_name || null : null,
       }));
 
-      // Vendor list for the dashboard's filter UI when the user belongs to >1 shop.
+      // Vendor list for filters
       const vendors = (await supabase
         .from("caters")
         .select("catering_id, catering_name")
         .in("catering_id", allowed.length ? allowed : ["__none__"])
       ).data || [];
 
-      return res.json({ catering_ids: allowed, vendors, bookings: enriched });
+      return res.json({ 
+        catering_ids: allowed, 
+        vendors, 
+        bookings: enriched,
+        pagination: {
+          totalItems: count || 0,
+          totalPages: Math.ceil((count || 0) / pageSize),
+          currentPage: page,
+          pageSize
+        }
+      });
     } catch (err) {
       console.error("[Caterers] GET /catering/bookings error:", err);
       return res.status(500).json({ error: err?.message || "Internal server error" });
