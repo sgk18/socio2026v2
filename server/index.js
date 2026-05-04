@@ -107,10 +107,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 const DEFAULT_ALLOWED_ORIGIN_PATTERNS = [
-  '^http://(localhost|127\\.0\\.0\\.1)(:\\d+)?$',
-  '^https://.*\\.vercel\\.app$',
-  '^https://.*\\.christuniversity\\.in$',
-  '^https://.*\\.withsocio\\.com$'
+  '^http://(localhost|127\\.0\\.0\\.1)(:\\d+)?/?$',
+  '^https://.*\\.vercel\\.app/?$',
+  '^https://.*\\.christuniversity\\.in/?$',
+  '^https://.*\\.withsocio\\.com/?$'
 ];
 
 const parseCsvEnv = (value) =>
@@ -167,10 +167,12 @@ const setCorsHeaders = (req, res) => {
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!isOriginAllowed(origin)) {
+  setCorsHeaders(req, res);
+  
+  if (origin && !isOriginAllowed(origin)) {
     return res.status(403).json({ error: 'CORS origin not allowed' });
   }
-  setCorsHeaders(req, res);
+  
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
