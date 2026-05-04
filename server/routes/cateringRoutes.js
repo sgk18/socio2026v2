@@ -570,7 +570,7 @@ router.get(
         scopeIds = allowed;
       }
 
-      if (!scopeIds.length) {
+      if (!scopeIds.length && !req.userInfo?.is_masteradmin) {
         return res.status(400).json({ error: "No catering_id associated with this user" });
       }
 
@@ -579,10 +579,15 @@ router.get(
       const to = from + pageSize - 1;
 
       // Fetch bookings with count
-      const { data: bookings, error, count } = await supabase
+      let query = supabase
         .from("cater_bookings")
-        .select("*", { count: "exact" })
-        .in("catering_id", scopeIds)
+        .select("*", { count: "exact" });
+
+      if (scopeIds.length) {
+        query = query.in("catering_id", scopeIds);
+      }
+
+      const { data: bookings, error, count } = await query
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -619,11 +624,15 @@ router.get(
       }));
 
       // Vendor list for filters
-      const vendors = (await supabase
+      let vendorsQuery = supabase
         .from("caters")
-        .select("catering_id, catering_name")
-        .in("catering_id", allowed.length ? allowed : ["__none__"])
-      ).data || [];
+        .select("catering_id, catering_name");
+
+      if (!req.userInfo?.is_masteradmin) {
+        vendorsQuery = vendorsQuery.in("catering_id", allowed.length ? allowed : ["__none__"]);
+      }
+
+      const vendors = (await vendorsQuery).data || [];
 
       return res.json({ 
         catering_ids: allowed, 
