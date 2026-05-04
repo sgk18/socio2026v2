@@ -4003,7 +4003,7 @@ function MasterAdminPageInner() {
               {/* ── Assign form (compact) ── */}
               <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
-                <div className="flex gap-3 items-start flex-wrap">
+                <div className="flex gap-3 items-center flex-wrap">
                   {/* Email */}
                   <div className="relative min-w-[220px] flex-1">
                     <input
@@ -4035,7 +4035,6 @@ function MasterAdminPageInner() {
 
                   {/* Role dropdown */}
                   <div className="min-w-[180px]">
-                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Role</label>
                     <select
                       value={roleSelectedRole}
                       onChange={e => { setRoleSelectedRole(e.target.value as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
