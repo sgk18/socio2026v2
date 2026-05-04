@@ -43,6 +43,7 @@ import stallBookingRoutes from "./routes/stallBookingRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
+import { sanitizeErrorPayload } from "./utils/userFacingErrors.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,6 +55,37 @@ initializeDatabase().catch(err => {
 
 const app = express();
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+
+  res.json = (body) => {
+    const isErrorResponse =
+      res.statusCode >= 400 ||
+      body?.success === false ||
+      Boolean(body?.error);
+
+    if (isErrorResponse) {
+      const sanitized = sanitizeErrorPayload(body, res.statusCode);
+      return originalJson({
+        ...body,
+        ...sanitized,
+        message: sanitized.error,
+        details: undefined,
+        code: undefined,
+        stack: undefined,
+        userEmail: undefined,
+        currentRole: undefined,
+        supabaseError: undefined,
+        errorDetail: undefined,
+      });
+    }
+
+    return originalJson(body);
+  };
+
+  next();
+});
 
 // Prevent stale API payloads from being cached by browsers or intermediary caches.
 app.use('/api', (req, res, next) => {

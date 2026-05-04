@@ -95,6 +95,24 @@ const toDateTimeLocalInputValue = (value: string | null | undefined): string => 
   return parsed.toISOString().slice(0, 16);
 };
 
+const toDateInputValue = (value: string | null | undefined): string => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getTodayDateInputValue = (): string => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const getDefaultSubHeadExpiry = (fest?: Fest): string => {
   if (fest?.closing_date) {
     return toDateTimeLocalInputValue(fest.closing_date);
@@ -363,6 +381,10 @@ const VolunteerManagerModal = ({
   const [input, setInput] = React.useState("");
   const [isAdding, setIsAdding] = React.useState(false);
   const [revokingIds, setRevokingIds] = React.useState<Set<string>>(new Set());
+  const [editingVolunteer, setEditingVolunteer] = React.useState<VolunteerRecord | null>(null);
+  const [editedExpiryDate, setEditedExpiryDate] = React.useState("");
+  const [isSavingEdit, setIsSavingEdit] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
   const [volunteers, setVolunteers] = React.useState<VolunteerRecord[]>(
     normalizeVolunteerRecords((event as any).volunteers)
   );
@@ -412,6 +434,71 @@ const VolunteerManagerModal = ({
       toast.error(err?.message || "Unable to revoke volunteer.");
     } finally {
       setRevokingIds((prev) => { const next = new Set(prev); next.delete(registerNumber); return next; });
+    }
+  };
+
+  const handleOpenEdit = (volunteer: VolunteerRecord) => {
+    setEditingVolunteer(volunteer);
+    setEditedExpiryDate(toDateInputValue(volunteer.expires_at));
+    setEditError(null);
+  };
+
+  const handleCloseEdit = () => {
+    if (isSavingEdit) return;
+    setEditingVolunteer(null);
+    setEditedExpiryDate("");
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!authToken) {
+      toast.error("Please sign in again.");
+      return;
+    }
+
+    if (!editingVolunteer) return;
+
+    const today = getTodayDateInputValue();
+    if (!editedExpiryDate) {
+      setEditError("Select an expiration date.");
+      return;
+    }
+
+    if (editedExpiryDate < today) {
+      setEditError("Past dates are not allowed.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError(null);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/events/${encodeURIComponent(event.event_id)}/volunteers/${encodeURIComponent(editingVolunteer.register_number)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ expires_on: editedExpiryDate }),
+        }
+      );
+
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to update volunteer expiration.");
+      }
+
+      const updated = normalizeVolunteerRecords(payload?.event?.volunteers);
+      setVolunteers(updated);
+      toast.success("Volunteer expiration updated.");
+      onVolunteersChanged();
+      handleCloseEdit();
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to update volunteer expiration.");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -486,6 +573,15 @@ const VolunteerManagerModal = ({
                       <td className="px-5 py-3 text-right">
                         <button
                           type="button"
+                          disabled={isRevoking || isSavingEdit}
+                          onClick={() => handleOpenEdit(v)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mr-2"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
                           disabled={isRevoking}
                           onClick={() => handleRevoke(v.register_number)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -509,6 +605,68 @@ const VolunteerManagerModal = ({
           onPrev={() => setVolPage((p) => Math.max(1, p - 1))}
           onNext={() => setVolPage((p) => p + 1)}
         />
+
+        {editingVolunteer && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) handleCloseEdit();
+            }}
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-100">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Edit expiration date</h3>
+                  <p className="text-xs text-slate-500 mt-0.5 font-mono">{editingVolunteer.register_number}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseEdit}
+                  disabled={isSavingEdit}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
+                    Expiration Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editedExpiryDate}
+                    min={getTodayDateInputValue()}
+                    onChange={(event) => {
+                      setEditedExpiryDate(event.target.value);
+                      if (editError) setEditError(null);
+                    }}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#154CB3]/30 focus:border-[#154CB3]"
+                  />
+                </div>
+                {editError && <p className="text-xs text-red-600">{editError}</p>}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCloseEdit}
+                    disabled={isSavingEdit}
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    disabled={isSavingEdit || !editedExpiryDate}
+                    className="inline-flex items-center justify-center rounded-lg bg-[#154CB3] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0f3782] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingEdit ? "Saving…" : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

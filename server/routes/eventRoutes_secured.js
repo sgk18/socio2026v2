@@ -1752,6 +1752,81 @@ router.post(
   }
 );
 
+// PATCH update a volunteer expiration date - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
+router.patch(
+  "/:eventId/volunteers/:registerNumber",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  requireOrganiserOrSubHead,
+  requireOwnership("events", "eventId", "auth_uuid"),
+  async (req, res) => {
+    try {
+      const { eventId, registerNumber } = req.params;
+      const targetRegisterNumber = normalizeRegisterNumber(registerNumber);
+      const expiresOn = String(req.body.expires_on || req.body.expires_at || "").trim();
+
+      if (!targetRegisterNumber) {
+        return res.status(400).json({ error: "Volunteer register number is required." });
+      }
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresOn)) {
+        return res.status(400).json({ error: "A valid expiration date is required." });
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const selectedDate = new Date(`${expiresOn}T00:00:00`);
+      if (Number.isNaN(selectedDate.getTime())) {
+        return res.status(400).json({ error: "A valid expiration date is required." });
+      }
+
+      selectedDate.setHours(0, 0, 0, 0);
+      if (selectedDate.getTime() < today.getTime()) {
+        return res.status(400).json({ error: "Past dates are not allowed." });
+      }
+
+      const existingVolunteers = normalizeVolunteerRecords(req.resource?.volunteers);
+      let found = false;
+      const updatedVolunteers = existingVolunteers.map((volunteer) => {
+        if (volunteer.register_number !== targetRegisterNumber) return volunteer;
+        found = true;
+        return {
+          ...volunteer,
+          expires_at: new Date(`${expiresOn}T23:59:59.999`).toISOString(),
+        };
+      });
+
+      if (!found) {
+        return res.status(404).json({ error: "Volunteer assignment not found." });
+      }
+
+      const updatedRows = await update(
+        "events",
+        {
+          volunteers: updatedVolunteers,
+          updated_at: new Date().toISOString(),
+        },
+        { event_id: eventId }
+      );
+
+      return res.status(200).json({
+        message: "Volunteer expiration updated successfully.",
+        event: updatedRows?.[0]
+          ? {
+              ...updatedRows[0],
+              volunteers: normalizeVolunteerRecords(updatedRows[0].volunteers),
+            }
+          : null,
+      });
+    } catch (error) {
+      console.error("Server error PATCH /api/events/:eventId/volunteers/:registerNumber:", error);
+      return res.status(500).json({ error: "Internal server error while updating volunteer expiration." });
+    }
+  }
+);
+
 // DELETE volunteer access - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
 router.delete(
   "/:eventId/volunteers/:registerNumber",
