@@ -137,9 +137,9 @@ export default function TeamPage() {
     },
     {
       name: "Suryachalam",
-      role: "Full Stack & Mobile App Developer",
+      role: "Product Engineer & Mobile App Developer",
       image: suryachalamImg,
-      skills: ["Full Stack Development", "Mobile Apps", "Product Delivery"],
+      skills: ["Product Engineering", "Mobile Apps", "Product Delivery"],
       email: "suryachalam18@gmail.com",
       linkedin: "https://www.linkedin.com/in/suryachalam/",
       github: "https://github.com/sgk18",

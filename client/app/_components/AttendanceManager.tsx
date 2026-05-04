@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { QRScanner } from "./QRScanner";
+import supabase from "@/lib/supabaseClient";
 
 interface Participant {
   id: string;
@@ -29,7 +30,20 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const { userData, session } = useAuth();
+
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showExportMenu]);
 
   useEffect(() => {
     fetchParticipants();
@@ -123,28 +137,217 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     }
   };
 
-  const exportAttendance = () => {
-    const csvContent = [
-      ["Name", "Email", "Register Number", "Team Name", "Status", "Attended At"].join(","),
-      ...participants.map(p => [
-        p.name,
-        p.email,
-        p.registerNumber || "",
-        p.teamName || "",
-        p.status,
-        p.attendedAt ? new Date(p.attendedAt).toLocaleString() : "",
-      ].join(","))
-    ].join("\n");
+  const buildAttendanceExportData = async () => {
+    const periodSlots: { label: string; startMin: number; endMin: number }[] = [
+      { label: "Period07_45AM", startMin: 7 * 60 + 45,  endMin: 8 * 60 + 45 },
+      { label: "Period08_45AM", startMin: 8 * 60 + 45,  endMin: 9 * 60 + 45 },
+      { label: "Period09_45AM", startMin: 9 * 60 + 45,  endMin: 10 * 60 + 45 },
+      { label: "Period10_45AM", startMin: 10 * 60 + 45, endMin: 11 * 60 + 45 },
+      { label: "Period11_45AM", startMin: 11 * 60 + 45, endMin: 12 * 60 + 45 },
+      { label: "Period12_45PM", startMin: 12 * 60 + 45, endMin: 13 * 60 + 45 },
+      { label: "Period01_45PM", startMin: 13 * 60 + 45, endMin: 14 * 60 + 45 },
+      { label: "Period02_45PM", startMin: 14 * 60 + 45, endMin: 15 * 60 + 45 },
+      { label: "Period03_45PM", startMin: 15 * 60 + 45, endMin: 16 * 60 + 45 },
+      { label: "Period04_45PM", startMin: 16 * 60 + 45, endMin: 17 * 60 + 45 },
+      { label: "Period05_45PM", startMin: 17 * 60 + 45, endMin: 18 * 60 + 45 },
+    ];
+    const periodColumns = periodSlots.map((s) => s.label);
+    const headers = ["Date", "Name", "Register Number", "Class", ...periodColumns];
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    const parseTimeToMinutes = (raw: unknown): number | null => {
+      if (raw == null) return null;
+      const s = String(raw).trim();
+      if (!s) return null;
+      const m = s.match(/^(\d{1,2}):(\d{2})/);
+      if (!m) return null;
+      const hh = parseInt(m[1], 10);
+      const mm = parseInt(m[2], 10);
+      if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+      return hh * 60 + mm;
+    };
+
+    let eventStartMin: number | null = null;
+    let eventEndMin: number | null = null;
+    let eventDateFormatted = "";
+    try {
+      const { data: ev } = await supabase
+        .from("events")
+        .select("event_date, event_time, end_time")
+        .eq("event_id", eventId)
+        .maybeSingle();
+      if (ev) {
+        eventStartMin = parseTimeToMinutes((ev as any).event_time);
+        eventEndMin = parseTimeToMinutes((ev as any).end_time);
+        const evDate = (ev as any).event_date as string | null;
+        if (evDate) {
+          const m = evDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (m) eventDateFormatted = `${m[3]}/${m[2]}/${m[1]}`;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch event timing for export:", err);
+    }
+
+    const dateForRow = eventDateFormatted || (() => {
+      const t = new Date();
+      return `${String(t.getDate()).padStart(2, "0")}/${String(t.getMonth() + 1).padStart(2, "0")}/${t.getFullYear()}`;
+    })();
+
+    const matchedSet = new Set<string>(
+      eventStartMin != null && eventEndMin != null && eventEndMin > eventStartMin
+        ? periodSlots
+            .filter((s) => s.startMin < eventEndMin! && s.endMin > eventStartMin!)
+            .map((s) => s.label)
+        : []
+    );
+
+    const attendedParticipants = participants.filter((p) => p.status === "attended");
+
+    const dataRows = attendedParticipants.map((p) => [
+      dateForRow,
+      p.name || "",
+      p.registerNumber || "",
+      "",
+      ...periodColumns.map((label) => (matchedSet.has(label) ? label : "")),
+    ]);
+
+    return { headers, periodColumns, dataRows };
+  };
+
+  const triggerDownload = (blob: Blob, filename: string) => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_${eventTitle}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  };
+
+  const baseFilename = () =>
+    `attendance_${eventTitle}_${new Date().toISOString().split("T")[0]}`;
+
+  const exportAsExcel = async () => {
+    setShowExportMenu(false);
+    const { headers, dataRows } = await buildAttendanceExportData();
+
+    const ExcelJS = (await import("exceljs")).default;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Attendance");
+
+    const totalCols = headers.length;
+    const firstPeriodCol = 5;
+    const lastPeriodCol = totalCols;
+
+    const bannerRow = worksheet.addRow(
+      Array.from({ length: totalCols }, (_, i) =>
+        i === firstPeriodCol - 1 ? "Hours missed(please specify - Period9_45)" : ""
+      )
+    );
+    bannerRow.height = 26;
+    const navyBorder = {
+      top: { style: "thin" as const, color: { argb: "FF1F2937" } },
+      left: { style: "thin" as const, color: { argb: "FF1F2937" } },
+      bottom: { style: "thin" as const, color: { argb: "FF1F2937" } },
+      right: { style: "thin" as const, color: { argb: "FF1F2937" } },
+    };
+    worksheet.mergeCells(1, 1, 1, firstPeriodCol - 1);
+    const eventCell = worksheet.getCell(1, 1);
+    eventCell.value = eventTitle || "";
+    eventCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+    eventCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    eventCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF063168" },
+    };
+    eventCell.border = navyBorder;
+    worksheet.mergeCells(1, firstPeriodCol, 1, lastPeriodCol);
+    const bannerCell = worksheet.getCell(1, firstPeriodCol);
+    bannerCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+    bannerCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    bannerCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF063168" },
+    };
+    bannerCell.border = navyBorder;
+
+    const headerRow = worksheet.addRow(headers);
+    headerRow.height = 22;
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF154CB3" },
+      };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FF1F2937" } },
+        left: { style: "thin", color: { argb: "FF1F2937" } },
+        bottom: { style: "thin", color: { argb: "FF1F2937" } },
+        right: { style: "thin", color: { argb: "FF1F2937" } },
+      };
+    });
+
+    dataRows.forEach((rowValues) => {
+      const row = worksheet.addRow(rowValues);
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFD1D5DB" } },
+          left: { style: "thin", color: { argb: "FFD1D5DB" } },
+          bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
+          right: { style: "thin", color: { argb: "FFD1D5DB" } },
+        };
+      });
+    });
+
+    headers.forEach((header, idx) => {
+      const col = worksheet.getColumn(idx + 1);
+      let max = header.length;
+      for (let r = 2; r <= worksheet.rowCount; r++) {
+        const cell = worksheet.getCell(r, idx + 1);
+        const value = cell.value == null ? "" : String(cell.value);
+        if (value.length > max) max = value.length;
+      }
+      col.width = Math.min(Math.max(max + 4, 14), 40);
+    });
+
+    worksheet.views = [{ state: "frozen", ySplit: 2 }];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    triggerDownload(blob, `${baseFilename()}.xlsx`);
+  };
+
+  const exportAsCsv = async () => {
+    setShowExportMenu(false);
+    const { headers, dataRows } = await buildAttendanceExportData();
+
+    const escapeCsv = (value: unknown) => {
+      const s = value == null ? "" : String(value);
+      const needsQuoting = /[",\n\r]/.test(s);
+      const escaped = s.replace(/"/g, '""');
+      return needsQuoting ? `"${escaped}"` : escaped;
+    };
+
+    const lines = [
+      headers.map(escapeCsv).join(","),
+      ...dataRows.map((row) => row.map(escapeCsv).join(",")),
+    ];
+    const csv = "﻿" + lines.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    triggerDownload(blob, `${baseFilename()}.csv`);
+  };
+
+  const exportAsGoogleSheet = async () => {
+    await exportAsExcel();
+    window.open("https://docs.google.com/spreadsheets/u/0/", "_blank", "noopener,noreferrer");
   };
 
   const handleQRScanSuccess = (result: any) => {
@@ -214,15 +417,58 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
               </svg>
               QR Scanner
             </button>
-            <button
-              onClick={exportAttendance}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export CSV
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                aria-haspopup="menu"
+                aria-expanded={showExportMenu}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export
+                <svg
+                  className={`w-4 h-4 transition-transform ${showExportMenu ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showExportMenu && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden"
+                >
+                  <button
+                    onClick={exportAsGoogleSheet}
+                    role="menuitem"
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    Google Sheet
+                  </button>
+                  <button
+                    onClick={exportAsExcel}
+                    role="menuitem"
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
+                  >
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-700" />
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    onClick={exportAsCsv}
+                    role="menuitem"
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
+                  >
+                    <span className="inline-block w-2 h-2 rounded-full bg-gray-500" />
+                    CSV (.csv)
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
