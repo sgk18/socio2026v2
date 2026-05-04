@@ -6,6 +6,11 @@ import Image from "next/image";
 import Footer from "../../_components/Home/Footer";
 import sachinImg from '@/public/founder-sachin-yadav.jpg';
 import suryaImg from '@/public/founder-surya-vamshi.jpg';
+import socioTeam1Img from '@/public/socioteam1.jpeg';
+import socioTeam2Img from '@/public/socioteam2.jpeg';
+import advaithImg from '@/public/advaithsocio.jpeg';
+import altonImg from '@/public/altonsocio.jpeg';
+import suryachalamImg from '@/public/suryachalamsocio.jpeg';
 
 export default function TeamPage() {
   const founders = [
@@ -30,17 +35,6 @@ export default function TeamPage() {
       github: "https://github.com/ayrus15",
       quote: "Great products solve real problems. We just happened to find ours on campus.",
       image: suryaImg,
-    },
-    {
-      name: "Meeth Shah",
-      role: "Co-Founder & Design Lead",
-      bio: "Experience design expert who co-founded SOCIO to bridge the gap between students and campus opportunities. With a focus on intuitive interfaces and seamless user journeys, Meeth leads the design vision, ensuring the platform remains accessible and engaging for all university students. His background in creative strategy drives SOCIO's unique visual identity.",
-      skills: ["UI/UX Design", "Creative Strategy", "User Experience", "Brand Identity"],
-      email: "thesocio.blr@gmail.com",
-      linkedin: "https://www.linkedin.com/in/meeth-shah/",
-      github: "https://github.com/thesachinyyadav",
-      quote: "Design is not just what it looks like, it's how it works for the community.",
-      image: null,
     },
   ];
 
@@ -116,10 +110,40 @@ export default function TeamPage() {
   ];
 
   const milestones = [
-    { metric: "4+", achievement: "Campuses", description: "Expanded beyond our home university" },
-    { metric: "20K+", achievement: "Students Served", description: "Growing community of active users" },
-    { metric: "500+", achievement: "Events Managed", description: "Helping organizers reach their audience" },
+    { metric: "5+", achievement: "Campuses", description: "Expanded beyond our home university" },
+    { metric: "2000+", achievement: "Students Served", description: "Growing community of active users" },
+    { metric: "50+", achievement: "Events Managed", description: "Helping organizers reach their audience" },
     { metric: "95%", achievement: "Satisfaction", description: "High user satisfaction ratings" },
+  ];
+
+  const growingTeam = [
+    {
+      name: "Advaith Biju",
+      role: "Backend Engineer & System Design",
+      image: advaithImg,
+      skills: ["Backend Development", "System Design", "APIs"],
+      email: "advaithbiju2020@gmail.com",
+      linkedin: "https://www.linkedin.com/in/advaith-biju/",
+      github: "https://github.com/AdvaithBiju",
+    },
+    {
+      name: "Alton Joe",
+      role: "Wireframe Developer & System Design",
+      image: altonImg,
+      skills: ["Wireframing", "System Design", "UI Planning"],
+      email: "altonjoe670@gmail.com",
+      linkedin: "https://www.linkedin.com/in/alton-joe/",
+      github: "https://github.com/alton-joe-christ",
+    },
+    {
+      name: "Suryachalam",
+      role: "Full Stack & Mobile App Developer",
+      image: suryachalamImg,
+      skills: ["Full Stack Development", "Mobile Apps", "Product Delivery"],
+      email: "suryachalam18@gmail.com",
+      linkedin: "https://www.linkedin.com/in/suryachalam/",
+      github: "https://github.com/sgk18",
+    },
   ];
 
   return (
@@ -160,6 +184,62 @@ export default function TeamPage() {
               Our team has grown from 3 founders to include 11 talented interns across
               technical and business domains, all working to transform campus life.
             </p>
+          </div>
+        </section>
+
+        {/* Module 11 Celebration */}
+        <section className="mb-20">
+          {/* Text card — full width */}
+          <div className="bg-gradient-to-br from-[#063168] via-[#154CB3] to-[#0f4aa6] rounded-3xl p-8 sm:p-10 text-white mb-5">
+            <div className="max-w-3xl mb-8">
+              <p className="text-sm font-bold uppercase tracking-widest text-[#FFCC00] mb-4">
+                Module 11 Milestone
+              </p>
+              <h2 className="text-2xl sm:text-4xl font-black leading-tight mb-5">
+                Celebrating the successful inauguration of a bigger Module 11 of SOCIO
+              </h2>
+              <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
+                This moment marks a crucial milestone for SOCIO. What began as a student-led idea has now
+                grown into a stronger, wider platform with a larger operational module, a bigger team,
+                and a clearer path for the future of campus experiences.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 max-w-xl">
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                <p className="text-2xl font-black text-[#FFCC00] mb-1">11</p>
+                <p className="text-sm text-blue-100">Module expansion</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                <p className="text-2xl font-black text-[#FFCC00] mb-1">SOCIO</p>
+                <p className="text-sm text-blue-100">Team in action</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                <p className="text-2xl font-black text-[#FFCC00] mb-1">Milestone</p>
+                <p className="text-sm text-blue-100">A bigger chapter ahead</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Landscape images — side by side at full section width */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-gray-100">
+              <Image
+                src={socioTeam1Img}
+                alt="SOCIO team celebrating the successful inauguration of Module 11"
+                fill
+                placeholder="blur"
+                className="object-cover object-center"
+              />
+            </div>
+            <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-gray-100">
+              <Image
+                src={socioTeam2Img}
+                alt="SOCIO team during the Module 11 celebration"
+                fill
+                placeholder="blur"
+                className="object-cover object-center"
+              />
+            </div>
           </div>
         </section>
 
@@ -284,73 +364,7 @@ export default function TeamPage() {
           </div>
         </section>
 
-        {/* Growing Team Section */}
         <section className="mb-20">
-          <div className="text-center mb-12">
-            <p className="text-sm font-bold text-[#154CB3] uppercase tracking-widest mb-2">
-              Growing Together
-            </p>
-            <h2 className="text-2xl sm:text-4xl font-black text-[#063168]">
-              Our Growing Team
-            </h2>
-            <div className="mt-4 w-16 h-1 bg-[#FFCC00] mx-auto rounded-full" />
-          </div>
-
-          {/* Team Expansion */}
-          <div className="mb-14 bg-gray-50 p-8 sm:p-10 rounded-2xl border border-gray-200">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-[#154CB3] rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-[#063168]">Team Expansion</h3>
-                <p className="text-xs text-gray-500 font-semibold">March 2025</p>
-              </div>
-            </div>
-            <p className="text-gray-600 mb-8 leading-relaxed">
-              After our successful incubation, we expanded our team to bring diverse expertise
-              and fresh perspectives to SOCIO.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-xl border border-gray-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-[#154CB3]/10 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#154CB3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                  </div>
-                  <h4 className="font-bold text-gray-800">Technical Team</h4>
-                </div>
-                <p className="text-sm text-[#154CB3] font-semibold mb-3">8 Technical Interns</p>
-                <ul className="text-xs text-gray-600 space-y-2">
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Frontend Development & UI/UX</li>
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Backend Development & Database</li>
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Mobile App Development</li>
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Quality Assurance & Testing</li>
-                </ul>
-              </div>
-              <div className="bg-white p-6 rounded-xl border border-gray-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-[#FFCC00]/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#063168]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                  <h4 className="font-bold text-gray-800">Business Team</h4>
-                </div>
-                <p className="text-sm text-[#154CB3] font-semibold mb-3">7 Finance & Research Interns</p>
-                <ul className="text-xs text-gray-600 space-y-2">
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Market Research & User Analysis</li>
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Financial Planning & Strategy</li>
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Marketing & Community Outreach</li>
-                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Partnership Development</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
           {/* Advisors */}
           <div className="text-center mb-10">
             <p className="text-sm font-bold text-[#154CB3] uppercase tracking-widest mb-2">
@@ -417,6 +431,167 @@ export default function TeamPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Growing Team Section */}
+        <section className="mb-20">
+          <div className="text-center mb-12">
+            <p className="text-sm font-bold text-[#154CB3] uppercase tracking-widest mb-2">
+              Growing Together
+            </p>
+            <h2 className="text-2xl sm:text-4xl font-black text-[#063168]">
+              Our Growing Team
+            </h2>
+            <div className="mt-4 w-16 h-1 bg-[#FFCC00] mx-auto rounded-full" />
+          </div>
+
+          {/* Team Expansion */}
+          <div className="mb-14 bg-gray-50 p-8 sm:p-10 rounded-2xl border border-gray-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-[#154CB3] rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-[#063168]">Team Expansion</h3>
+                <p className="text-xs text-gray-500 font-semibold">March 2025</p>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-8 leading-relaxed">
+              After our successful incubation, we expanded our team to bring diverse expertise
+              and fresh perspectives to SOCIO.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-[#154CB3]/10 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-[#154CB3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                  </div>
+                  <h4 className="font-bold text-gray-800">Technical Team</h4>
+                </div>
+                <p className="text-sm text-[#154CB3] font-semibold mb-3">12 Technical Interns</p>
+                <ul className="text-xs text-gray-600 space-y-2">
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Frontend Development & UI/UX</li>
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Backend Development & Database</li>
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Mobile App Development</li>
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#154CB3] rounded-full" /> Quality Assurance & Testing</li>
+                </ul>
+              </div>
+              <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-[#FFCC00]/20 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-[#063168]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <h4 className="font-bold text-gray-800">Business Team</h4>
+                </div>
+                <p className="text-sm text-[#154CB3] font-semibold mb-3">7 Finance & Research Interns</p>
+                <ul className="text-xs text-gray-600 space-y-2">
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Market Research & User Analysis</li>
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Financial Planning & Strategy</li>
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Marketing & Community Outreach</li>
+                  <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#FFCC00] rounded-full" /> Partnership Development</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-8 h-8 bg-[#FFCC00]/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-[#063168]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-1a4 4 0 00-5-3.874M17 20H7m10 0v-1c0-.896-.293-1.724-.788-2.386M7 20H2v-1a4 4 0 015-3.874M7 20v-1c0-.896.293-1.724.788-2.386m0 0a5.002 5.002 0 019.424 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-bold text-[#063168]">Growing Team</h4>
+                  <p className="text-xs text-gray-500 font-semibold">New members joining the mission</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {growingTeam.map((member) => (
+                  <div key={member.name} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="relative bg-gradient-to-br from-[#154CB3] to-[#063168] p-5 flex items-center justify-center">
+                      <div className="relative aspect-[3/4] w-36 overflow-hidden rounded-2xl border-4 border-white shadow-lg bg-white">
+                        <Image
+                          src={member.image}
+                          alt={member.name}
+                          placeholder="blur"
+                          fill
+                          sizes="144px"
+                          className="object-cover object-top"
+                        />
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
+                    </div>
+
+                    <div className="p-5">
+                      <div className="text-center mb-4">
+                        <h4 className="text-lg font-black text-gray-900 mb-1">{member.name}</h4>
+                        <p className="text-[#154CB3] font-semibold text-sm">{member.role}</p>
+                      </div>
+
+                      <div className="flex flex-wrap justify-center gap-1.5">
+                        {member.skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="bg-[#154CB3]/5 text-[#154CB3] px-3 py-1 rounded-full text-xs font-semibold border border-[#154CB3]/10"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                      {/* Links */}
+                      <div className="flex items-center justify-center gap-3 pt-4 border-t border-gray-100">
+                        {member.email && (
+                          <a
+                            href={`mailto:${member.email}`}
+                            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-[#154CB3] hover:bg-[#154CB3] hover:text-white transition-all duration-300"
+                            title="Email"
+                          >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                            </svg>
+                          </a>
+                        )}
+                        {member.linkedin && (
+                          <a
+                            href={member.linkedin}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-[#154CB3] hover:bg-[#154CB3] hover:text-white transition-all duration-300"
+                            title="LinkedIn"
+                          >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.338 16.338H13.67V12.16c0-.995-.017-2.277-1.387-2.277-1.39 0-1.601 1.086-1.601 2.207v4.248H8.014v-8.59h2.559v1.174h.037c.356-.675 1.227-1.387 2.526-1.387 2.703 0 3.203 1.778 3.203 4.092v4.711zM5.005 6.575a1.548 1.548 0 11-.003-3.096 1.548 1.548 0 01.003 3.096zm-1.337 9.763H6.34v-8.59H3.667v8.59zM17.668 1H2.328C1.595 1 1 1.581 1 2.298v15.403C1 18.418 1.595 19 2.328 19h15.34c.734 0 1.332-.582 1.332-1.299V2.298C19 1.581 18.402 1 17.668 1z" clipRule="evenodd" />
+                            </svg>
+                          </a>
+                        )}
+                        {member.github && (
+                          <a
+                            href={member.github}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-[#154CB3] hover:bg-[#154CB3] hover:text-white transition-all duration-300"
+                            title="GitHub"
+                          >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clipRule="evenodd" />
+                            </svg>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 

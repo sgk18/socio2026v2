@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
+import { getClubBannerCandidates } from "../lib/clubBannerUrl";
+import { serializeClubCategories, toClubCategories } from "../lib/clubCategory";
 
 export interface ClubRecord {
   club_id: string;
@@ -12,6 +14,20 @@ export interface ClubRecord {
   club_campus: string[];
   club_editors?: string[] | null;
   club_roles_available?: string[] | null;
+  clubs_applicants?: {
+    regno: string;
+    name: string;
+    email: string;
+    role_applied_for: string;
+    applied_at?: string;
+  }[] | null;
+  clubs_applicant?: {
+    regno: string;
+    name: string;
+    email: string;
+    role_applied_for: string;
+    applied_at?: string;
+  }[] | null;
   slug: string | null;
   subtitle: string | null;
   category: string | null;
@@ -23,7 +39,7 @@ export interface CreateClubInput {
   type: "club" | "centre" | "cell";
   club_name: string;
   subtitle?: string | null;
-  category?: string | null;
+  category?: string[] | string | null;
   club_description: string;
   club_banner_url?: string | null;
   club_registrations: boolean;
@@ -51,6 +67,40 @@ export async function deleteClub(clubId: string): Promise<boolean> {
   return true;
 }
 
+export async function removeClubApplicant(
+  clubId: string,
+  updatedApplicants: any[]
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("clubs")
+      .update({ clubs_applicants: updatedApplicants })
+      .eq("club_id", clubId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Failed to remove applicant" };
+  }
+}
+
+export async function setClubRegistrations(
+  clubId: string,
+  open: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("clubs")
+      .update({ club_registrations: open })
+      .eq("club_id", clubId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Failed to update application toggle" };
+  }
+}
+
 const slugify = (value: string): string =>
   value
     .toLowerCase()
@@ -65,6 +115,36 @@ const normalizeUrl = (value: string | null | undefined): string | null => {
   return normalized.length > 0 ? normalized : null;
 };
 
+const normalizeRoles = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const roles: string[] = [];
+
+  for (const item of value) {
+    const role = String(item ?? "").trim();
+    if (!role) continue;
+    const key = role.toLowerCase();
+    if (key === "member" || seen.has(key)) continue;
+    seen.add(key);
+    roles.push(role);
+  }
+
+  return roles;
+};
+
+const normalizeAndValidateBannerUrl = (
+  bannerUrl: string | null
+): { ok: boolean; url: string | null; error?: string } => {
+  if (!bannerUrl) return { ok: true, url: null };
+
+  const candidates = getClubBannerCandidates(bannerUrl);
+  if (candidates.length === 0) {
+    return { ok: false, url: null, error: "Banner URL is invalid." };
+  }
+
+  return { ok: true, url: candidates[0] };
+};
+
 export async function createClub(input: CreateClubInput): Promise<{
   ok: boolean;
   error?: string;
@@ -75,25 +155,14 @@ export async function createClub(input: CreateClubInput): Promise<{
     const clubName = String(input.club_name ?? "").trim();
     const description = String(input.club_description ?? "").trim();
     const subtitle = normalizeUrl(input.subtitle);
-    const category = normalizeUrl(input.category);
+    const categoryValues = toClubCategories(input.category);
+    const category = serializeClubCategories(categoryValues);
     const website = normalizeUrl(input.club_web_link);
-    const banner = normalizeUrl(input.club_banner_url);
+    const bannerInput = normalizeUrl(input.club_banner_url);
     const campus = (Array.isArray(input.club_campus) ? input.club_campus : [])
       .map((c) => String(c).trim())
       .filter(Boolean);
-    const roles = (Array.isArray(input.club_roles_available)
-      ? input.club_roles_available
-      : []
-    )
-      .map((r) => String(r).trim())
-      .filter(Boolean);
-    const normalizedRoles = Array.from(
-      new Set(
-        ["Member", ...roles].map((role) =>
-          role.toLowerCase() === "member" ? "Member" : role
-        )
-      )
-    );
+    const normalizedRoles = normalizeRoles(input.club_roles_available);
     const editors = (Array.isArray(input.club_editors) ? input.club_editors : [])
       .map((e) => String(e).trim().toLowerCase())
       .filter(Boolean);
@@ -102,15 +171,22 @@ export async function createClub(input: CreateClubInput): Promise<{
     if ((clubType === "centre" || clubType === "cell") && !subtitle) {
       return { ok: false, error: "Subtitle is required." };
     }
-    if (!category) return { ok: false, error: "Category is required." };
+    if (categoryValues.length === 0) return { ok: false, error: "Select at least one category." };
     if (!description) return { ok: false, error: "Description is required." };
     if (campus.length === 0) return { ok: false, error: "Select at least one campus." };
-    if (normalizedRoles.length === 0) return { ok: false, error: "Add at least one role." };
+    if (Boolean(input.club_registrations) && normalizedRoles.length === 0) {
+      return { ok: false, error: "Add at least one role before publishing registrations." };
+    }
     if (website && !website.startsWith("https://")) {
       return { ok: false, error: "Website must be a valid https:// URL." };
     }
-    if (banner && !banner.startsWith("https://")) {
+    if (bannerInput && !bannerInput.startsWith("https://")) {
       return { ok: false, error: "Banner URL must be a valid https:// URL." };
+    }
+
+    const validatedBanner = normalizeAndValidateBannerUrl(bannerInput);
+    if (!validatedBanner.ok) {
+      return { ok: false, error: validatedBanner.error };
     }
 
     const slug = `${slugify(clubName) || "club"}-${Date.now().toString(36)}`;
@@ -124,7 +200,7 @@ export async function createClub(input: CreateClubInput): Promise<{
         subtitle,
         category,
         club_description: description,
-        club_banner_url: banner,
+        club_banner_url: validatedBanner.url,
         club_registrations: Boolean(input.club_registrations),
         club_campus: campus,
         club_editors: editors,
@@ -155,25 +231,14 @@ export async function updateClub(
     const clubName = String(input.club_name ?? "").trim();
     const description = String(input.club_description ?? "").trim();
     const subtitle = normalizeUrl(input.subtitle);
-    const category = normalizeUrl(input.category);
+    const categoryValues = toClubCategories(input.category);
+    const category = serializeClubCategories(categoryValues);
     const website = normalizeUrl(input.club_web_link);
-    const banner = normalizeUrl(input.club_banner_url);
+    const bannerInput = normalizeUrl(input.club_banner_url);
     const campus = (Array.isArray(input.club_campus) ? input.club_campus : [])
       .map((c) => String(c).trim())
       .filter(Boolean);
-    const roles = (Array.isArray(input.club_roles_available)
-      ? input.club_roles_available
-      : []
-    )
-      .map((r) => String(r).trim())
-      .filter(Boolean);
-    const normalizedRoles = Array.from(
-      new Set(
-        ["Member", ...roles].map((role) =>
-          role.toLowerCase() === "member" ? "Member" : role
-        )
-      )
-    );
+    const normalizedRoles = normalizeRoles(input.club_roles_available);
     const editors = (Array.isArray(input.club_editors) ? input.club_editors : [])
       .map((e) => String(e).trim().toLowerCase())
       .filter(Boolean);
@@ -192,15 +257,22 @@ export async function updateClub(
     if ((existing.type === "centre" || existing.type === "cell") && !subtitle) {
       return { ok: false, error: "Subtitle is required." };
     }
-    if (!category) return { ok: false, error: "Category is required." };
+    if (categoryValues.length === 0) return { ok: false, error: "Select at least one category." };
     if (!description) return { ok: false, error: "Description is required." };
     if (campus.length === 0) return { ok: false, error: "Select at least one campus." };
-    if (normalizedRoles.length === 0) return { ok: false, error: "Add at least one role." };
+    if (Boolean(input.club_registrations) && normalizedRoles.length === 0) {
+      return { ok: false, error: "Add at least one role before publishing registrations." };
+    }
     if (website && !website.startsWith("https://")) {
       return { ok: false, error: "Website must be a valid https:// URL." };
     }
-    if (banner && !banner.startsWith("https://")) {
+    if (bannerInput && !bannerInput.startsWith("https://")) {
       return { ok: false, error: "Banner URL must be a valid https:// URL." };
+    }
+
+    const validatedBanner = normalizeAndValidateBannerUrl(bannerInput);
+    if (!validatedBanner.ok) {
+      return { ok: false, error: validatedBanner.error };
     }
 
     const { data, error } = await supabase
@@ -211,7 +283,7 @@ export async function updateClub(
         subtitle,
         category,
         club_description: description,
-        club_banner_url: banner,
+        club_banner_url: validatedBanner.url,
         club_registrations: Boolean(input.club_registrations),
         club_campus: campus,
         club_editors: editors,

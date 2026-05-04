@@ -130,6 +130,7 @@ const DataExplorerDashboard = dynamic(
   }
 );
 
+
 type User = {
   id: number;
   email: string;
@@ -151,6 +152,8 @@ type User = {
   is_accounts_office?: boolean;
   is_it_support?: boolean;
   is_stalls?: boolean;
+    is_venue_manager?: boolean;
+    venue_manager_expires_at?: string | null;
   school?: string | null;
   department?: string | null;
   campus?: string | null;
@@ -293,6 +296,8 @@ function MasterAdminPageInner() {
   const [selectedEventForBookings, setSelectedEventForBookings] = useState<Event | null>(null);
   const [eventBookings, setEventBookings] = useState<Registration[]>([]);
   const [eventBookingsLoading, setEventBookingsLoading] = useState(false);
+  const eventBookingsPanelRef = useRef<HTMLDivElement>(null);
+  const [eventBookingsHighlight, setEventBookingsHighlight] = useState(false);
   const [eventPage, setEventPage] = useState(1);
   const [eventStatusFilter, setEventStatusFilter] = useState<"all" | "live" | "upcoming" | "thisweek" | "past">("all");
   const [eventSortKey, setEventSortKey] = useState<"title" | "date" | "registrations" | "dept">("date");
@@ -351,6 +356,7 @@ function MasterAdminPageInner() {
   const [editVenueSaving,  setEditVenueSaving]  = useState(false);
   // Venue list pagination
   const [venuePage,        setVenuePage]        = useState(1);
+  const [venueSearchQuery, setVenueSearchQuery] = useState("");
   const VENUE_PAGE_SIZE = 15;
   const [selectedVenueForBookings, setSelectedVenueForBookings] = useState<VenueRow | null>(null);
   const [venueBookings, setVenueBookings] = useState<VenueBookingRow[]>([]);
@@ -376,7 +382,22 @@ function MasterAdminPageInner() {
   const [editCatererForm,  setEditCatererForm]  = useState({ catering_name: "", campuses: [] as string[], location: "", contacts: [] as CatererFormContact[] });
   const [editCatererSaving,setEditCatererSaving]= useState(false);
   const [catererPage,      setCatererPage]      = useState(1);
+  const [catererSearchQuery, setCatererSearchQuery] = useState("");
   const CATERER_PAGE_SIZE = 15;
+  const campusDetailsRef   = useRef<HTMLDetailsElement>(null);
+
+  const filteredCaterers = caterers.filter((caterer) => {
+    const query = catererSearchQuery.trim().toLowerCase();
+    if (!query) return true;
+
+    return (
+      (caterer.catering_name || "").toLowerCase().includes(query) ||
+      (caterer.catering_id || "").toLowerCase().includes(query) ||
+      (caterer.contact_details || []).some((contact) =>
+        (contact.name || "").toLowerCase().includes(query)
+      )
+    );
+  });
 
   async function fetchAllCaterers() {
     setCaterersLoading(true);
@@ -640,7 +661,9 @@ function MasterAdminPageInner() {
   const debouncedClubSearch = useDebounce(clubSearchQuery, 300);
 
   useEffect(() => {
-    const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     if (!authIsLoading && !isMasterAdmin && !isLocalhost) {
       router.push("/");
     }
@@ -650,12 +673,19 @@ function MasterAdminPageInner() {
   const [isLocalhostDev, setIsLocalhostDev] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setIsLocalhostDev(window.location.hostname === 'localhost');
+      setIsLocalhostDev(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     }
   }, []);
 
   useEffect(() => {
-    if (!isMasterAdmin || !authToken) return;
+    // Allow localhost users to open the admin shell even without masteradmin role.
+    if (isLocalhostDev && !isMasterAdmin) {
+      setIsLoading(false);
+    }
+  }, [isLocalhostDev, isMasterAdmin]);
+
+  useEffect(() => {
+    if ((!isMasterAdmin && !isLocalhostDev) || !authToken) return;
     
     if (activeTab === "users") {
       fetchUsers();
@@ -679,7 +709,7 @@ function MasterAdminPageInner() {
     } else if (activeTab === "caterers") {
       fetchAllCaterers();
     }
-  }, [activeTab, isMasterAdmin, authToken]);
+  }, [activeTab, isMasterAdmin, isLocalhostDev, authToken]);
 
   // Fetch existing location suggestions when campus changes (add form) or edit modal opens
   const fetchLocationSuggestions = (campus: string) => {
@@ -772,6 +802,10 @@ function MasterAdminPageInner() {
   }, [debouncedFestSearch, festSortKey, festSortDir]);
 
   useEffect(() => {
+    setCatererPage(1);
+  }, [catererSearchQuery]);
+
+  useEffect(() => {
     if (!isMasterAdmin || !authToken || activeTab !== "users") return;
     fetchUsers();
   }, [activeTab, isMasterAdmin, authToken, userPage, debouncedUserSearch, roleFilter, userSortKey, userSortDir]);
@@ -835,6 +869,11 @@ function MasterAdminPageInner() {
 
     setSelectedEventForBookings(event);
     setEventBookingsLoading(true);
+    setTimeout(() => {
+      eventBookingsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setEventBookingsHighlight(true);
+      setTimeout(() => setEventBookingsHighlight(false), 1400);
+    }, 0);
     try {
       const token = await getFreshToken();
       const headers: Record<string, string> = token
@@ -1259,7 +1298,7 @@ function MasterAdminPageInner() {
       if (!res.ok) return;
       const data = await res.json();
       const all: User[] = data.users || data || [];
-      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls));
+      setRoleHolders(all.filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls || u.is_venue_manager));
     } catch { /* non-critical */ }
     finally { setRoleHoldersLoading(false); }
   };
@@ -1272,6 +1311,7 @@ function MasterAdminPageInner() {
         organiser: "is_organiser", support: "is_support", masteradmin: "is_masteradmin",
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
         director: "is_campus_director", accounts: "is_accounts_office", it_support: "is_it_support", stalls: "is_stalls",
+        venue_manager: "is_venue_manager",
       };
       const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(user.email)}/roles`, {
         method: "PUT",
@@ -1284,7 +1324,7 @@ function MasterAdminPageInner() {
         if (u.email !== user.email) return u;
         const updated = { ...u, [fieldMap[roleKey]]: false };
         return updated;
-      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls));
+      }).filter(u => u.is_organiser || u.is_support || u.is_masteradmin || u.is_hod || u.is_dean || u.is_cfo || u.is_campus_director || u.is_accounts_office || u.is_it_support || u.is_stalls || u.is_venue_manager));
       toast.success("Role removed");
     } catch { toast.error("Failed to remove role"); }
     finally { setRoleRemoving(null); }
@@ -1324,6 +1364,7 @@ function MasterAdminPageInner() {
       const fieldMap: Record<string, string> = {
         hod: "is_hod", dean: "is_dean", cfo: "is_cfo",
         director: "is_campus_director", accounts: "is_accounts_office", it_support: "is_it_support", stalls: "is_stalls",
+        venue_manager: "is_venue_manager",
       };
       const body: Record<string, unknown> = {
         [fieldMap[roleSelectedRole]]: true,
@@ -1477,7 +1518,7 @@ function MasterAdminPageInner() {
     </div>
   );
 
-  if (isLoading || !authToken) {
+  if (isLoading || (!authToken && !isLocalhostDev)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
@@ -1488,7 +1529,7 @@ function MasterAdminPageInner() {
     );
   }
 
-  if (!isMasterAdmin) {
+  if (!isMasterAdmin && !isLocalhostDev) {
     return null;
   }
 
@@ -1578,14 +1619,6 @@ function MasterAdminPageInner() {
             </span>
             Roles
           </button>
-          <Link href="/manage">
-            <span className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-medium">
-              <span className="text-slate-400">
-                <Eye className="w-4 h-4" />
-              </span>
-              Organiser View
-            </span>
-          </Link>
           <button
             onClick={() => setActiveTab("venues")}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative group ${
@@ -1628,6 +1661,14 @@ function MasterAdminPageInner() {
               }`}>{caterers.length}</span>
             )}
           </button>
+          <Link href="/manage">
+            <span className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-medium">
+              <span className="text-slate-400">
+                <Eye className="w-4 h-4" />
+              </span>
+              Organiser View
+            </span>
+          </Link>
         </div>
       </aside>
 
@@ -1686,9 +1727,6 @@ function MasterAdminPageInner() {
         {/* Data Explorer Tab */}
         {activeTab === "dataExplorer" && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-1">Advanced Analytics Data Explorer</h2>
-            </div>
             <DataExplorerDashboard />
           </div>
         )}
@@ -1822,6 +1860,19 @@ function MasterAdminPageInner() {
                 <div className="p-8 text-center text-sm text-gray-400">No venues yet. Add one above.</div>
               ) : (
                 <>
+                  {/* Search */}
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="relative max-w-xs">
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                      <input
+                        type="text"
+                        value={venueSearchQuery}
+                        onChange={e => { setVenueSearchQuery(e.target.value); setVenuePage(1); }}
+                        placeholder="Search venues…"
+                        className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#154CB3] bg-gray-50"
+                      />
+                    </div>
+                  </div>
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
@@ -1835,7 +1886,13 @@ function MasterAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {venues.slice((venuePage - 1) * VENUE_PAGE_SIZE, venuePage * VENUE_PAGE_SIZE).map(v => (
+                      {venues.filter(v => {
+                        const q = venueSearchQuery.trim().toLowerCase();
+                        if (!q) return true;
+                        return (v.name || "").toLowerCase().includes(q) ||
+                               (v.campus || "").toLowerCase().includes(q) ||
+                               (v.location || "").toLowerCase().includes(q);
+                      }).slice((venuePage - 1) * VENUE_PAGE_SIZE, venuePage * VENUE_PAGE_SIZE).map(v => (
                         <tr key={v.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-900">{v.name}</td>
                           <td className="px-4 py-3 text-gray-600">{v.campus}</td>
@@ -1919,7 +1976,7 @@ function MasterAdminPageInner() {
 
                   {/* Venue table pagination */}
                   {venues.length > VENUE_PAGE_SIZE && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50 mb-24">
                       <p className="text-xs text-gray-500">
                         {(venuePage - 1) * VENUE_PAGE_SIZE + 1}–{Math.min(venuePage * VENUE_PAGE_SIZE, venues.length)} of {venues.length} venues
                       </p>
@@ -2442,12 +2499,12 @@ function MasterAdminPageInner() {
                                   >
                                     Edit
                                   </a>
-                                  <a
+                                  <Link
                                     href={`/event/${event.event_id}`}
                                     className="px-3 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-lg hover:bg-gray-700 hover:-translate-y-0.5 transition-all"
                                   >
                                     View
-                                  </a>
+                                  </Link>
                                   <button
                                     onClick={() => handleViewEventBookings(event)}
                                     className="h-8 w-8 inline-flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 hover:-translate-y-0.5 transition-all"
@@ -2473,7 +2530,14 @@ function MasterAdminPageInner() {
                     </table>
                   </div>
                   {selectedEventForBookings && (
-                    <div className="border-t border-gray-200 p-6 bg-gray-50">
+                    <div
+                      ref={eventBookingsPanelRef}
+                      className={`border-t p-6 transition-all duration-300 ${
+                        eventBookingsHighlight
+                          ? "border-2 border-[#154CB3] bg-blue-50 ring-4 ring-blue-100"
+                          : "border-gray-200 bg-gray-50"
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-4 mb-4">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900">
@@ -2785,7 +2849,21 @@ function MasterAdminPageInner() {
                               <div className="text-xs text-gray-500 mt-1 uppercase font-medium">TYPE: {club.type}</div>
                             </td>
                             <td className="px-6 py-5 text-sm text-gray-600 font-medium leading-6 align-top break-words">
-                              {club.category || "Uncategorized"}
+                              {(() => {
+                                const cat = club.category;
+                                if (!cat) return "Uncategorized";
+                                if (Array.isArray(cat)) return cat.join(", ");
+                                if (typeof cat === "string") {
+                                  if (cat.startsWith("[")) {
+                                    try {
+                                      const parsed = JSON.parse(cat);
+                                      if (Array.isArray(parsed)) return parsed.join(", ");
+                                    } catch {}
+                                  }
+                                  return cat;
+                                }
+                                return String(cat);
+                              })()}
                             </td>
                             <td className="px-6 py-5 align-top">
                               <button
@@ -2812,6 +2890,12 @@ function MasterAdminPageInner() {
                             </td>
                             <td className="px-6 py-5 text-right align-top">
                               <div className="flex flex-wrap items-center justify-end gap-2">
+                                <a
+                                  href={`/clubeditor/${club.club_id}`}
+                                  className="px-3.5 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 hover:-translate-y-0.5 transition-all"
+                                >
+                                  Manage
+                                </a>
                                 <a
                                   href={`/edit/clubs/${club.club_id}`}
                                   className="px-3.5 py-1.5 bg-[#154CB3] text-white text-xs font-semibold rounded-lg hover:bg-[#0f3f96] hover:-translate-y-0.5 transition-all"
@@ -3564,13 +3648,13 @@ function MasterAdminPageInner() {
             </div>
 
             {/* Add caterer form */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <PlusCircle className="w-4 h-4 text-[#154CB3]" /> Add New Caterer
               </h3>
 
-              {/* Name + Location */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Name + Location + Campus */}
+              <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_1fr_1.15fr] gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Caterer Name <span className="text-red-500">*</span></label>
                   <input
@@ -3578,12 +3662,13 @@ function MasterAdminPageInner() {
                     value={catererForm.catering_name}
                     onChange={e => setCatererForm(f => ({ ...f, catering_name: e.target.value }))}
                     placeholder="e.g. Prestige Catering Co."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
                   {catererForm.catering_name.trim() && (
                     <p className="text-[11px] text-gray-400 mt-1">ID: <span className="font-mono text-gray-600">{catererForm.catering_name.toLowerCase().trim().replace(/[^\w\s-]/g,"").replace(/[\s_-]+/g,"-").replace(/^-+|-+$/g,"")}</span></p>
                   )}
                 </div>
+
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Location</label>
                   <input
@@ -3591,60 +3676,78 @@ function MasterAdminPageInner() {
                     value={catererForm.location}
                     onChange={e => setCatererForm(f => ({ ...f, location: e.target.value }))}
                     placeholder="e.g. Central Kitchen, Block C"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
                 </div>
-              </div>
 
-              {/* Campuses */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">Campuses Served</label>
-                <div className="flex flex-wrap gap-2">
-                  {christCampuses.map(campus => (
-                    <label key={campus} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-all ${catererForm.campuses.includes(campus) ? "bg-[#154CB3] text-white border-[#154CB3]" : "border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"}`}>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={catererForm.campuses.includes(campus)}
-                        onChange={e => setCatererForm(f => ({ ...f, campuses: e.target.checked ? [...f.campuses, campus] : f.campuses.filter(c => c !== campus) }))}
-                      />
-                      {campus}
-                    </label>
-                  ))}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Campuses Served <span className="text-red-500">*</span></label>
+                  <details ref={campusDetailsRef} className="group relative" onBlur={() => { if (campusDetailsRef.current) campusDetailsRef.current.open = false; }} onMouseLeave={() => { if (campusDetailsRef.current) campusDetailsRef.current.open = false; }}>
+                    <summary className="list-none cursor-pointer w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white flex items-center justify-between gap-3 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                      <span className={`truncate ${catererForm.campuses.length === 0 ? "text-gray-400" : "text-gray-800"}`}>
+                        {catererForm.campuses.length === 0
+                          ? "Select campuses"
+                          : catererForm.campuses.length <= 2
+                            ? catererForm.campuses.join(", ")
+                            : `${catererForm.campuses.length} campuses selected`}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 transition-transform duration-200 group-open:rotate-90" />
+                    </summary>
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg p-2 max-h-60 overflow-y-auto">
+                      {christCampuses.map((campus) => (
+                        <label key={campus} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${catererForm.campuses.includes(campus) ? "bg-blue-50 text-[#154CB3]" : "hover:bg-gray-50 text-gray-700"}`}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-[#154CB3] focus:ring-[#154CB3]"
+                            checked={catererForm.campuses.includes(campus)}
+                            onChange={e => {
+                              setCatererForm(f => ({ ...f, campuses: e.target.checked ? [...f.campuses, campus] : f.campuses.filter(c => c !== campus) }));
+                              if (campusDetailsRef.current) campusDetailsRef.current.open = false;
+                            }}
+                          />
+                          <span>{campus}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                  <p className="text-[11px] text-gray-400 mt-1">Choose one or more campuses.</p>
                 </div>
               </div>
 
               {/* Contacts */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-gray-600">Contact Details</label>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block">Contact Details</label>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Orders will be received on this email.</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setCatererForm(f => ({ ...f, contacts: [...f.contacts, { name: "", email: "", mobile: "" }] }))}
-                    className="text-xs text-[#154CB3] font-medium hover:underline"
+                    className="text-xs text-[#154CB3] font-medium hover:underline shrink-0"
                   >+ Add Contact</button>
                 </div>
                 <div className="space-y-3">
                   {catererForm.contacts.map((contact, idx) => (
-                    <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-200 relative">
+                    <div key={idx} className="p-3.5 bg-white rounded-xl border border-gray-200 relative shadow-sm">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Contact {idx + 1}</span>
                         {catererForm.contacts.length > 1 && (
                           <button type="button" onClick={() => setCatererForm(f => ({ ...f, contacts: f.contacts.filter((_, i) => i !== idx) }))} className="text-gray-400 hover:text-red-500 text-sm leading-none">&times; Remove</button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[11px] text-gray-500 mb-1">Name</label>
-                          <input type="text" value={contact.name} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, name: e.target.value } : c) }))} placeholder="Contact name" className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <input type="text" value={contact.name} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, name: e.target.value } : c) }))} placeholder="Contact name" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-gray-500 mb-1">Email</label>
-                          <input type="email" value={contact.email} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, email: e.target.value } : c) }))} placeholder="email@example.com" className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <label className="block text-[11px] text-gray-500 mb-1">Email <span className="font-normal text-gray-400">(orders go here)</span></label>
+                          <input type="email" value={contact.email} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, email: e.target.value } : c) }))} placeholder="email@example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-gray-500 mb-1">Mobile(s) — comma-separated</label>
-                          <input type="text" value={contact.mobile} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, mobile: e.target.value } : c) }))} placeholder="9900001111, 9900002222" className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <label className="block text-[11px] text-gray-500 mb-1">Mobile</label>
+                          <input type="text" value={contact.mobile} onChange={e => setCatererForm(f => ({ ...f, contacts: f.contacts.map((c, i) => i === idx ? { ...c, mobile: e.target.value } : c) }))} placeholder="Mobile number" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                         </div>
                       </div>
                     </div>
@@ -3665,10 +3768,41 @@ function MasterAdminPageInner() {
 
             {/* Caterers list */}
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="border-b border-gray-200 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="w-full sm:max-w-md">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Search Caterers</label>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setCatererPage(1);
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={catererSearchQuery}
+                      onChange={(e) => setCatererSearchQuery(e.target.value)}
+                      placeholder="Search by caterer name or contact name..."
+                      className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-[#154CB3]"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-semibold bg-[#154CB3] text-white rounded-lg hover:bg-[#0f3a7a] transition-colors"
+                    >
+                      Search
+                    </button>
+                  </form>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Showing <span className="font-semibold text-gray-700">{filteredCaterers.length}</span> of <span className="font-semibold text-gray-700">{caterers.length}</span>
+                </div>
+              </div>
               {caterersLoading ? (
                 <div className="p-8 text-center text-sm text-gray-400">Loading caterers…</div>
-              ) : caterers.length === 0 ? (
-                <div className="p-8 text-center text-sm text-gray-400">No caterers yet. Add one above.</div>
+              ) : filteredCaterers.length === 0 ? (
+                <div className="p-8 text-center text-sm text-gray-400">
+                  {catererSearchQuery.trim() ? "No caterers found." : "No caterers yet. Add one above."}
+                </div>
               ) : (
                 <>
                   <table className="w-full text-sm">
@@ -3683,7 +3817,7 @@ function MasterAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {caterers.slice((catererPage - 1) * CATERER_PAGE_SIZE, catererPage * CATERER_PAGE_SIZE).map(c => (
+                      {filteredCaterers.slice((catererPage - 1) * CATERER_PAGE_SIZE, catererPage * CATERER_PAGE_SIZE).map(c => (
                         <tr key={c.catering_id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 font-medium text-gray-900">{c.catering_name}</td>
                           <td className="px-4 py-3 font-mono text-xs text-gray-500">{c.catering_id}</td>
@@ -3716,12 +3850,12 @@ function MasterAdminPageInner() {
                       ))}
                     </tbody>
                   </table>
-                  {caterers.length > CATERER_PAGE_SIZE && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
-                      <span>{caterers.length} caterers</span>
+                  {filteredCaterers.length > CATERER_PAGE_SIZE && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500 mb-24">
+                      <span>{filteredCaterers.length} caterers</span>
                       <div className="flex gap-2">
                         <button onClick={() => setCatererPage(p => Math.max(1, p - 1))} disabled={catererPage === 1} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Prev</button>
-                        <button onClick={() => setCatererPage(p => p + 1)} disabled={catererPage * CATERER_PAGE_SIZE >= caterers.length} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Next</button>
+                        <button onClick={() => setCatererPage(p => p + 1)} disabled={catererPage * CATERER_PAGE_SIZE >= filteredCaterers.length} className="px-3 py-1 border border-gray-200 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50">Next</button>
                       </div>
                     </div>
                   )}
@@ -3830,6 +3964,7 @@ function MasterAdminPageInner() {
             { key: "accounts",   label: "Finance Officer", flag: "is_accounts_office" as const },
             { key: "it_support", label: "IT Support",      flag: "is_it_support" as const },
             { key: "stalls",     label: "Stalls",          flag: "is_stalls" as const },
+            { key: "venue_manager", label: "Venue Manager", flag: "is_venue_manager" as const },
           ] as const;
           const ROLE_DEFS = [
             { key: "organiser",  label: "Organiser",       flag: "is_organiser" as const },
@@ -3861,13 +3996,14 @@ function MasterAdminPageInner() {
 
           const needsDept = roleListRoleFilter === "hod";
           const needsSchool = roleListRoleFilter === "dean";
+          const campusOnlyRoles = ["venue_manager"];
 
           return (
             <div className="flex flex-col h-full overflow-hidden">
               {/* ── Assign form (compact) ── */}
               <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assign Role</p>
-                <div className="flex gap-3 items-end flex-wrap">
+                <div className="flex flex-row items-stretch gap-2">
                   {/* Email */}
                   <div className="relative min-w-[220px] flex-1">
                     <input
@@ -3875,7 +4011,7 @@ function MasterAdminPageInner() {
                       value={roleEmailInput}
                       onChange={(e) => { setRoleEmailInput(e.target.value); setRoleSelectedEmail(""); searchRoleEmails(e.target.value); }}
                       placeholder="Email or name…"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full h-10 box-border border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                     {roleEmailSuggestions.length > 0 && !roleSelectedEmail && (
                       <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
@@ -3892,16 +4028,17 @@ function MasterAdminPageInner() {
                         ))}
                       </ul>
                     )}
-                    {roleSelectedEmail && <p className="mt-0.5 text-[11px] text-green-600 font-medium">✓ selected</p>}
+                    <div className="min-h-[18px] pt-0.5">
+                      {roleSelectedEmail && <p className="text-[11px] text-green-600 font-medium">✓ selected</p>}
+                    </div>
                   </div>
 
                   {/* Role dropdown */}
                   <div className="min-w-[180px]">
-                    <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Role</label>
                     <select
                       value={roleSelectedRole}
                       onChange={e => { setRoleSelectedRole(e.target.value as any); setRoleSchool(""); setRoleDept(""); setRoleCampus(""); }}
-                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full h-10 box-border border border-gray-300 rounded-lg px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
                     >
                       <option value="">Select role…</option>
                       {ASSIGN_ROLE_DEFS.map(r => (
@@ -3922,7 +4059,7 @@ function MasterAdminPageInner() {
                         {christCampuses.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
-                    {(roleSelectedRole === "hod" || roleSelectedRole === "dean") && (
+                    {!campusOnlyRoles.includes(roleSelectedRole) && (roleSelectedRole === "hod" || roleSelectedRole === "dean") && (
                       <div className="min-w-[200px]">
                         <label className="block text-[11px] font-medium text-gray-500 mb-0.5">School</label>
                         <select value={roleSchool} onChange={e => { setRoleSchool(e.target.value); setRoleDept(""); }}
@@ -3932,7 +4069,7 @@ function MasterAdminPageInner() {
                         </select>
                       </div>
                     )}
-                    {roleSelectedRole === "hod" && (
+                    {!campusOnlyRoles.includes(roleSelectedRole) && roleSelectedRole === "hod" && (
                       <div className="min-w-[200px]">
                         <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Department</label>
                         <select value={roleDept} onChange={e => setRoleDept(e.target.value)} disabled={!roleSchool}
@@ -3943,7 +4080,7 @@ function MasterAdminPageInner() {
                       </div>
                     )}
                     <button onClick={saveApprovalRole}
-                      disabled={!roleSelectedEmail || !roleSelectedRole || !roleCampus || (roleSelectedRole === "hod" && (!roleSchool || !roleDept)) || (roleSelectedRole === "dean" && !roleSchool) || roleSaving}
+                      disabled={!roleSelectedEmail || !roleSelectedRole || !roleCampus || (!campusOnlyRoles.includes(roleSelectedRole) && roleSelectedRole === "hod" && (!roleSchool || !roleDept)) || (!campusOnlyRoles.includes(roleSelectedRole) && roleSelectedRole === "dean" && !roleSchool) || roleSaving}
                       className="px-4 py-1.5 bg-[#154cb3] text-white rounded-lg text-sm font-semibold hover:bg-[#1240a0] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                     >{roleSaving ? "Saving…" : "Assign Role"}</button>
                   </div>
@@ -4021,7 +4158,9 @@ function MasterAdminPageInner() {
                           cfo:         "bg-amber-100 text-amber-700",
                           director:    "bg-cyan-100 text-cyan-700",
                           accounts:    "bg-green-100 text-green-700",
+                          it_support:  "bg-sky-100 text-sky-700",
                           stalls:      "bg-orange-100 text-orange-700",
+                          venue_manager: "bg-violet-100 text-violet-700",
                         };
                         return filteredRows.map(({ user, roles }, i) => (
                           <tr key={user.email} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}>

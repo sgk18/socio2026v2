@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import toast from "react-hot-toast";
+import type { Toast } from "react-hot-toast";
 import { ClubRecord, createClub, updateClub } from "../actions/clubs";
+import { toClubCategories } from "../lib/clubCategory";
 import { christCampuses } from "../lib/eventFormSchema";
 
 const CLUB_TYPES: Array<"club" | "centre" | "cell"> = ["club", "centre", "cell"];
@@ -16,7 +18,6 @@ const PREDEFINED_ROLES = [
   "Documentation",
   "Art and Decor",
   "Operations",
-  "Member",
 ];
 const PREDEFINED_CATEGORIES = [
   "Academic",
@@ -36,8 +37,6 @@ const PREDEFINED_CATEGORIES = [
 const OTHER_ROLE_OPTION = "Others";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"];
 const MAX_IMAGE_SIZE = 3 * 1024 * 1024;
-const REQUIRED_IMAGE_WIDTH = 2048;
-const REQUIRED_IMAGE_HEIGHT = 1080;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 type FormErrors = {
@@ -85,36 +84,31 @@ const readApiBodySafely = async (response: Response): Promise<any> => {
   }
 };
 
-const validateImageDimensions = (file: File): Promise<string | null> =>
-  new Promise((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-
-    image.onload = () => {
-      const valid =
-        image.naturalWidth === REQUIRED_IMAGE_WIDTH &&
-        image.naturalHeight === REQUIRED_IMAGE_HEIGHT;
-      URL.revokeObjectURL(objectUrl);
-      resolve(
-        valid
-          ? null
-          : `Image must be exactly ${REQUIRED_IMAGE_WIDTH}x${REQUIRED_IMAGE_HEIGHT}px.`
-      );
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve("Unable to read image dimensions. Please use a valid JPG/PNG image.");
-    };
-
-    image.src = objectUrl;
-  });
-
 const toStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => String(item ?? "").trim())
     .filter(Boolean);
+};
+
+const showValidationToast = (message: string) => {
+  const toastId = `club-validation-${message}`;
+  toast(
+    (t: Toast) => (
+      <div className="flex max-w-sm items-start gap-2 rounded-md bg-[#202939] px-3 py-2 text-sm text-white shadow-lg">
+        <span className="flex-1 leading-5">{message}</span>
+        <button
+          type="button"
+          onClick={() => toast.dismiss(t.id)}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+          aria-label="Dismiss notification"
+        >
+          ×
+        </button>
+      </div>
+    ),
+    { id: toastId, duration: 3000 }
+  );
 };
 
 export default function CreateClubForm({
@@ -132,13 +126,13 @@ export default function CreateClubForm({
   );
   const [clubName, setClubName] = useState(initialClub?.club_name ?? "");
   const [subtitle, setSubtitle] = useState(initialClub?.subtitle ?? "");
-  const [category, setCategory] = useState(initialClub?.category ?? "");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    toClubCategories(initialClub?.category)
+  );
   const [description, setDescription] = useState(initialClub?.club_description ?? "");
   const [webLink, setWebLink] = useState(initialClub?.club_web_link ?? "");
   const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [bannerUrlInput, setBannerUrlInput] = useState(
-    initialClub?.club_banner_url ?? ""
-  );
+  const [bannerUrlInput, setBannerUrlInput] = useState(initialClub?.club_banner_url ?? "");
   const [registrationsOpen, setRegistrationsOpen] = useState(
     Boolean(initialClub?.club_registrations)
   );
@@ -149,13 +143,12 @@ export default function CreateClubForm({
     const roles = toStringArray(initialClub?.club_roles_available).filter(
       (role) => role.toLowerCase() !== "member"
     );
-    return roles.length > 0
-      ? roles.map((value) => ({ id: nextRowId(), value }))
-      : [{ id: nextRowId(), value: "Media" }];
+    return roles.map((value) => ({ id: nextRowId(), value }));
   });
   const [showRolesMenu, setShowRolesMenu] = useState(false);
   const [showOtherRoleInput, setShowOtherRoleInput] = useState(false);
   const [otherRoleInput, setOtherRoleInput] = useState("");
+  const [showCategoriesMenu, setShowCategoriesMenu] = useState(false);
   const [editorRows, setEditorRows] = useState<EditorRow[]>(() => {
     const editors = toStringArray(initialClub?.club_editors);
     return editors.length > 0
@@ -163,6 +156,9 @@ export default function CreateClubForm({
       : [{ id: nextRowId(), email: "" }];
   });
   const [errors, setErrors] = useState<FormErrors>({});
+
+  const rolesDropdownRef = useRef<HTMLDivElement | null>(null);
+  const categoriesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -180,7 +176,7 @@ export default function CreateClubForm({
     setClubType(initialClub.type);
     setClubName(initialClub.club_name ?? "");
     setSubtitle(initialClub.subtitle ?? "");
-    setCategory(initialClub.category ?? "");
+    setSelectedCategories(toClubCategories(initialClub.category));
     setDescription(initialClub.club_description ?? "");
     setWebLink(initialClub.club_web_link ?? "");
     setBannerUrlInput(initialClub.club_banner_url ?? "");
@@ -190,11 +186,7 @@ export default function CreateClubForm({
     const roles = toStringArray(initialClub.club_roles_available).filter(
       (role) => role.toLowerCase() !== "member"
     );
-    setRoleRows(
-      roles.length > 0
-        ? roles.map((value) => ({ id: nextRowId(), value }))
-        : [{ id: nextRowId(), value: "Media" }]
-    );
+    setRoleRows(roles.map((value) => ({ id: nextRowId(), value })));
     const editors = toStringArray(initialClub.club_editors);
     setEditorRows(
       editors.length > 0
@@ -202,6 +194,33 @@ export default function CreateClubForm({
         : [{ id: nextRowId(), email: "" }]
     );
   }, [initialClub]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (
+        showRolesMenu &&
+        rolesDropdownRef.current &&
+        !rolesDropdownRef.current.contains(target)
+      ) {
+        setShowRolesMenu(false);
+      }
+
+      if (
+        showCategoriesMenu &&
+        categoriesDropdownRef.current &&
+        !categoriesDropdownRef.current.contains(target)
+      ) {
+        setShowCategoriesMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showCategoriesMenu, showRolesMenu]);
 
   const toggleFromArray = (
     value: string,
@@ -236,8 +255,7 @@ export default function CreateClubForm({
   const addOtherRole = () => {
     const custom = normalize(otherRoleInput);
     if (!custom || custom.toLowerCase() === "member") {
-      setOtherRoleInput("");
-      setShowOtherRoleInput(false);
+      showValidationToast("Provide a valid custom role.");
       return;
     }
     setRoleRows((prev) =>
@@ -254,6 +272,11 @@ export default function CreateClubForm({
   };
 
   const addEditorRow = () => {
+    const hasEmptyEmailField = editorRows.some((row) => !normalizeEmail(row.email));
+    if (hasEmptyEmailField) {
+      showValidationToast("Please fill in the current email field before adding another.");
+      return;
+    }
     setEditorRows((prev) => [...prev, { id: nextRowId(), email: "" }]);
   };
 
@@ -266,8 +289,18 @@ export default function CreateClubForm({
   };
 
   const getResolvedRoles = () => {
-    const dynamicRoles = roleRows.map((row) => normalize(row.value)).filter(Boolean);
-    return Array.from(new Set(["Member", ...dynamicRoles]));
+    const seen = new Set<string>();
+    const dynamicRoles = roleRows
+      .map((row) => normalize(row.value))
+      .filter(Boolean)
+      .filter((role) => {
+        const key = role.toLowerCase();
+        if (key === "member" || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+    return dynamicRoles;
   };
 
   const getResolvedEditors = () =>
@@ -283,7 +316,11 @@ export default function CreateClubForm({
     if (isCentreOrCell && !normalize(subtitle)) {
       nextErrors.subtitle = `${entityLabel} subtitle is required.`;
     }
-    if (!normalize(category)) nextErrors.category = "Category is required.";
+    if (selectedCategories.length === 0) {
+      nextErrors.category = "Select at least one category.";
+    } else if (selectedCategories.length > 3) {
+      nextErrors.category = "You can select a maximum of 3 categories.";
+    }
     if (!normalize(description)) nextErrors.description = "Description is required.";
 
     const normalizedWebLink = normalize(webLink);
@@ -302,7 +339,9 @@ export default function CreateClubForm({
     if (showOtherRoleInput && !normalize(otherRoleInput)) {
       nextErrors.roles = "Provide a custom role for Others.";
     }
-    if (resolvedRoles.length === 0) nextErrors.roles = "Add at least one role.";
+    if (registrationsOpen && resolvedRoles.length === 0) {
+      nextErrors.roles = "Add at least one role before publishing registrations.";
+    }
 
     if (resolvedEditors.length === 0) {
       nextErrors.editors = `Add at least one ${entityLabelLower} editor email.`;
@@ -311,10 +350,19 @@ export default function CreateClubForm({
     }
 
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+
+    if (Object.keys(nextErrors).length > 0) {
+      const uniqueMessages = Array.from(
+        new Set(Object.values(nextErrors).filter((message): message is string => Boolean(message)))
+      );
+      uniqueMessages.forEach((message) => showValidationToast(message));
+      return false;
+    }
+
+    return true;
   };
 
-  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
 
     if (!file) {
@@ -323,19 +371,16 @@ export default function CreateClubForm({
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setBannerFile(null);
-      setErrors((prev) => ({ ...prev, banner: "Only JPG and PNG files are allowed." }));
+      const message = "Only JPG and PNG files are allowed.";
+      setErrors((prev) => ({ ...prev, banner: message }));
+      showValidationToast(message);
       return;
     }
     if (file.size > MAX_IMAGE_SIZE) {
       setBannerFile(null);
-      setErrors((prev) => ({ ...prev, banner: "Image size must be under 3MB." }));
-      return;
-    }
-
-    const dimensionError = await validateImageDimensions(file);
-    if (dimensionError) {
-      setBannerFile(null);
-      setErrors((prev) => ({ ...prev, banner: dimensionError }));
+      const message = "Image size must be under 3MB.";
+      setErrors((prev) => ({ ...prev, banner: message }));
+      showValidationToast(message);
       return;
     }
 
@@ -403,7 +448,7 @@ export default function CreateClubForm({
       type: (initialClub?.type ?? clubType) as "club" | "centre" | "cell",
       club_name: clubName,
       subtitle,
-      category,
+      category: selectedCategories,
       club_description: description,
       club_banner_url: bannerUrl,
       club_registrations: registrationsOpen,
@@ -435,7 +480,7 @@ export default function CreateClubForm({
     <div className={embedded ? "py-10 px-3 sm:px-4" : "min-h-screen bg-[#f3f5f9] py-10 px-3 sm:px-4"}>
       <div className="mx-auto w-full max-w-3xl rounded-xl border border-[#ced6e0] bg-[#f8fafc] p-4 sm:p-6">
         {!hideHeader && (
-      <>
+          <>
             <span className="inline-flex rounded-full border border-[#93a4bd] px-2 py-0.5 text-[10px] font-medium text-[#4f647f]">
               {entityLabel} details
             </span>
@@ -517,25 +562,64 @@ export default function CreateClubForm({
             </div>
           </div>
 
-          <div>
+          <div className="relative" ref={categoriesDropdownRef}>
             <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
-              Category <span className="text-red-500">*</span>
+              Categories <span className="text-red-500">*</span>
             </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-              className={`h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3] ${
+            <button
+              type="button"
+              onClick={() => setShowCategoriesMenu((prev) => !prev)}
+              className={`flex h-10 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3] ${
                 errors.category ? "border-red-500" : "border-[#bcc8d6]"
               }`}
             >
-              <option value="">Select category</option>
-              {PREDEFINED_CATEGORIES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+              <span className={selectedCategories.length > 0 ? "text-[#1f2f46]" : "text-[#6a7b92]"}>
+                {selectedCategories.length > 0
+                  ? `${selectedCategories.length} categor${selectedCategories.length === 1 ? "y" : "ies"} selected`
+                  : "Select one or more categories"}
+              </span>
+              <span className="text-xs text-[#4f6482]">{showCategoriesMenu ? "▲" : "▼"}</span>
+            </button>
+
+            {showCategoriesMenu && (
+              <div className="absolute left-0 right-0 top-16 z-30 max-h-60 overflow-y-auto rounded-md border border-[#c7d0db] bg-white shadow-md">
+                {PREDEFINED_CATEGORIES.map((item) => (
+                  <label
+                    key={item}
+                    className="flex cursor-pointer items-center gap-2 border-b border-[#edf1f5] px-3 py-2 text-xs text-[#2f435c] last:border-b-0 hover:bg-[#f3f7ff]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(item)}
+                      onChange={() => {
+                        if (selectedCategories.includes(item)) {
+                          setSelectedCategories(selectedCategories.filter((c) => c !== item));
+                        } else if (selectedCategories.length >= 3) {
+                          showValidationToast("You can only select up to 3 categories.");
+                        } else {
+                          setSelectedCategories([...selectedCategories, item]);
+                        }
+                      }}
+                      className="h-3.5 w-3.5 accent-[#1f57c3]"
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {selectedCategories.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedCategories.map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex items-center rounded-full border border-[#c4ceda] bg-white px-2.5 py-1 text-[10px] font-medium text-[#2f435c]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {errors.category && <p className="text-red-500 text-xs mt-1">{errors.category}</p>}
           </div>
 
@@ -557,11 +641,11 @@ export default function CreateClubForm({
           </div>
 
           <div>
-              <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
+            <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
               {entityLabel} banner: (max 3MB) - JPG/PNG <span className="text-red-500">*</span>
             </label>
             <div className="rounded-md border border-dashed border-[#8da1bb] bg-white px-4 py-5 text-center">
-              <p className="mb-2 text-[11px] text-[#5a6d84]">JPEG, PNG (max 3MB) - 2048x1080 required</p>
+              <p className="mb-2 text-[11px] text-[#5a6d84]">JPEG, PNG (max 3MB)</p>
               {!bannerFile && bannerUrlInput ? (
                 <a
                   href={bannerUrlInput}
@@ -712,10 +796,13 @@ export default function CreateClubForm({
             {errors.editors && <p className="text-red-500 text-xs mt-1">{errors.editors}</p>}
           </div>
 
-          <div className="relative rounded-md border border-[#d3dbe6] bg-[#f4f6f8] px-3 py-2">
+          <div
+            ref={rolesDropdownRef}
+            className="relative rounded-md border border-[#d3dbe6] bg-[#f4f6f8] px-3 py-2"
+          >
             <div className="mb-2 flex items-center justify-between">
               <label className="text-[11px] font-semibold text-[#29364a]">
-                Roles Available <span className="text-red-500">*</span>
+                Roles Available {registrationsOpen ? <span className="text-red-500">*</span> : null}
               </label>
               <button
                 type="button"
@@ -728,16 +815,23 @@ export default function CreateClubForm({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center rounded-full border border-[#1f57c3] bg-[#1f57c3] px-2 py-0.5 text-[10px] font-semibold text-white">
-                Member
-              </span>
+              {roleRows.length === 0 ? (
+                <span className="text-[10px] font-medium text-[#5d708a]">
+                  No roles selected yet.
+                </span>
+              ) : null}
               {roleRows.map((row) => (
                 <span
                   key={row.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-[#c4ceda] bg-white px-2 py-0.5 text-[10px] font-medium text-[#2f435c]"
+                  className="inline-flex items-center gap-1 rounded-full border border-[#9aa8bb] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#1f2f46]"
                 >
                   {row.value}
-                  <button type="button" onClick={() => removeRoleRow(row.id)} className="text-red-500">
+                  <button
+                    type="button"
+                    onClick={() => removeRoleRow(row.id)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500/45 bg-red-500/15 text-base font-bold leading-none text-red-800 transition-colors duration-200 hover:border-red-600/70 hover:bg-red-600/25 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                    aria-label={`Remove role ${row.value}`}
+                  >
                     ×
                   </button>
                 </span>
@@ -745,7 +839,7 @@ export default function CreateClubForm({
             </div>
 
             {showRolesMenu && (
-              <div className="absolute right-3 top-14 z-20 max-h-52 w-36 overflow-y-auto rounded-md border border-[#c7d0db] bg-white shadow-md">
+              <div className="absolute right-3 top-14 z-20 max-h-52 w-44 overflow-y-auto rounded-md border border-[#c7d0db] bg-white shadow-md">
                 {PREDEFINED_ROLES.map((role) => (
                   <button
                     key={role}

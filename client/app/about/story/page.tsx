@@ -48,6 +48,20 @@ const StoryPage = () => {
       title: "Innowave Presentation",
       description: "Selected to present SOCIO at Innowave 2026, showcasing the platform's capabilities to a wider audience and preparing for campus-wide rollout.",
       icon: "presentation"
+    },
+    {
+      year: "2026",
+      quarter: "February",
+      title: "SOCIO Gated Integration",
+      description: "Integrated gated access features to SOCIO, enabling advanced permission management and role-based access control for different user types and event organizers.",
+      icon: "gated"
+    },
+    {
+      year: "2026",
+      quarter: "April",
+      title: "Module 11 Integration",
+      description: "Successfully integrated the comprehensive Module 11 approval workflow system, enabling structured event approvals through HOD, Dean, and CFO lanes with operational support.",
+      icon: "module"
     }
   ];
 
@@ -101,6 +115,22 @@ const StoryPage = () => {
           <div className={`${iconClass} bg-[#FFCC00]`}>
             <svg className="w-5 h-5 text-[#063168]" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+            </svg>
+          </div>
+        );
+      case "gated":
+        return (
+          <div className={`${iconClass} bg-orange-500`}>
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"/>
+            </svg>
+          </div>
+        );
+      case "module":
+        return (
+          <div className={`${iconClass} bg-blue-600`}>
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.3A4.5 4.5 0 1113.5 13H11V9.413l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13H5.5z"/>
             </svg>
           </div>
         );
@@ -234,7 +264,7 @@ const StoryPage = () => {
                 />
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
                   <p className="text-white text-center font-medium">
-                    Sachin Yadav teaching Python to BBA students - where it all began
+                    Sachin teaching Python to BBA students - where it all began
                   </p>
                 </div>
               </div>
@@ -247,7 +277,7 @@ const StoryPage = () => {
                 />
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
                   <p className="text-white text-center font-medium">
-                    The SOCIO team: Sachin Yadav, Surya Vamshi, and the extended team
+                    The SOCIO team: Sachin Yadav, Surya Vamshi, and team
                   </p>
                 </div>
               </div>
@@ -353,15 +383,15 @@ const StoryPage = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             <div className="bg-gradient-to-br from-[#154CB3] to-[#063168] text-white p-6 rounded-xl">
-              <div className="text-3xl font-black mb-2">4+</div>
+              <div className="text-3xl font-black mb-2">5+</div>
               <div className="text-sm text-blue-100">Campuses Connected</div>
             </div>
             <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-xl">
-              <div className="text-3xl font-black mb-2">20K+</div>
+              <div className="text-3xl font-black mb-2">2000+</div>
               <div className="text-sm text-green-100">Active Students</div>
             </div>
             <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white p-6 rounded-xl">
-              <div className="text-3xl font-black mb-2">500+</div>
+              <div className="text-3xl font-black mb-2">50+</div>
               <div className="text-sm text-yellow-100">Events Hosted</div>
             </div>
             <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl">
@@ -434,7 +464,7 @@ const StoryPage = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/Discover"
+              href="https://chat.whatsapp.com/HevkGjlLp5KLxqtgjHaYjq"
               className="bg-[#FFCC00] text-gray-900 px-6 py-3 rounded-lg font-medium hover:bg-yellow-400 transition-all"
             >
               Join Our Community

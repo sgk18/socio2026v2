@@ -42,6 +42,9 @@ import {
   Zap,
   Plus,
   History,
+  MapPin,
+  UtensilsCrossed,
+  Grid3X3,
 } from "lucide-react";
 import OrganiserHistoryModal from "./OrganiserHistoryModal";
 import {
@@ -110,6 +113,24 @@ const PRICING_COLOR_CLASSES = ["bg-[#154cb3]", "bg-[#e2e8f0]"];
 const ROLE_COLOR_CLASSES = ["bg-[#154cb3]", "bg-[#10b981]", "bg-[#f59e0b]", "bg-[#8b5cf6]"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function extractCreatorEmails(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.flatMap(extractCreatorEmails);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try { return extractCreatorEmails(JSON.parse(trimmed)); } catch { /* fall through */ }
+    }
+    return [trimmed.toLowerCase()];
+  }
+  if (typeof value === "object") {
+    const r = value as Record<string, unknown>;
+    return [...extractCreatorEmails(r.event_creator), ...extractCreatorEmails(r.fest_creator), ...extractCreatorEmails(r.email)];
+  }
+  return [];
+}
+
 function getDateCutoff(range: DateRange): Date {
   if (range === "all") return new Date(0); // Epoch
   const now = new Date();
@@ -258,7 +279,7 @@ export default function AdminDashboardView({
       
       const matchCampus = campusFilter === "all" || (() => {
         const campusUsers = new Set(users.filter((u) => u.campus === campusFilter).map((u) => u.email));
-        return campusUsers.has(e.created_by);
+        return extractCreatorEmails(e.created_by).some(email => campusUsers.has(email));
       })();
 
       const matchDept = deptFilter === "all" || e.organizing_dept === deptFilter;
@@ -372,7 +393,9 @@ export default function AdminDashboardView({
   // Top organisers
   const topOrganisers = useMemo(() => {
     const map: Record<string, number> = {};
-    events.forEach((e) => e.created_by && (map[e.created_by] = (map[e.created_by] || 0) + 1));
+    events.forEach((e) => extractCreatorEmails(e.created_by).filter(v => v.includes("@")).forEach(email => {
+      map[email] = (map[email] || 0) + 1;
+    }));
     return Object.entries(map)
       .map(([email, count]) => ({ email, initials: email.slice(0, 2).toUpperCase(), count }))
       .sort((a, b) => b.count - a.count)
@@ -380,7 +403,8 @@ export default function AdminDashboardView({
   }, [events]);
 
   const organiserOptions = useMemo(() => {
-    return Array.from(new Set(events.map((e) => e.created_by).filter(Boolean))).sort();
+    const emails = events.flatMap((e) => extractCreatorEmails(e.created_by)).filter(v => v.includes("@"));
+    return Array.from(new Set(emails)).sort();
   }, [events]);
 
   // Recent activity
@@ -627,25 +651,43 @@ export default function AdminDashboardView({
             onClick={() => openOrganiserHistory(null)}
             className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] bg-white text-[#154cb3] px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
           >
-            <History className="w-4 h-4" /> Event Backtracking
+            <History className="w-4 h-4" /> Backtrack
           </button>
           <Link
-            href="/create/event"
+            href="/bookvenue"
             className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Create Event
+            <MapPin className="w-4 h-4" /> Venue
+          </Link>
+          <Link
+            href="/bookcatering"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] text-[#154cb3] bg-white px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
+          >
+            <UtensilsCrossed className="w-4 h-4" /> Catering
+          </Link>
+          <Link
+            href="/bookstall"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
+          >
+            <Grid3X3 className="w-4 h-4" /> Stalls
+          </Link>
+          <Link
+            href="/create/event"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] text-[#154cb3] bg-white px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
+          >
+            <Plus className="w-4 h-4" /> Event
           </Link>
           <Link
             href="/create/fest"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] text-[#154cb3] bg-white px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Create Fest
+            <Plus className="w-4 h-4" /> Fest
           </Link>
           <Link
             href="/create/clubs"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-[#154cb3] border-2 border-[#154cb3] text-white px-3.5 py-2 rounded-full hover:bg-[#1240a0] transition-all shadow-sm"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-[#154cb3] text-[#154cb3] bg-white px-3.5 py-2 rounded-full hover:bg-blue-50 transition-all"
           >
-            <Plus className="w-4 h-4" /> Create Club
+            <Plus className="w-4 h-4" /> Club
           </Link>
         </div>
       </div>

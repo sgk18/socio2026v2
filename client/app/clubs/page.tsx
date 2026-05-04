@@ -9,6 +9,7 @@ import Footer from "../_components/Home/Footer";
 import { ClubRecord } from "@/app/actions/clubs";
 import supabase from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
+import { toClubCategories } from "@/app/lib/clubCategory";
 
 type OrganizationTypeFilter = "all" | "club" | "centre" | "cell";
 
@@ -93,7 +94,7 @@ const CentresPageContent = () => {
         const { data, error } = await supabase
           .from("clubs")
           .select(
-            "club_id,club_name,subtitle,club_description,club_web_link,slug,club_banner_url,type,category,club_editors"
+            "club_id,club_name,subtitle,club_description,club_web_link,slug,club_banner_url,type,category,club_editors,club_registrations"
           )
           .order("club_name", { ascending: true });
 
@@ -160,7 +161,8 @@ const CentresPageContent = () => {
             .filter(
               (centre) => selectedTypeFilter === "all" || centre.type === selectedTypeFilter
             )
-            .map((centre) => centre.category?.trim())
+            .flatMap((centre) => toClubCategories(centre.category))
+            .map((category) => category.trim())
             .filter((category): category is string => Boolean(category))
         )
       ),
@@ -187,13 +189,18 @@ const CentresPageContent = () => {
   const filteredCentres = useMemo(
     () =>
       allCentres.filter((centre: ClubRecord) => {
+        const centreCategories = toClubCategories(centre.category);
+
         if (selectedTypeFilter !== "all" && centre.type !== selectedTypeFilter) {
           return false;
         }
 
         if (
           normalizeCategory(selectedCategoryFilter) !== "all" &&
-          normalizeCategory(centre.category ?? "") !== normalizeCategory(selectedCategoryFilter)
+          !centreCategories.some(
+            (category) =>
+              normalizeCategory(category) === normalizeCategory(selectedCategoryFilter)
+          )
         ) {
           return false;
         }
@@ -203,7 +210,9 @@ const CentresPageContent = () => {
           const titleMatch = normalizeCategory(centre.club_name).includes(q);
           const subtitleMatch = normalizeCategory(centre.subtitle).includes(q);
           const descriptionMatch = normalizeCategory(centre.club_description).includes(q);
-          const categoryMatch = normalizeCategory(centre.category).includes(q);
+          const categoryMatch = centreCategories.some((category) =>
+            normalizeCategory(category).includes(q)
+          );
 
           if (!titleMatch && !subtitleMatch && !descriptionMatch && !categoryMatch) {
             return false;
@@ -229,6 +238,14 @@ const CentresPageContent = () => {
   const isMasterAdmin = Boolean(userData?.is_masteradmin);
   const canEditOrganization = (centre: ClubRecord) => {
     if (isMasterAdmin) return true;
+    if (!currentEmail) return false;
+    const editors = Array.isArray(centre.club_editors) ? centre.club_editors : [];
+    return editors.some(
+      (editor) => String(editor || "").trim().toLowerCase() === currentEmail
+    );
+  };
+
+  const isClubEditor = (centre: ClubRecord) => {
     if (!currentEmail) return false;
     const editors = Array.isArray(centre.club_editors) ? centre.club_editors : [];
     return editors.some(
@@ -265,7 +282,7 @@ const CentresPageContent = () => {
                 Explore centres, cells & clubs
               </h1>
               <p className="text-gray-500 mt-1 text-sm sm:text-base">
-                Browse all centres, cells, and clubs at Christ University that support academic excellence, research, innovation, and student development.
+                Find centres, cells, and clubs.
               </p>
             </div>
             <Link
@@ -411,6 +428,8 @@ const CentresPageContent = () => {
                         link={centre.club_web_link ?? undefined}
                         slug={centre.slug ?? undefined}
                         image={centre.club_banner_url ?? undefined}
+                        categories={toClubCategories(centre.category)}
+                        registrationsOpen={Boolean(centre.club_registrations)}
                         type={
                           centre.type === "club"
                             ? "club"
@@ -420,6 +439,8 @@ const CentresPageContent = () => {
                         }
                         showEditButton={canEditOrganization(centre)}
                         editHref={`/edit/clubs/${centre.club_id}`}
+                        showManageButton={isMasterAdmin || isClubEditor(centre)}
+                        manageHref={`/clubeditor/${centre.club_id}`}
                       />
                     </div>
                   ))}

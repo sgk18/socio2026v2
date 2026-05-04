@@ -5,34 +5,60 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function PopupSuccess() {
   useEffect(() => {
-    const notifyParent = async () => {
+    let unsubscribed = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+
+    const sendToParent = (type: "GOOGLE_AUTH_SUCCESS" | "GOOGLE_AUTH_ERROR", accessToken?: string, refreshToken?: string) => {
+      if (unsubscribed) return;
+      unsubscribed = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (authSubscription) authSubscription.unsubscribe();
+
       if (!window.opener || window.opener.closed) {
         window.close();
         return;
       }
 
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          window.opener.postMessage(
-            {
-              type: "GOOGLE_AUTH_SUCCESS",
-              accessToken: session.access_token,
-              refreshToken: session.refresh_token,
-            },
-            window.location.origin
-          );
-        } else {
-          window.opener.postMessage({ type: "GOOGLE_AUTH_SUCCESS" }, window.location.origin);
-        }
-      } catch {
-        window.opener.postMessage({ type: "GOOGLE_AUTH_SUCCESS" }, window.location.origin);
-      }
+      window.opener.postMessage(
+        type === "GOOGLE_AUTH_SUCCESS"
+          ? { type, accessToken, refreshToken }
+          : { type },
+        window.location.origin
+      );
 
-      setTimeout(() => window.close(), 100);
+      setTimeout(() => window.close(), 300);
     };
 
-    void notifyParent();
+    const run = async () => {
+      // Try immediately — session is often already available in cookies
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          sendToParent("GOOGLE_AUTH_SUCCESS", session.access_token, session.refresh_token);
+          return;
+        }
+      } catch { /* fall through to listener */ }
+
+      // Not available yet — wait for Supabase to fire SIGNED_IN / INITIAL_SESSION
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.access_token) {
+          sendToParent("GOOGLE_AUTH_SUCCESS", session.access_token, session.refresh_token);
+        }
+      });
+      authSubscription = subscription;
+
+      // Give up after 8 s and tell parent so the spinner doesn't hang forever
+      fallbackTimer = setTimeout(() => sendToParent("GOOGLE_AUTH_ERROR"), 8000);
+    };
+
+    void run();
+
+    return () => {
+      unsubscribed = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (authSubscription) authSubscription.unsubscribe();
+    };
   }, []);
 
   return (

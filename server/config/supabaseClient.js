@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import './loadEnv.js';
 
 /**
  * IMPORTANT: This Supabase client is ONLY used for token verification purposes.

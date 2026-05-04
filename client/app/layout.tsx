@@ -8,7 +8,6 @@ import { OrganizationJsonLd, WebsiteJsonLd } from "./_components/JsonLd";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Toaster } from "react-hot-toast";
 import { unstable_cache } from "next/cache";
-import { Suspense } from "react";
 import ClientInit from "./_components/ClientInit";
 import MobileDetectionRedirect from "./_components/MobileDetectionRedirect";
 import { DM_Sans } from "next/font/google";
@@ -229,41 +228,39 @@ function getServerSupabase(): SupabaseClient | null {
 
 async function fetchEventsFromSupabase() {
   const supabase = getServerSupabase();
-  if (!supabase) {
+  if (!supabase) return [] as FetchedEvent[];
+
+  try {
+    const { data, error: supabaseError } = await supabase
+      .from("events")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (supabaseError) return [] as FetchedEvent[];
+    return (data as FetchedEvent[]) || [];
+  } catch {
     return [] as FetchedEvent[];
   }
-  
-  const { data, error: supabaseError } = await supabase
-    .from("events")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (supabaseError) {
-    throw new Error(supabaseError.message);
-  }
-
-  return data as FetchedEvent[];
 }
 
 async function fetchUpcomingEventsFromSupabase() {
   const supabase = getServerSupabase();
-  if (!supabase) {
+  if (!supabase) return [] as FetchedEvent[];
+
+  try {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const { data, error: supabaseError } = await supabase
+      .from("events")
+      .select("*")
+      .gte("event_date", todayIso)
+      .order("event_date", { ascending: true })
+      .limit(12);
+
+    if (supabaseError) return [] as FetchedEvent[];
+    return (data as FetchedEvent[]) || [];
+  } catch {
     return [] as FetchedEvent[];
   }
-  const todayIso = new Date().toISOString().slice(0, 10);
-
-  const { data, error: supabaseError } = await supabase
-    .from("events")
-    .select("*")
-    .gte("event_date", todayIso)
-    .order("event_date", { ascending: true })
-    .limit(12);
-
-  if (supabaseError) {
-    throw new Error(supabaseError.message);
-  }
-
-  return (data as FetchedEvent[]) || [];
 }
 
 // OPTIMIZATION: Cache the Supabase query with unstable_cache
@@ -425,9 +422,7 @@ export default async function RootLayout({
                 }}
               />
               <div className="relative w-full overflow-hidden">
-                <Suspense fallback={null}>
-                  <NavigationBar />
-                </Suspense>
+                <NavigationBar />
                 {children}
               </div>
           </EventsProvider>

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import CampusDetectionModal, { isCampusDismissedRecently } from "../app/_components/CampusDetectionModal";
@@ -47,6 +47,7 @@ type AuthContextType = {
   isMasterAdmin: boolean;
   isStudentOrganiser: boolean;
   subHeadFestIds: string[];
+  isVolunteer: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isStudentOrganiser, setIsStudentOrganiser] = useState(false);
   const [subHeadFestIds, setSubHeadFestIds] = useState<string[]>([]);
+  const [isVolunteer, setIsVolunteer] = useState(false);
   const [showOutsiderWarning, setShowOutsiderWarning] = useState(false);
   const [outsiderVisitorId, setOutsiderVisitorId] = useState<string | null>(null);
   const [outsiderNameInput, setOutsiderNameInput] = useState("");
@@ -110,9 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Restore session + userData from localStorage on mount — eliminates the
-  // loading flash for returning users by skipping the async Supabase round-trip.
-  useEffect(() => {
+  // Restore session + userData from localStorage synchronously before paint so
+  // returning users see the correct navbar state on the very first frame.
+  useLayoutEffect(() => {
     const storedSession = localStorage.getItem('socio_session');
     const storedUserData = localStorage.getItem('socio_user_data');
     if (storedSession && storedUserData) {
@@ -349,17 +351,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
-      const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`);
+      const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         if (response.status === 404) {
-          console.warn(
-            `User data not found for ${email}. User might need to be created.`
-          );
+          console.warn(`User not found for ${email}.`);
           setUserData(null);
           persistUserData(null);
-        } else {
-          throw new Error(`Failed to fetch user data: ${response.statusText}`);
         }
         return null;
       }
@@ -369,8 +374,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       persistUserData(user);
       return user;
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error("Error fetching user data:", error);
-      setUserData(null);
+      // Preserve cached userData on network errors — don't wipe the session
       return null;
     }
   };
@@ -528,9 +534,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [userData?.email, userData?.is_organiser]);
 
+  // Check if user has any active volunteer assignments
+  useEffect(() => {
+    const registerNumber = userData?.register_number;
+    if (!registerNumber || !supabase) {
+      setIsVolunteer(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("events")
+          .select("volunteers")
+          .not("volunteers", "is", null)
+          .neq("volunteers", "[]")
+          .eq("is_archived", false)
+          .limit(50);
+        const now = new Date();
+        const regUpper = String(registerNumber).toUpperCase();
+        const hasActive = (data || []).some((event: any) => {
+          const vols: any[] = Array.isArray(event.volunteers) ? event.volunteers : [];
+          return vols.some(
+            (v) =>
+              String(v?.register_number || "").toUpperCase() === regUpper &&
+              v?.expires_at &&
+              new Date(v.expires_at) > now
+          );
+        });
+        setIsVolunteer(hasActive);
+      } catch {
+        setIsVolunteer(false);
+      }
+    })();
+  }, [userData?.register_number]);
+
   return (
     <AuthContext.Provider
-      value={{ session, userData, isLoading, isSupport, isMasterAdmin, isStudentOrganiser, subHeadFestIds, signInWithGoogle, signOut }}
+      value={{ session, userData, isLoading, isSupport, isMasterAdmin, isStudentOrganiser, subHeadFestIds, isVolunteer, signInWithGoogle, signOut }}
     >
       {children}
 

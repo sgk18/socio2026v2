@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useEvents, FetchedEvent as ContextEvent } from "../../context/EventContext";
@@ -76,8 +76,10 @@ function statusStyle(status: string) {
   }
 }
 
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function statusLabel(status: string | null | undefined): string {
+  const text = String(status ?? "").trim();
+  if (!text) return "Unknown";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function formatDateShort(iso: string | null | undefined): string {
@@ -125,8 +127,10 @@ const IconPhone = () => (
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function BookCateringPage() {
+function BookCateringContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { session, userData, isLoading } = useAuth() as any;
   const { allEvents } = useEvents() as any;
 
@@ -144,13 +148,36 @@ export default function BookCateringPage() {
 
   const [tab, setTab] = useState<TabKey>("book");
 
+  // Sync tab with URL on mount
+  useEffect(() => {
+    const t = searchParams?.get("tab");
+    if (t === "mine" || t === "book") setTab(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function switchTab(next: TabKey) {
+    setTab(next);
+    const p = new URLSearchParams(searchParams?.toString() || "");
+    if (next === "mine") p.set("tab", "mine");
+    else p.delete("tab");
+    const qs = p.toString();
+    router.replace(qs ? `?${qs}` : pathname, { scroll: false });
+  }
+
   const [vendors, setVendors] = useState<CateringVendor[]>([]);
   const [loadingVendors, setLoadingVendors] = useState(false);
   const [selectedVendorId, setSelectedVendorId] = useState("");
   const [campusFilter, setCampusFilter] = useState("");
 
-  const [selectedEventId, setSelectedEventId] = useState("");
-  const [selectedFestId, setSelectedFestId] = useState("");
+  // Vendor search (client-side)
+  const [vendorQuery, setVendorQuery] = useState("");
+  const [vendorQueryDebounced, setVendorQueryDebounced] = useState("");
+
+  // In-memory cache + abort control for caterer fetching (faster campus switching)
+  const vendorCacheRef = useRef<Map<string, CateringVendor[]>>(new Map());
+  const vendorsAbortRef = useRef<AbortController | null>(null);
+
+  const [selectedEventFestId, setSelectedEventFestId] = useState("");
+  const [selectedEventFestType, setSelectedEventFestType] = useState<"event" | "fest" | null>(null);
   const [myFests, setMyFests] = useState<MyFest[]>([]);
   const [description, setDescription] = useState("");
   const [contactName, setContactName] = useState("");
@@ -166,6 +193,13 @@ export default function BookCateringPage() {
   const [minePage, setMinePage] = useState(1);
   const MINE_PAGE_SIZE = 8;
 
+  // Keep active tab in sync with URL, e.g. /bookcatering?tab=mine
+  useEffect(() => {
+    const tabParam = searchParams?.get("tab");
+    if (tabParam === "mine") setTab("mine");
+    else if (tabParam === "book") setTab("book");
+  }, [searchParams]);
+
   // Pre-fill contact from user profile
   useEffect(() => {
     if (!userData) return;
@@ -174,18 +208,47 @@ export default function BookCateringPage() {
     setContactMobile(userData.phone || userData.mobile || "");
   }, [userData]);
 
-  // Fetch vendors
+  // Fetch vendors (cached + abort in-flight requests on campusFilter change)
   useEffect(() => {
     if (!session?.access_token) return;
+
+    const cacheKey = campusFilter ? `campus:${campusFilter}` : "all";
+    const cached = vendorCacheRef.current.get(cacheKey);
+    if (cached) {
+      setVendors(cached);
+      setLoadingVendors(false);
+      return;
+    }
+
+    // Abort previous request
+    if (vendorsAbortRef.current) vendorsAbortRef.current.abort();
+    const controller = new AbortController();
+    vendorsAbortRef.current = controller;
+
     setLoadingVendors(true);
     const url = campusFilter
       ? `${API_URL}/api/caterers?campus=${encodeURIComponent(campusFilter)}`
       : `${API_URL}/api/caterers`;
-    fetch(url, { headers: { Authorization: `Bearer ${session.access_token}` } })
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setVendors(Array.isArray(d) ? d : []))
-      .catch(() => setVendors([]))
-      .finally(() => setLoadingVendors(false));
+
+    fetch(url, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      signal: controller.signal,
+    })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => {
+        const next = Array.isArray(d) ? d : [];
+        vendorCacheRef.current.set(cacheKey, next);
+        setVendors(next);
+      })
+      .catch(err => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setVendors([]);
+      })
+      .finally(() => {
+        // If this request was aborted, we don't want to force the loading spinner off for the next one.
+        if (controller.signal.aborted) return;
+        setLoadingVendors(false);
+      });
   }, [session?.access_token, campusFilter]);
 
   // Fetch user's own fests
@@ -232,6 +295,78 @@ export default function BookCateringPage() {
     return Array.from(all).sort();
   }, [vendors]);
 
+  // Debounce search input for smoother typing (client-side filtering)
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setVendorQueryDebounced(vendorQuery.trim());
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [vendorQuery]);
+
+  const filteredVendors = useMemo(() => {
+    const q = vendorQueryDebounced;
+    if (!q) return vendors;
+
+    const qLower = q.toLowerCase();
+    return vendors.filter(v => {
+      const name = (v.catering_name || "").toLowerCase();
+      const location = (v.location || "").toLowerCase();
+      const campuses = Array.isArray(v.campuses) ? v.campuses.join(", ").toLowerCase() : "";
+      return name.includes(qLower) || location.includes(qLower) || campuses.includes(qLower);
+    });
+  }, [vendors, vendorQueryDebounced]);
+
+  const displayVendors = useMemo(() => {
+    if (!selectedVendorId) return filteredVendors;
+    const selectedFromFiltered = filteredVendors.find(v => v.catering_id === selectedVendorId) || null;
+    const selectedFromAll = vendors.find(v => v.catering_id === selectedVendorId) || null;
+    const selected = selectedFromFiltered || selectedFromAll;
+    if (!selected) return filteredVendors;
+
+    return [selected, ...filteredVendors.filter(v => v.catering_id !== selectedVendorId)];
+  }, [filteredVendors, selectedVendorId, vendors]);
+
+  // Combined events + fests for dropdown
+  const combinedEventFest = useMemo(() => {
+    const events = myEvents.map((e: any) => ({
+      id: e.event_id,
+      type: "event" as const,
+      label: e.title + (e.event_date ? ` · ${new Date(e.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""),
+    }));
+    const fests = myFests.map(f => ({
+      id: f.fest_id,
+      type: "fest" as const,
+      label: f.fest_title,
+    }));
+    return [...events, ...fests];
+  }, [myEvents, myFests]);
+
+  // Pre-fill event/fest from URL query param
+  useEffect(() => {
+    const urlEventFestId = searchParams?.get("event_fest_id");
+    if (!urlEventFestId || selectedEventFestId) return; // Don't override if already set
+    
+    const found = combinedEventFest.find(item => item.id === urlEventFestId);
+    if (found) {
+      setSelectedEventFestId(found.id);
+      setSelectedEventFestType(found.type);
+    } else {
+      setSelectedEventFestId(urlEventFestId);
+      // Read explicit type from URL, fallback to ID-prefix heuristic (events start with EV-)
+      const urlType = searchParams?.get("event_fest_type");
+      const inferredType: "event" | "fest" =
+        urlType === "fest" ? "fest" :
+        urlType === "event" ? "event" :
+        urlEventFestId.toUpperCase().startsWith("EV-") ? "event" : "fest";
+      setSelectedEventFestType(inferredType);
+    }
+  }, [searchParams, combinedEventFest, selectedEventFestId]);
+
+  // If URL provides an event_fest_id that matches one of the combined items,
+  // we'll treat it as a locked value and hide the selectable dropdown in the UI.
+  const urlEventFestId = searchParams?.get("event_fest_id");
+  const lockedEventFest = urlEventFestId ? combinedEventFest.find(item => item.id === urlEventFestId) || null : null;
+
   const canSubmit =
     !!selectedVendorId &&
     description.trim().length >= 3 &&
@@ -257,8 +392,8 @@ export default function BookCateringPage() {
         },
         body: JSON.stringify({
           catering_id: selectedVendorId,
-          event_fest_id: selectedEventId || selectedFestId || null,
-          event_fest_type: selectedEventId ? "event" : selectedFestId ? "fest" : null,
+          event_fest_id: selectedEventFestId || null,
+          event_fest_type: selectedEventFestType || null,
           description: description.trim(),
           contact_details,
         }),
@@ -268,10 +403,22 @@ export default function BookCateringPage() {
         setError(body.error || "Failed to submit booking.");
         return;
       }
-      toast.success("Catering request sent — awaiting caterer's response.");
+
+      const returnEventFestId = searchParams?.get("event_fest_id");
+      const returnType: "event" | "fest" =
+        selectedEventFestType ||
+        ((returnEventFestId || selectedEventFestId || "").toUpperCase().startsWith("EV-") ? "event" : "fest");
+
+      toast.success("Request sent.");
+
+      if (returnEventFestId) {
+        router.push(`/approvals/${returnEventFestId}?type=${returnType}`);
+        return;
+      }
+
       setSelectedVendorId("");
-      setSelectedEventId("");
-      setSelectedFestId("");
+      setSelectedEventFestId("");
+      setSelectedEventFestType(null);
       setDescription("");
       loadMyBookings();
       setTab("mine");
@@ -352,27 +499,27 @@ export default function BookCateringPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[#0f2557] leading-tight">Book Catering</h1>
-              <p className="text-xs text-gray-500 mt-0.5">Send a catering request and track its status.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Send a request. Track status.</p>
             </div>
           </div>
 
           {/* Tab strip */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
             <button
-              onClick={() => setTab("book")}
+              onClick={() => switchTab("book")}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 tab === "book" ? "bg-[#154CB3] text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               }`}
             >
-              Book Caterer
+              Book
             </button>
             <button
-              onClick={() => setTab("mine")}
+              onClick={() => switchTab("mine")}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 tab === "mine" ? "bg-[#154CB3] text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               }`}
             >
-              My Bookings
+              My Requests
               {statusCounts.all > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                   tab === "mine" ? "bg-white text-[#154CB3]" : "bg-gray-200 text-gray-600"
@@ -414,7 +561,7 @@ export default function BookCateringPage() {
             ) : filteredMyBookings.length === 0 ? (
               <div className="py-16 text-center text-sm text-gray-400">
                 {myBookings.length === 0
-                  ? "You haven't made any catering bookings yet."
+                  ? "No requests yet."
                   : `No ${mineStatusFilter} requests.`}
               </div>
             ) : (
@@ -488,27 +635,77 @@ export default function BookCateringPage() {
 
           {/* LEFT — Vendor list */}
           <div className="col-span-2 max-lg:col-span-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-800">Available Caterers</p>
-              <select
-                value={campusFilter}
-                onChange={e => setCampusFilter(e.target.value)}
-                className="h-7 rounded-md border border-gray-200 bg-white px-2 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#154CB3]"
-              >
-                <option value="">All campuses</option>
-                {availableCampuses.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+            <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-800">Caterers</p>
+                <select
+                  value={campusFilter}
+                  onChange={e => setCampusFilter(e.target.value)}
+                  className="h-7 rounded-md border border-gray-200 bg-white px-2 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#154CB3]"
+                >
+                  <option value="">All campuses</option>
+                  {availableCampuses.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div className="relative">
+                <input
+                  value={vendorQuery}
+                  onChange={e => setVendorQuery(e.target.value)}
+                  placeholder="Search caterer, location, or campus"
+                  className="w-full h-8 rounded-lg border border-gray-200 bg-white px-9 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent"
+                />
+                {vendorQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setVendorQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-50 flex items-center justify-center"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                ) : (
+                  <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-[11px] text-gray-400 flex items-center justify-between">
+                <span>
+                  {vendorQueryDebounced
+                    ? `${filteredVendors.length} match${filteredVendors.length === 1 ? "" : "es"}`
+                    : `${vendors.length} caterer${vendors.length === 1 ? "" : "s"}`}
+                </span>
+                {vendorQueryDebounced && (
+                  <button
+                    type="button"
+                    onClick={() => setVendorQuery("")}
+                    className="text-[#154CB3] hover:underline whitespace-nowrap"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
 
             {loadingVendors ? (
               <div className="py-10 text-center text-sm text-gray-400">Loading caterers…</div>
-            ) : vendors.length === 0 ? (
+            ) : displayVendors.length === 0 ? (
               <div className="py-10 text-center text-sm text-gray-400 px-4">
-                No caterers available{campusFilter ? ` for ${campusFilter}` : ""}.
+                {vendorQueryDebounced
+                  ? "No caterers match your search."
+                  : `No caterers available${campusFilter ? ` for ${campusFilter}` : ""}.`}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
-                {vendors.map(v => {
+                {displayVendors.map(v => {
                   const selected = v.catering_id === selectedVendorId;
                   return (
                     <li key={v.catering_id}>
@@ -553,7 +750,7 @@ export default function BookCateringPage() {
                   <IconChefHat />
                 </div>
                 <p className="text-sm font-semibold text-gray-700">Select a caterer</p>
-                <p className="text-xs text-gray-400 mt-1">Pick a vendor on the left to begin your booking request.</p>
+                <p className="text-xs text-gray-400 mt-1">Pick a vendor to start.</p>
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -579,56 +776,64 @@ export default function BookCateringPage() {
                 </div>
 
                 <div className="px-5 py-5 space-y-4">
-                  <FormField label="Event (optional)">
-                    <select
-                      value={selectedEventId}
-                      onChange={e => { setSelectedEventId(e.target.value); if (e.target.value) setSelectedFestId(""); }}
-                      className={selectCls}
-                    >
-                      <option value="">— Not linked to a specific event —</option>
-                      {myEvents.map((e: any) => (
-                        <option key={e.event_id} value={e.event_id}>
-                          {e.title}{e.event_date ? ` · ${new Date(e.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                    {myEvents.length === 0 && (
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        You have no upcoming events. You can still submit a standalone request.
-                      </p>
-                    )}
-                  </FormField>
-
-                  <FormField label="Fest (optional)">
-                    <select
-                      value={selectedFestId}
-                      onChange={e => { setSelectedFestId(e.target.value); if (e.target.value) setSelectedEventId(""); }}
-                      className={selectCls}
-                    >
-                      <option value="">— Not linked to a specific fest —</option>
-                      {myFests.map(f => (
-                        <option key={f.fest_id} value={f.fest_id}>{f.fest_title}</option>
-                      ))}
-                    </select>
-                    {myFests.length === 0 && (
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        You have no fests. You can still submit a standalone request.
-                      </p>
-                    )}
-                  </FormField>
-
-                  <FormField label="Description / Order details">
+                  <FormField label="Order details">
                     <textarea
                       value={description}
                       onChange={e => setDescription(e.target.value.slice(0, 1500))}
-                      placeholder="e.g. Lunch for 120 guests on 2026-05-10 at 1pm — vegetarian buffet, tea/coffee service, setup near Block A foyer."
+                      placeholder="e.g. Lunch for 120 guests, vegetarian buffet, tea/coffee, Block A foyer"
                       className={`${inputCls} h-28 resize-none pt-2`}
                     />
                     <p className="text-[10px] text-gray-400 mt-0.5 text-right">{description.length}/1500</p>
                   </FormField>
 
+                  <FormField label={<span><strong>Event or Fest</strong> (optional)</span>}>
+                    {urlEventFestId ? (
+                      <div className="py-2">
+                        <div className="text-sm font-medium text-gray-800">
+                          {lockedEventFest ? lockedEventFest.label : urlEventFestId}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedEventFestId}
+                          onChange={e => {
+                            if (!e.target.value) {
+                              setSelectedEventFestId("");
+                              setSelectedEventFestType(null);
+                            } else {
+                              const found = combinedEventFest.find(item => item.id === e.target.value);
+                              if (found) {
+                                setSelectedEventFestId(found.id);
+                                setSelectedEventFestType(found.type);
+                              }
+                            }
+                          }}
+                          className={selectCls}
+                        >
+                          <option value="">Not linked to event/fest</option>
+                          {combinedEventFest.length > 0 && <optgroup label="Events" />}
+                          {myEvents.map((e: any) => (
+                            <option key={`event-${e.event_id}`} value={e.event_id}>
+                              {e.title}{e.event_date ? ` · ${new Date(e.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                            </option>
+                          ))}
+                          {myFests.length > 0 && <optgroup label="Fests" />}
+                          {myFests.map(f => (
+                            <option key={`fest-${f.fest_id}`} value={f.fest_id}>{f.fest_title}</option>
+                          ))}
+                        </select>
+                        {combinedEventFest.length === 0 && (
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            No upcoming events or fests. You can still submit.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </FormField>
+
                   <div>
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Your contact details</p>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Contact</p>
                     <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
                       <FormField label="Name">
                         <input
@@ -662,7 +867,7 @@ export default function BookCateringPage() {
                 <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex gap-2.5 justify-end">
                   <button
                     type="button"
-                    onClick={() => { setSelectedVendorId(""); setDescription(""); setSelectedEventId(""); setSelectedFestId(""); }}
+                    onClick={() => { setSelectedVendorId(""); setDescription(""); setSelectedEventFestId(""); setSelectedEventFestType(null); }}
                     className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
                   >
                     Cancel
@@ -673,7 +878,7 @@ export default function BookCateringPage() {
                     disabled={!canSubmit}
                     className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#154CB3] text-white hover:bg-[#0f3a7a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Sending…" : "Send booking request"}
+                    {submitting ? "Sending…" : "Send request"}
                   </button>
                 </div>
               </div>
@@ -683,6 +888,20 @@ export default function BookCateringPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BookCateringPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-[#154CB3] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <BookCateringContent />
+    </Suspense>
   );
 }
 

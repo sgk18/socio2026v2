@@ -223,6 +223,8 @@ const getOrganiserTagMeta = (value?: string | null): OrganiserTagMeta => {
   };
 };
 
+const EVENTS_PER_PAGE = 5;
+
 const getOrganiserTagClassName = (meta: OrganiserTagMeta) => {
   if (meta.isValidEmail) {
     return "border-blue-200 bg-blue-50 text-blue-700";
@@ -243,6 +245,41 @@ const getOrganiserTagText = (meta: OrganiserTagMeta) => {
   return meta.value;
 };
 
+const extractCreatorEmails = (value: unknown): string[] => {
+  if (value == null) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractCreatorEmails(entry));
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try {
+        return extractCreatorEmails(JSON.parse(trimmed));
+      } catch {
+        // fall back to plain string handling
+      }
+    }
+
+    return [trimmed.toLowerCase()];
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return [
+      ...extractCreatorEmails(record.event_creator),
+      ...extractCreatorEmails(record.fest_creator),
+      ...extractCreatorEmails(record.created_by),
+      ...extractCreatorEmails(record.email),
+    ];
+  }
+
+  return [];
+};
+
 export default function OrganiserHistoryModal({
   isOpen,
   organiserIdentifier,
@@ -259,6 +296,7 @@ export default function OrganiserHistoryModal({
   const [activeIdentifier, setActiveIdentifier] = useState("");
   const [activeView, setActiveView] = useState<BacktrackingView>("events");
   const [selectedEventId, setSelectedEventId] = useState("all");
+  const [eventPage, setEventPage] = useState(1);
 
   const supabase = useMemo(
     () =>
@@ -282,19 +320,28 @@ export default function OrganiserHistoryModal({
     async (identifier: string) => {
       await applyAuthenticatedSession();
 
+      const normalizedIdentifier = identifier.trim().toLowerCase();
+      if (!normalizedIdentifier) {
+        return [] as OrganiserEvent[];
+      }
+
       const { data, error: fetchError } = await supabase
         .from("events")
         .select(
           "event_id, title, event_date, event_time, venue, category, registration_fee, registration_deadline, fest_id, fest, organizing_dept, created_by, created_at"
         )
-        .eq("created_by", identifier)
         .order("created_at", { ascending: false });
 
       if (fetchError) {
         throw fetchError;
       }
 
-      return (data ?? []) as OrganiserEvent[];
+      const filtered = (data ?? []).filter((event: any) => {
+        const creators = extractCreatorEmails(event?.created_by);
+        return creators.includes(normalizedIdentifier);
+      });
+
+      return filtered as OrganiserEvent[];
     },
     [applyAuthenticatedSession, supabase]
   );
@@ -458,12 +505,22 @@ export default function OrganiserHistoryModal({
     setScope(nextScope);
     setSelectedEventId("all");
     setActiveView("events");
+    setEventPage(1);
 
     if (nextScope === "all-events") {
       setActiveIdentifier("");
       onOrganiserChange(null);
     }
   };
+
+  const paginatedEvents = useMemo(() => {
+    const startIndex = (eventPage - 1) * EVENTS_PER_PAGE;
+    return events.slice(startIndex, startIndex + EVENTS_PER_PAGE);
+  }, [events, eventPage]);
+
+  const totalEventPages = useMemo(() => {
+    return Math.ceil(events.length / EVENTS_PER_PAGE);
+  }, [events.length]);
 
   const filteredRegistrations = useMemo(() => {
     if (selectedEventId === "all") {
@@ -718,7 +775,7 @@ export default function OrganiserHistoryModal({
             </div>
           ) : (
             <div className="space-y-3">
-              {events.map((event) => {
+              {paginatedEvents.map((event) => {
                 const status = getEventStatus(event.event_date);
                 const eventRegistrationCount = registrationCountByEvent.get(event.event_id) || 0;
                 const organiserTagMeta = getOrganiserTagMeta(event.created_by);
@@ -797,6 +854,29 @@ export default function OrganiserHistoryModal({
                   </div>
                 );
               })}
+                        <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
+                          <span className="text-xs text-slate-500">
+                            Page {eventPage} of {totalEventPages}
+                          </span>
+                          {events.length > EVENTS_PER_PAGE && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setEventPage(p => Math.max(1, p - 1))}
+                                disabled={eventPage === 1}
+                                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              >
+                                Previous
+                              </button>
+                              <button
+                                onClick={() => setEventPage(p => Math.min(totalEventPages, p + 1))}
+                                disabled={eventPage >= totalEventPages}
+                                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
+                        </div>
             </div>
           ) : events.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 py-16 text-center">

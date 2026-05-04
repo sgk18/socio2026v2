@@ -169,12 +169,22 @@ const CareersPage = () => {
                 Send your resume or portfolio to our hiring desk. Let us know the internship track you are excited about, your availability, and any standout projects or campus work.
               </p>
             </div>
-            <a
-              href="mailto:hr.socio.blr@gmail.com"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#FFCC00] text-[#063168] font-semibold shadow-md hover:bg-[#ffcc00e6] transition-colors"
-            >
-              Email hr.socio.blr@gmail.com
-            </a>
+            <div className="flex flex-col gap-3">
+              <a
+                href="https://www.withsocio.com/socio/careers/christid"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-[#FFCC00] text-[#063168] font-semibold shadow-md hover:bg-[#ffcc00e6] transition-colors"
+              >
+                Apply as an Intern
+              </a>
+              <a
+                href="mailto:hr.socio.blr@gmail.com"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-white/10 border border-white/30 text-white font-semibold hover:bg-white/20 transition-colors"
+              >
+                Email hr.socio.blr@gmail.com
+              </a>
+            </div>
           </div>
         </section>
 

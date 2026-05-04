@@ -33,6 +33,7 @@ export interface CampusScopedItem {
   allowed_campuses?: string[] | string | null;
   venue?: string | null;
   location?: string | null;
+  allow_outsiders?: boolean | null;
 }
 
 interface EventsContextType {
@@ -165,19 +166,19 @@ export const matchesSelectedCampus = (
   const campusMatchers = getCampusMatchers(selectedCampus);
   if (campusMatchers.length === 0) return true;
 
+  const allowedCampuses = parseCampusField(item.allowed_campuses);
+  const hasCampusData =
+    Boolean(normalizeCampusText(item.campus_hosted_at)) ||
+    allowedCampuses.length > 0;
+
+  // No explicit campus restriction set — treat as visible to everyone
+  if (!hasCampusData) return true;
+
   if (matchesCampusText(item.campus_hosted_at, campusMatchers)) {
     return true;
   }
 
-  const allowedCampuses = parseCampusField(item.allowed_campuses);
   if (allowedCampuses.some((campus) => matchesCampusText(campus, campusMatchers))) {
-    return true;
-  }
-
-  if (
-    matchesCampusText(item.venue, campusMatchers) ||
-    matchesCampusText(item.location, campusMatchers)
-  ) {
     return true;
   }
 
@@ -277,6 +278,7 @@ export const buildDiscoverCampusDatasets = (
         campus_hosted_at: event.campus_hosted_at,
         allowed_campuses: event.allowed_campuses,
         venue: event.venue,
+        allow_outsiders: event.allow_outsiders,
       },
       selectedCampus
     )

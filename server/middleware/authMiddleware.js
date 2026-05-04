@@ -1,6 +1,20 @@
 import supabase from "../config/supabaseClient.js";
 import { queryOne, update } from "../config/database.js";
 
+// Extract all owner emails from created_by regardless of storage format:
+// - plain string: "email@..."
+// - array (new format): ["email1@...", "email2@..."]
+// - JSONB object (legacy): { event_creator: "...", fest_creator: "..." }
+export function extractCreatorEmails(createdBy) {
+  if (!createdBy) return [];
+  if (typeof createdBy === 'string') return [createdBy];
+  if (Array.isArray(createdBy)) return createdBy.filter(e => typeof e === 'string' && e);
+  if (typeof createdBy === 'object') {
+    return [createdBy.event_creator, createdBy.fest_creator].filter(Boolean);
+  }
+  return [];
+}
+
 /**
  * Middleware to check and clear expired roles
  * Run this after getUserInfo() to auto-expire roles
@@ -332,29 +346,34 @@ export const requireOwnership = (table, paramName, ownerField = 'auth_uuid') => 
         }
       }
       
-      // Strategy 2: Fallback to email comparison (for legacy records)
+      // Strategy 2: Email match against created_by (string, array, or JSONB object)
       if (resource.created_by && req.userInfo?.email) {
-        if (resource.created_by === req.userInfo.email) {
-          console.log(`[Ownership] ✅ PASSED via email fallback (${req.userInfo.email})`);
-          
-          // Try to auto-populate auth_uuid for future requests (non-blocking)
-          setImmediate(async () => {
-            try {
-              const updateWhere = {};
-              updateWhere[dbColumnName] = resourceId;
-              
-              await update(table, { auth_uuid: req.userId }, updateWhere);
-              console.log(`[Ownership] Auto-updated auth_uuid for ${table}/${resourceId}`);
-            } catch (updateError) {
-              console.warn('[Ownership] Failed to auto-update auth_uuid (non-critical):', updateError.message);
-            }
-          });
-          
+        const userEmail = req.userInfo.email.toLowerCase();
+        const creatorEmails = extractCreatorEmails(resource.created_by).map(e => e.toLowerCase());
+        if (creatorEmails.includes(userEmail)) {
+          console.log(`[Ownership] ✅ PASSED via created_by match (${req.userInfo.email})`);
           req.resource = resource;
           return next();
         }
       }
-      
+
+      // Strategy 3: Fest-creator fallback — if the resource is an event under a fest,
+      // check if the user is the creator of that parent fest. This covers historical
+      // events where the fest creator's email was not stored in event.created_by.
+      if (resource.fest_id && req.userInfo?.email) {
+        try {
+          const fest = await queryOne('fests', { where: { fest_id: resource.fest_id } });
+          if (fest) {
+            const festCreatorEmails = extractCreatorEmails(fest.created_by).map(e => e.toLowerCase());
+            if (festCreatorEmails.includes(req.userInfo.email.toLowerCase())) {
+              console.log(`[Ownership] ✅ PASSED via parent fest creator match (${req.userInfo.email})`);
+              req.resource = resource;
+              return next();
+            }
+          }
+        } catch (_) { /* non-fatal — fall through to deny */ }
+      }
+
       // No match found
       console.log(`[Ownership] ❌ FAILED: No ownership match found`);
       console.log(`[Ownership] Checked: auth_uuid=${resource.auth_uuid}, created_by=${resource.created_by}`);
@@ -395,8 +414,8 @@ export const requireOrganiserOrSubHead = async (req, res, next) => {
     return res.status(401).json({ error: 'User info not available' });
   }
 
-  if (req.userInfo.is_organiser) {
-    console.log(`[SubHead] ✅ User ${req.userInfo.email} is a full organiser. Proceeding.`);
+  if (req.userInfo.is_organiser || req.userInfo.is_masteradmin) {
+    console.log(`[SubHead] ✅ User ${req.userInfo.email} is a full organiser/masteradmin. Proceeding.`);
     return next();
   }
 

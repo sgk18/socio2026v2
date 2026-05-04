@@ -845,9 +845,12 @@ function ApprovalsSetupView({
   festId,
   approvalExists,
   isSubmitting,
+  isUpdatingFest,
+  initialStages,
   initialBudgetItems,
   onSubmitForApproval,
   onUpdateWorkflow,
+  onUpdateFest,
   onBackToDetails,
 }: {
   organizingSchool: string;
@@ -855,9 +858,12 @@ function ApprovalsSetupView({
   festId: string | null;
   approvalExists: boolean | null;
   isSubmitting: boolean;
+  isUpdatingFest?: boolean;
+  initialStages?: WorkflowStage[];
   initialBudgetItems?: BudgetItem[];
   onSubmitForApproval: (customStages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
   onUpdateWorkflow: (customStages: WorkflowStage[], budgetItems: BudgetItem[]) => void;
+  onUpdateFest?: () => void;
   onBackToDetails: () => void;
 }) {
   return (
@@ -868,9 +874,12 @@ function ApprovalsSetupView({
       festId={festId}
       approvalExists={approvalExists}
       isSubmitting={isSubmitting}
+      isUpdatingFest={isUpdatingFest}
+      initialStages={initialStages}
       initialBudgetItems={initialBudgetItems}
       onSubmitForApproval={onSubmitForApproval}
       onUpdateWorkflow={onUpdateWorkflow}
+      onUpdateFest={onUpdateFest}
       onBackToDetails={onBackToDetails}
     />
   );
@@ -946,8 +955,10 @@ function CreateFestForm(props?: CreateFestProps) {
   const [savedFestId, setSavedFestId] = useState<string | null>(null);
   const [approvalExists, setApprovalExists] = useState(false);
   const [approvalPhase1Complete, setApprovalPhase1Complete] = useState(false);
+  const [existingWorkflowStages, setExistingWorkflowStages] = useState<WorkflowStage[]>([]);
   const [existingBudgetItems, setExistingBudgetItems] = useState<BudgetItem[]>([]);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isUpdatingFestFromApprovals, setIsUpdatingFestFromApprovals] = useState(false);
   const [isLoadingFestData, setIsLoadingFestData] = useState(false);
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
   const actionsDropdownRef = useRef<HTMLDivElement>(null);
@@ -1143,6 +1154,24 @@ function CreateFestForm(props?: CreateFestProps) {
         setApprovalPhase1Complete(phase1Complete);
         if (Array.isArray(data?.approval?.budget_items)) {
           setExistingBudgetItems(data.approval.budget_items);
+        }
+        if (stages.length > 0) {
+          const savedRoles = new Set(stages.map((s: any) => s.role));
+          const mapped: WorkflowStage[] = [
+            ...stages.map((s: any) => {
+              const def = DEFAULT_WORKFLOW_STAGES.find(d => d.role === s.role);
+              return {
+                role: s.role,
+                label: s.label || def?.label || s.role,
+                desc: def?.desc || '',
+                blocking: Boolean(s.blocking),
+                required: def?.required ?? false,
+                enabled: true,
+              } as WorkflowStage;
+            }),
+            ...DEFAULT_WORKFLOW_STAGES.filter(d => !savedRoles.has(d.role)).map(d => ({ ...d, enabled: false })),
+          ];
+          setExistingWorkflowStages(mapped);
         }
       })
       .catch(() => {
@@ -2013,6 +2042,15 @@ function CreateFestForm(props?: CreateFestProps) {
     }
   };
 
+  const handleUpdateFestFromApprovals = async () => {
+    setIsUpdatingFestFromApprovals(true);
+    try {
+      await submitFest(isDraftFest, true);
+    } finally {
+      setIsUpdatingFestFromApprovals(false);
+    }
+  };
+
   const handleSaveDraft = async () => {
     await submitFest(true);
   };
@@ -2389,9 +2427,12 @@ function CreateFestForm(props?: CreateFestProps) {
                   festId={savedFestId || festIdFromPath || null}
                   approvalExists={approvalExists}
                   isSubmitting={isSubmittingApproval}
+                  isUpdatingFest={isUpdatingFestFromApprovals}
+                  initialStages={existingWorkflowStages.length > 0 ? existingWorkflowStages : undefined}
                   initialBudgetItems={existingBudgetItems}
                   onSubmitForApproval={handleSubmitForApproval}
                   onUpdateWorkflow={handleUpdateWorkflow}
+                  onUpdateFest={finalIsEditMode ? handleUpdateFestFromApprovals : undefined}
                   onBackToDetails={() => setActiveView('details')}
                 />
               ) : (

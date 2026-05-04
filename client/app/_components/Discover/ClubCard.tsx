@@ -1,5 +1,6 @@
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { getClubBannerCandidates } from "@/app/lib/clubBannerUrl";
 
 interface CardProps {
   title: string;
@@ -9,8 +10,12 @@ interface CardProps {
   slug?: string;
   image?: string;
   type: "center" | "club" | "cell";
+  categories?: string[];
+  registrationsOpen?: boolean;
   showEditButton?: boolean;
   editHref?: string;
+  showManageButton?: boolean;
+  manageHref?: string;
 }
 
 export const CentreClubCard = ({
@@ -21,52 +26,92 @@ export const CentreClubCard = ({
   slug,
   image,
   type,
+  categories = [],
+  registrationsOpen = false,
   showEditButton = false,
   editHref,
+  showManageButton = false,
+  manageHref,
 }: CardProps) => {
   const [imageError, setImageError] = useState(false);
+  const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
+  const imageCandidates = useMemo(() => getClubBannerCandidates(image), [image]);
+  const activeImageUrl = imageCandidates[imageCandidateIndex] ?? null;
+
+  useEffect(() => {
+    setImageError(false);
+    setImageCandidateIndex(0);
+  }, [image]);
   // Use provided slug or create URL-friendly version of title for linking
   const slugTitle = slug || String(title ?? "")
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
+  const hasEditButton = Boolean(showEditButton && editHref);
+  const hasManageButton = Boolean(showManageButton && manageHref);
   
   return (
     <div className="relative h-full min-w-0">
-      {showEditButton && editHref ? (
-        <Link
-          href={editHref}
-          onClick={(event) => event.stopPropagation()}
-          className="absolute left-3 top-3 z-30 inline-flex items-center gap-1 rounded-full bg-[#154CB3] px-2.5 py-1 text-[11px] font-semibold text-white shadow-md hover:bg-[#0f3f95]"
-          aria-label={`Edit ${title}`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M17.414 2.586a2 2 0 010 2.828l-8.9 8.9a1 1 0 01-.39.242l-3 1a1 1 0 01-1.266-1.266l1-3a1 1 0 01.242-.39l8.9-8.9a2 2 0 012.828 0z" />
-            <path d="M4 16a1 1 0 100 2h12a1 1 0 100-2H4z" />
-          </svg>
-          Edit
-        </Link>
+      {hasEditButton || hasManageButton || registrationsOpen ? (
+        <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
+          <div className="flex items-center gap-2">
+            {hasEditButton && editHref ? (
+              <Link
+                href={editHref}
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex items-center gap-1 rounded-full bg-[#154CB3] px-2.5 py-1 text-[11px] font-semibold text-white shadow-md hover:bg-[#0f3f95]"
+                aria-label={`Edit ${title}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.414 2.586a2 2 0 010 2.828l-8.9 8.9a1 1 0 01-.39.242l-3 1a1 1 0 01-1.266-1.266l1-3a1 1 0 01.242-.39l8.9-8.9a2 2 0 012.828 0z" />
+                  <path d="M4 16a1 1 0 100 2h12a1 1 0 100-2H4z" />
+                </svg>
+                Edit
+              </Link>
+            ) : null}
+            {registrationsOpen ? (
+              <div className="rounded-full bg-green-600 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow">
+                Open
+              </div>
+            ) : null}
+          </div>
+          {hasManageButton && manageHref ? (
+            <Link
+              href={manageHref}
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-full bg-[#154CB3] px-2.5 py-1 text-[11px] font-semibold text-white shadow-md hover:bg-[#0f3f95]"
+              aria-label={`Manage ${title}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10.5 1.5H.5v2h10V1.5zM10.5 4.5H.5v2h10v-2zM10.5 7.5H.5v2h10v-2zM15.5 1.5h-2v2h2v-2zm-2 3h2v2h-2v-2zm0 3h2v2h-2v-2zm4-6h-2v2h2v-2zm-2 3h2v2h-2v-2zm0 3h2v2h-2v-2z" />
+              </svg>
+              Manage
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 
       <Link href={`/club/${slugTitle}`} className="w-full block h-full min-w-0">
       <div className="bg-white rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-lg shadow-md h-full border border-blue-100 group w-full min-w-0">
         <div className="relative h-48 overflow-hidden">
-          {image && !imageError ? (
+          {activeImageUrl && !imageError ? (
             <>
               <div className="absolute inset-0 bg-gradient-to-t from-[#063168]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
               <img
-                src={image}
+                src={activeImageUrl}
                 alt={title}
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
-                onError={() => setImageError(true)}
+                className="h-full w-full object-cover object-center transition-all duration-500 group-hover:scale-105"
+                referrerPolicy="no-referrer"
+                onError={() => {
+                  if (imageCandidateIndex < imageCandidates.length - 1) {
+                    setImageCandidateIndex((prev) => prev + 1);
+                    return;
+                  }
+                  setImageError(true);
+                }}
                 loading="lazy"
               />
-              <div className="absolute top-3 right-3 z-20">
-                <div className="bg-[#063168]/90 text-white text-xs uppercase font-bold py-1 px-2 rounded-full">
-                  {type === "center" ? "Centre" : type === "cell" ? "Cell" : "Club"}
-                </div>
-              </div>
             </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-r from-[#3D75BD]/5 to-[#063168]/10">
@@ -108,6 +153,19 @@ export const CentreClubCard = ({
               )}
             </div>
           )}
+          <div className="absolute right-3 top-3 z-20 flex flex-col items-end gap-1">
+            <div className="rounded-full bg-[#063168]/90 px-2 py-1 text-xs font-bold uppercase text-white">
+              {type === "center" ? "Centre" : type === "cell" ? "Cell" : "Club"}
+            </div>
+            {categories.slice(0, 3).map((category) => (
+              <div
+                key={category}
+                className="rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#0f2f63]"
+              >
+                {category}
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="p-5 min-w-0">

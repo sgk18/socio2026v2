@@ -76,6 +76,18 @@ const buildTeamSizeTag = (event: ContextFetchedEvent): string | null => {
     : `${normalizedMin}-${normalizedMax} members`;
 };
 
+const formatStatusLabel = (value: unknown, fallback = "Unknown"): string => {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+const formatPlatformLabel = (value: unknown, fallback = "Link"): string => {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 // Helper function to generate Google Calendar URL
 const generateGoogleCalendarUrl = (eventTitle: string, eventDate: string, eventTime?: string): string | null => {
   try {
@@ -510,7 +522,7 @@ const FestPage = () => {
                         status === 'completed' ? 'bg-gray-100 text-gray-700' :
                         status === 'cancelled' ? 'bg-red-100 text-red-700' :
                         'bg-yellow-100 text-yellow-700'
-                      }`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                      }`}>{formatStatusLabel(status)}</span>
                     </div>
                   </div>
                 )}
@@ -606,7 +618,7 @@ const FestPage = () => {
                     rel="noopener noreferrer"
                     className="px-4 py-2 bg-[#154CB3] text-white rounded-full text-sm hover:bg-[#0f3a8a] transition-colors"
                   >
-                    {link.platform.charAt(0).toUpperCase() + link.platform.slice(1)}
+                    {formatPlatformLabel(link.platform)}
                   </a>
                 ))}
               </div>

@@ -424,7 +424,7 @@ export default function Page() {
       })
         .then(response => {
           if (!response.ok) {
-            throw new Error(`Event with ID "${currentEventIdString}" not found.`);
+            throw new Error("Event not found.");
           }
           return response.json();
         })
@@ -449,12 +449,12 @@ export default function Page() {
             // Process the event data and update state
             processEventData(data.event);
           } else {
-            throw new Error(`Event with ID "${currentEventIdString}" not found.`);
+            throw new Error("Event not found.");
           }
         })
         .catch(error => {
           console.error("Error fetching event:", error);
-          setPageError(error.message || `Event with ID "${currentEventIdString}" not found.`);
+          setPageError(error.message || "Event not found.");
           setEventData(null);
           setPageLoading(false);
         });
@@ -482,7 +482,7 @@ export default function Page() {
       processEventData(foundEvent);
     } else {
       if (currentEventIdString) {
-        setPageError(`Event with ID "${currentEventIdString}" not found.`);
+        setPageError("Event not found.");
       }
       setEventData(null);
       setPageLoading(false);

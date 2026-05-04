@@ -9,6 +9,7 @@ import supabase from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/app/_components/Home/Footer";
 
+
 export default function EditClubPage() {
   const params = useParams();
   const id = String(params.id ?? "");
@@ -114,12 +115,13 @@ export default function EditClubPage() {
   const entityLabel =
     club.type === "centre" ? "Centre" : club.type === "cell" ? "Cell" : "Club";
   const entityLabelLower = entityLabel.toLowerCase();
+  const publicClubHref = `/club/${club.slug ?? club.club_id}`;
 
   return (
     <div className="min-h-screen bg-[#f3f5f9]">
       <section className="bg-[#0b3879] px-6 py-10 text-white">
         <div className="mx-auto w-full max-w-5xl">
-          <Link href="/masteradmin" className="inline-flex items-center text-[#f3c83a] hover:underline">
+          <Link href={publicClubHref} className="inline-flex items-center text-[#f3c83a] hover:underline">
             ← Back to dashboard
           </Link>
           <h1 className="mt-5 text-5xl font-bold">{`Edit ${entityLabel}`}</h1>

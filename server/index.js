@@ -1,8 +1,23 @@
 import express from "express";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from 'url';
+import "./config/loadEnv.js";
+import * as Sentry from "@sentry/node";
 import { initializeDatabase } from "./config/database.js";
+
+// Initialize Sentry for error tracking.
+// Keep startup resilient if the SDK or one of its integrations is not compatible
+// with the current runtime shape.
+try {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0,
+    sendDefaultPii: true,
+  });
+} catch (error) {
+  console.warn('Sentry initialization skipped:', error?.message || error);
+}
 
 // API Routes
 import userRoutes from "./routes/userRoutes.js";
@@ -27,8 +42,8 @@ import cateringRoutes from "./routes/cateringRoutes.js";
 import stallBookingRoutes from "./routes/stallBookingRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
-
-dotenv.config();
+import clubRoutes from "./routes/clubRoutes.js";
+import { sanitizeErrorPayload } from "./utils/userFacingErrors.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +55,37 @@ initializeDatabase().catch(err => {
 
 const app = express();
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+
+  res.json = (body) => {
+    const isErrorResponse =
+      res.statusCode >= 400 ||
+      body?.success === false ||
+      Boolean(body?.error);
+
+    if (isErrorResponse) {
+      const sanitized = sanitizeErrorPayload(body, res.statusCode);
+      return originalJson({
+        ...body,
+        ...sanitized,
+        message: sanitized.error,
+        details: undefined,
+        code: undefined,
+        stack: undefined,
+        userEmail: undefined,
+        currentRole: undefined,
+        supabaseError: undefined,
+        errorDetail: undefined,
+      });
+    }
+
+    return originalJson(body);
+  };
+
+  next();
+});
 
 // Prevent stale API payloads from being cached by browsers or intermediary caches.
 app.use('/api', (req, res, next) => {
@@ -61,8 +107,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 const DEFAULT_ALLOWED_ORIGIN_PATTERNS = [
+  '^http://(localhost|127\\.0\\.0\\.1)(:\\d+)?$',
   '^https://.*\\.vercel\\.app$',
-  '^https://.*\\.christuniversity\\.in$'
+  '^https://.*\\.christuniversity\\.in$',
+  '^https://.*\\.withsocio\\.com$'
 ];
 
 const parseCsvEnv = (value) =>
@@ -180,22 +228,32 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/hod-analytics", hodAnalyticsRoutes);
 app.use("/api/dean-analytics", deanAnalyticsRoutes);
 app.use("/api/volunteer", volunteerRoutes);
+app.use("/api/clubs", clubRoutes);
+
+// Sentry error handler - must be before other error handlers
+try {
+  if (process.env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
+  }
+} catch (error) {
+  console.warn('Sentry Express error handler skipped:', error?.message || error);
+}
 
 // Global error handler - ensures CORS headers are always sent
 app.use((err, req, res, next) => {
   console.error('Global error:', err);
   setCorsHeaders(req, res);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
 const PORT = process.env.PORT || 8000;
 const isVercelRuntime = process.env.VERCEL === '1';
 
 if (!isVercelRuntime) {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on port ${PORT}`);
     console.log(`📁 Upload directory: ${path.join(__dirname, 'uploads')}`);
-    console.log(`🗄️  Database: Supabase (${process.env.SUPABASE_URL || 'https://vkappuaapscvteexogtp.supabase.co'})`);
+    console.log(`🗄️  Database: Supabase (${process.env.SUPABASE_URL ? 'configured' : 'MISSING — set SUPABASE_URL'})`);
   });
 }
 

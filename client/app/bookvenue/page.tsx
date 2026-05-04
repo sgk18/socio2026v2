@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { christCampuses } from "@/app/lib/eventFormSchema";
@@ -109,9 +109,11 @@ function statusStyle(status: string) {
   }
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string | null | undefined): string {
   if (status === "returned_for_revision") return "Revision";
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  const text = String(status ?? "").trim();
+  if (!text) return "Unknown";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function bookingBarColor(status: string) {
@@ -120,6 +122,12 @@ function bookingBarColor(status: string) {
     case "pending":  return { bg: "#fef3c7", border: "#fbbf24", text: "#92400e" };
     default:         return { bg: "#e2e8f0", border: "#94a3b8", text: "#1e293b" };
   }
+}
+
+function getApprovalRedirectPath(entityId?: string | null, entityType?: string | null): string | null {
+  if (!entityId) return null;
+  const type = entityType || (entityId.toUpperCase().startsWith("EV-") ? "event" : "fest");
+  return `/approvals/${entityId}?type=${type}`;
 }
 
 // ─── SVG icons ────────────────────────────────────────────────────────────────
@@ -175,13 +183,25 @@ const IconUsers = () => (
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BookVenuePage() {
+  return (
+    <Suspense>
+      <BookVenuePageInner />
+    </Suspense>
+  );
+}
+
+function BookVenuePageInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { session, userData, isLoading } = useAuth() as any;
+
+  const entityId   = searchParams.get("entity_id")   || null;
+  const entityType = searchParams.get("entity_type") || null;
 
   useEffect(() => {
     if (!isLoading && !session) router.replace("/auth");
     if (!isLoading && session && userData) {
-      // Block only pure students — anyone with any role can access
       const hasAnyRole =
         userData.is_organiser || userData.is_masteradmin || userData.is_support ||
         userData.is_hod || userData.is_dean || userData.is_cfo ||
@@ -192,6 +212,20 @@ export default function BookVenuePage() {
   }, [isLoading, session, userData, router]);
 
   const [tab, setTab] = useState<TabKey>("specific");
+
+  useEffect(() => {
+    const t = searchParams?.get("tab") as TabKey | null;
+    if (t === "mine" || t === "specific" || t === "any") setTab(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function switchTab(next: TabKey) {
+    setTab(next);
+    const p = new URLSearchParams(searchParams?.toString() || "");
+    if (next === "mine") p.set("tab", "mine");
+    else p.delete("tab");
+    const qs = p.toString();
+    router.replace(qs ? `?${qs}` : pathname, { scroll: false });
+  }
 
   if (isLoading) {
     return (
@@ -209,30 +243,53 @@ export default function BookVenuePage() {
         <div className="flex items-center gap-3 mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <Link href="/manage" className="hover:text-[#154CB3] transition-colors">Manage</Link>
-              <span>›</span>
-              <span className="text-gray-600 font-medium">Venue Booking</span>
+              {entityId ? (
+                <>
+                  <Link
+                    href={getApprovalRedirectPath(entityId, entityType)!}
+                    className="hover:text-[#154CB3] transition-colors"
+                  >
+                    Approvals
+                  </Link>
+                  <span>›</span>
+                </>
+              ) : (
+                <>
+                  <Link href="/manage" className="hover:text-[#154CB3] transition-colors">Manage</Link>
+                  <span>›</span>
+                </>
+              )}
+              <span className="text-gray-600 font-medium">Book Venue</span>
             </div>
+            {entityId && (
+              <p className="text-xs text-[#154CB3] mt-0.5 font-medium">
+                Linked to {entityType || "event"}.
+              </p>
+            )}
           </div>
 
           {/* Compact tab strip */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 max-md:hidden">
-            <TabButton active={tab === "mine"}     onClick={() => setTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
-            <TabButton active={tab === "specific"} onClick={() => setTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
-            <TabButton active={tab === "any"}      onClick={() => setTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+            <TabButton active={tab === "mine"}     onClick={() => switchTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
+            <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book by Venue" />
+            <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Free Venue" />
           </div>
         </div>
 
         {/* Mobile tab strip */}
         <div className="hidden max-md:flex flex-col gap-1.5 mb-3">
-          <TabButton active={tab === "mine"}     onClick={() => setTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
-          <TabButton active={tab === "specific"} onClick={() => setTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
-          <TabButton active={tab === "any"}      onClick={() => setTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+          <TabButton active={tab === "mine"}     onClick={() => switchTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
+          <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book by Venue" />
+          <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Free Venue" />
         </div>
 
         {tab === "mine"     && <MyBookingsView session={session} />}
-        {tab === "specific" && <SpecificVenueView session={session} userData={userData} onBookingSuccess={() => setTab("mine")} />}
-        {tab === "any"      && <AnyAvailableView session={session} userData={userData} />}
+        {tab === "specific" && <SpecificVenueView session={session} userData={userData} entityId={entityId} entityType={entityType} onBookingSuccess={() => {
+          const redirect = getApprovalRedirectPath(entityId, entityType);
+          if (redirect) router.push(redirect);
+          else switchTab("mine");
+        }} />}
+        {tab === "any"      && <AnyAvailableView session={session} userData={userData} entityId={entityId} entityType={entityType} />}
       </div>
     </div>
   );
@@ -262,7 +319,8 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 // VIEW 1 — BOOK SPECIFIC VENUE
 // ══════════════════════════════════════════════════════════════════════════════
 
-function SpecificVenueView({ session, userData, onBookingSuccess }: { session: any; userData: any; onBookingSuccess?: () => void }) {
+function SpecificVenueView({ session, userData, entityId, entityType, onBookingSuccess }: { session: any; userData: any; entityId?: string | null; entityType?: string | null; onBookingSuccess?: () => void }) {
+  const router = useRouter();
   const [campuses,       setCampuses]       = useState<string[]>([]);
   const [selectedCampus, setSelectedCampus] = useState("");
   const [blocks,         setBlocks]         = useState<string[]>([]);
@@ -333,16 +391,17 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
     if (!selectedVenueId || !session?.access_token) { setBookings([]); return; }
     setLoadingCal(true);
     try {
-      const mid = addDays(weekStart, 3);
-      const monthStr = `${mid.getFullYear()}-${pad2(mid.getMonth() + 1)}`;
-      const r = await fetch(
-        `${API_URL}/api/venues/${selectedVenueId}/availability?month=${monthStr}`,
-        { headers: { Authorization: `Bearer ${session.access_token}` } }
-      );
-      if (r.ok) {
-        const d = await r.json();
-        setBookings(Array.isArray(d.bookings) ? d.bookings : []);
-      }
+      const weekEnd = addDays(weekStart, 6);
+      const startMonth = `${weekStart.getFullYear()}-${pad2(weekStart.getMonth() + 1)}`;
+      const endMonth   = `${weekEnd.getFullYear()}-${pad2(weekEnd.getMonth() + 1)}`;
+      const months = startMonth === endMonth ? [startMonth] : [startMonth, endMonth];
+      const results = await Promise.all(months.map(m =>
+        fetch(`${API_URL}/api/venues/${selectedVenueId}/availability?month=${m}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).then(r => r.ok ? r.json() : { bookings: [] }).catch(() => ({ bookings: [] }))
+      ));
+      const combined = results.flatMap(d => Array.isArray(d.bookings) ? d.bookings : []);
+      setBookings(combined);
     } catch {}
     finally { setLoadingCal(false); }
   }, [selectedVenueId, session?.access_token, weekStart]);
@@ -384,7 +443,7 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
               disabled={!canSwitchCampus}
               className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
             >
-              <option value="">Select campus…</option>
+              <option value="">Select campus</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </FormField>
@@ -397,13 +456,13 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
               className={selectCls}
             >
               {!selectedCampus
-                ? <option>Select campus first</option>
+                ? <option>Pick campus first</option>
                 : loadingBlocks
                   ? <option>Loading…</option>
                   : blocks.length === 0
-                    ? <option>No locations found</option>
+                    ? <option>No locations</option>
                     : <>
-                        <option value="">Select location…</option>
+                        <option value="">Select location</option>
                         {blocks.map(b => <option key={b} value={b}>{b}</option>)}
                       </>
               }
@@ -418,13 +477,13 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
               className={selectCls}
             >
               {!selectedBlock
-                ? <option>Select location first</option>
+                ? <option>Pick location first</option>
                 : loadingVenues
                   ? <option>Loading…</option>
                   : venues.length === 0
-                    ? <option>No venues found</option>
+                    ? <option>No venues</option>
                     : <>
-                        <option value="">Select venue…</option>
+                        <option value="">Select venue</option>
                         {venues.map(v => (
                           <option key={v.id} value={v.id}>
                             {v.name}{v.capacity ? ` · cap ${v.capacity}` : ""}
@@ -456,7 +515,7 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {!selectedVenueId ? (
           <div className="py-16 text-center text-sm text-gray-400">
-            Select a campus, location, and venue to view the calendar.
+            Pick campus, location, and venue.
           </div>
         ) : (
           <WeekCalendar
@@ -477,8 +536,17 @@ function SpecificVenueView({ session, userData, onBookingSuccess }: { session: a
           userData={userData}
           venue={selectedVenue}
           initial={modal}
+          entityId={entityId}
+          entityType={entityType}
           onClose={() => setModal(null)}
-          onSuccess={() => { setModal(null); loadBookings(); loadOwnBookings(); onBookingSuccess?.(); }}
+          onSuccess={() => {
+            setModal(null);
+            loadBookings();
+            loadOwnBookings();
+            const redirectPath = getApprovalRedirectPath(entityId, entityType);
+            if (redirectPath) router.push(redirectPath);
+            else onBookingSuccess?.();
+          }}
         />
       )}
     </>
@@ -610,7 +678,7 @@ function WeekCalendar({
                       tabIndex={pastCell ? undefined : 0}
                       onClick={pastCell ? undefined : () => onCellClick(dateStr, h)}
                       onKeyDown={pastCell ? undefined : e => { if (e.key === "Enter") onCellClick(dateStr, h); }}
-                      className={`border-b border-gray-100 ${pastCell ? "bg-gray-50 cursor-not-allowed" : "cursor-pointer hover:bg-blue-50 transition-colors"}`}
+                      className={`border-b border-gray-100 ${pastCell ? "bg-gray-400 cursor-not-allowed" : "cursor-pointer hover:bg-blue-50 transition-colors"}`}
                       style={{ height: HOUR_HEIGHT }}
                       aria-label={pastCell ? "Past" : `Book ${formatTime12(`${pad2(h)}:00`)} — ${d.toLocaleDateString("en-IN", { weekday: "long", month: "short", day: "numeric" })}`}
                     />
@@ -699,7 +767,7 @@ function WeekCalendar({
 
       {venueName && (
         <div className="px-5 py-2.5 border-t border-gray-200 bg-gray-50 text-xs text-gray-400">
-          Approved bookings for <span className="font-semibold text-gray-600">{venueName}</span> are visible to everyone. Your pending/rejected bookings are visible only to you. Click any empty slot to book.
+          Approved bookings for <span className="font-semibold text-gray-600">{venueName}</span> are public. Your pending and rejected bookings are private. Click an empty slot to book.
         </div>
       )}
     </div>
@@ -709,16 +777,18 @@ function WeekCalendar({
 // ─── Booking Modal ────────────────────────────────────────────────────────────
 
 function BookingModal({
-  session, userData, venue, initial, onClose, onSuccess,
+  session, userData, venue, initial, entityId, entityType, onClose, onSuccess,
 }: {
   session: any; userData: any; venue: Venue;
   initial: { date: string; start_time: string; end_time: string };
+  entityId?: string | null;
+  entityType?: string | null;
   onClose: () => void; onSuccess: () => void;
 }) {
   const [date,      setDate]      = useState(initial.date);
   const [startTime, setStartTime] = useState(initial.start_time);
   const [endTime,   setEndTime]   = useState(initial.end_time);
-  const [title,     setTitle]     = useState(`Venue booking — ${userData?.name || userData?.email || ""}`);
+  const [title,     setTitle]     = useState(`Venue booking - ${userData?.name || userData?.email || ""}`);
   const [headcount, setHeadcount] = useState("");
   const [notes,     setNotes]     = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -754,20 +824,21 @@ function BookingModal({
           title: title.trim(),
           headcount: hcNum,
           setup_notes: notes.trim() || null,
-          entity_type: "standalone",
+          entity_type: entityId && entityType ? entityType : "standalone",
+          entity_id: entityId || null,
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 409 && body.conflict) {
           const conflictLabel = body.conflict.title || `${body.conflict.start_time}–${body.conflict.end_time}`;
-          setError(`This slot is already booked for "${conflictLabel}". Please choose a different time.`);
+          setError(`This slot is booked for "${conflictLabel}". Choose another time.`);
         } else {
           setError(body.error || "Failed to submit.");
         }
         return;
       }
-      toast.success(body.auto_approved ? "Venue booked and confirmed!" : "Booking submitted — awaiting approval.");
+      toast.success(body.auto_approved ? "Venue booked." : "Request sent for approval.");
       onSuccess();
     } catch {
       setError("Network error. Please try again.");
@@ -789,6 +860,9 @@ function BookingModal({
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-0.5">New booking</p>
             <p className="text-base font-semibold text-gray-900">{venue.name}</p>
+            {entityId && (
+              <p className="text-[11px] text-[#154CB3] mt-0.5">Linked to {entityType || "event"}</p>
+            )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
             <IconX />
@@ -805,10 +879,11 @@ function BookingModal({
             />
           </FormField>
 
-          <div className="grid grid-cols-3 gap-3">
-            <FormField label="Date">
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
-            </FormField>
+          <FormField label="Date">
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-3">
             <FormField label="Start">
               <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={inputCls} />
             </FormField>
@@ -838,7 +913,7 @@ function BookingModal({
               value={notes}
               onChange={e => setNotes(e.target.value.slice(0, 500))}
               className={`${inputCls} h-20 resize-none pt-2`}
-              placeholder="Microphone, projector, seating layout…"
+              placeholder="Microphone, projector, seating layout"
             />
           </FormField>
 
@@ -857,7 +932,7 @@ function BookingModal({
             disabled={!canSubmit}
             className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#154CB3] text-white hover:bg-[#0f3a7a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? "Submitting…" : "Submit booking"}
+            {submitting ? "Submitting…" : "Submit"}
           </button>
         </div>
       </div>
@@ -1001,7 +1076,8 @@ function MyBookingsView({ session }: { session: any }) {
 // VIEW 3 — FIND AVAILABLE VENUE
 // ══════════════════════════════════════════════════════════════════════════════
 
-function AnyAvailableView({ session, userData }: { session: any; userData: any }) {
+function AnyAvailableView({ session, userData, entityId, entityType }: { session: any; userData: any; entityId?: string | null; entityType?: string | null }) {
+  const router = useRouter();
   const [campuses, setCampuses] = useState<string[]>([]);
   const [campus,   setCampus]   = useState("");
   const [date,     setDate]     = useState(() => { const d = new Date(); d.setDate(d.getDate() + 2); return ymd(d); });
@@ -1095,7 +1171,7 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
               disabled={!canSwitchCampus}
               className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
             >
-              <option value="">Select…</option>
+              <option value="">Select campus</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </FormField>
@@ -1170,7 +1246,7 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
               <p className="text-sm font-semibold text-red-700">Unavailable — {occupied.length}</p>
             </div>
             {occupied.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-gray-400 text-center">None.</p>
+              <p className="px-4 py-8 text-sm text-gray-400 text-center">No unavailable venues.</p>
             ) : (
               <>
                 <ul className="divide-y divide-gray-100">
@@ -1209,8 +1285,15 @@ function AnyAvailableView({ session, userData }: { session: any; userData: any }
           userData={userData}
           venue={picked}
           initial={{ date, start_time: startT, end_time: endT }}
+          entityId={entityId}
+          entityType={entityType}
           onClose={() => setPicked(null)}
-          onSuccess={() => { setPicked(null); search(); }}
+          onSuccess={() => {
+            setPicked(null);
+            const redirectPath = getApprovalRedirectPath(entityId, entityType);
+            if (redirectPath) router.push(redirectPath);
+            else search();
+          }}
         />
       )}
     </>

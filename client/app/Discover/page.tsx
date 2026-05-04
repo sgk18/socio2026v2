@@ -33,6 +33,7 @@ interface Fest {
   campus_hosted_at?: string | null;
   allowed_campuses?: string[] | string | null;
   venue?: string | null;
+  allow_outsiders?: boolean | null;
   is_archived?: boolean;
   is_draft?: boolean;
   created_by?: string | null;
@@ -128,6 +129,7 @@ const DiscoverPageContent = () => {
               campus_hosted_at: fest.campus_hosted_at ?? fest.campusHostedAt ?? null,
               allowed_campuses: fest.allowed_campuses ?? fest.allowedCampuses ?? [],
               venue: fest.venue ?? null,
+              allow_outsiders: Boolean(fest.allow_outsiders),
               is_archived: Boolean(fest.is_archived),
               is_draft: Boolean(fest.is_draft),
               created_by: fest.created_by || fest.user_email || fest.organiser_email || null,
@@ -198,6 +200,7 @@ const DiscoverPageContent = () => {
           campus_hosted_at: fest.campus_hosted_at,
           allowed_campuses: fest.allowed_campuses,
           venue: fest.venue,
+          allow_outsiders: fest.allow_outsiders,
         },
         selectedCampus
       );
@@ -327,13 +330,14 @@ const DiscoverPageContent = () => {
 
 
   useEffect(() => {
+    const defaultCampus = userData?.campus || DEFAULT_DISCOVER_CAMPUS;
     const campusFromUrl =
-      findCampusByQueryValue(campusParam) || DEFAULT_DISCOVER_CAMPUS;
+      findCampusByQueryValue(campusParam) || defaultCampus;
 
     setSelectedCampus((previous) =>
       previous === campusFromUrl ? previous : campusFromUrl
     );
-  }, [campusParam]);
+  }, [campusParam, userData?.campus]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

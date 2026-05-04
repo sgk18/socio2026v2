@@ -6,6 +6,7 @@ import {
   getUserInfo,
   checkRoleExpiration,
   requireMasterAdmin,
+  extractCreatorEmails,
 } from "../middleware/authMiddleware.js";
 
 const supabase = createClient(
@@ -161,14 +162,11 @@ router.post(
         return res.status(404).json({ error: `${type} not found` });
       }
 
-      // Ownership check (creator or masteradmin)
-      const createdByEmail =
-        typeof item.created_by === "string"
-          ? item.created_by
-          : item.created_by?.event_creator ?? null;
+      // Ownership check — any creator email or auth_uuid match
+      const creatorEmails = extractCreatorEmails(item.created_by).map(e => e.toLowerCase());
       const isCreator =
         (item.auth_uuid && item.auth_uuid === req.userId) ||
-        (createdByEmail && createdByEmail === req.userInfo.email);
+        creatorEmails.includes((req.userInfo.email || "").toLowerCase());
       if (!isCreator && !req.userInfo.is_masteradmin) {
         return res.status(403).json({ error: "Only the creator can submit this item for approval" });
       }
@@ -454,18 +452,21 @@ router.get(
         return res.status(404).json({ error: "Approval record not found" });
       }
 
-      const isCreator = record.submitted_by === user.email;
+      const item = await fetchItemMeta(itemId, record.type);
+
+      // Allow submitter, any co-creator of the underlying item, relevant approvers, and masteradmin
+      const isSubmitter = record.submitted_by === user.email;
+      const creatorEmails = extractCreatorEmails(item?.created_by).map(e => e.toLowerCase());
+      const isCoCreator = creatorEmails.includes((user.email || "").toLowerCase());
       const isRelevantApprover =
         (user.is_hod && record.organizing_department_snapshot === user.department) ||
         (user.is_dean && record.organizing_school_snapshot === user.school) ||
         ((user.is_cfo || user.is_accounts_office) && record.organizing_campus_snapshot === user.campus);
-      const canView = isCreator || isRelevantApprover || user.is_masteradmin;
+      const canView = isSubmitter || isCoCreator || isRelevantApprover || user.is_masteradmin;
 
       if (!canView) {
         return res.status(403).json({ error: "Access denied" });
       }
-
-      const item = await fetchItemMeta(itemId, record.type);
 
       return res.json({
         approval: record,
@@ -517,7 +518,11 @@ router.patch(
       }
       if (!record) return res.status(404).json({ error: "Approval record not found" });
 
-      const isCreator = record.submitted_by === user.email;
+      const item = await fetchItemMeta(itemId, record.type);
+      const creatorEmails = extractCreatorEmails(item?.created_by).map(e => e.toLowerCase());
+      const isCreator =
+        record.submitted_by === user.email ||
+        creatorEmails.includes((user.email || "").toLowerCase());
       if (!isCreator && !user.is_masteradmin) {
         return res.status(403).json({ error: "Only the creator or a masteradmin can update the workflow" });
       }

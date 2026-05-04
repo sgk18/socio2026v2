@@ -67,6 +67,12 @@ interface UserData {
 
 const safeLower = (value: unknown): string => String(value ?? "").toLowerCase();
 
+const formatStatusLabel = (value: unknown, fallback = "Unknown"): string => {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 const StudentProfile = () => {
   const { userData, signOut, session, isLoading } = useAuth();
   const router = useRouter();
@@ -725,8 +731,7 @@ const StudentProfile = () => {
                                 : "bg-green-100 text-green-700"
                             }`}
                           >
-                            {event.status.charAt(0).toUpperCase() +
-                              event.status.slice(1)}
+                            {formatStatusLabel(event.status)}
                           </span>
                           {event.status === "completed" && pendingFeedbackEventIds.has(event.event_id) && (
                             <Link

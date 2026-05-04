@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Logo from "@/app/logo.svg";
 import { useAuth } from "@/context/AuthContext";
-import { NotificationSystem } from "./NotificationSystem";
-import TermsConsentModal from "./TermsConsentModal";
-import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import supabase from "@/lib/supabaseClient";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, memo } from "react";
+import { useRouter, usePathname } from "next/navigation";
+
+const NotificationSystem = dynamic(
+  () => import("./NotificationSystem").then((mod) => mod.NotificationSystem),
+  { ssr: false }
+);
+
+const TermsConsentModal = dynamic(() => import("./TermsConsentModal"), {
+  ssr: false,
+});
 
 // OPTIMIZATION: Move static data outside component to prevent recreation on every render
 const navigationLinks = [
@@ -63,16 +72,14 @@ type RoleAction = {
   key: string;
   label: string;
   href: string;
-  variant: "admin" | "cfo" | "dean" | "hod" | "accounts" | "organiser" | "student_organiser" | "venue" | "support" | "catering" | "stalls" | "it";
+  variant: "admin" | "cfo" | "dean" | "hod" | "accounts" | "organiser" | "student_organiser" | "venue" | "support" | "catering" | "stalls" | "it" | "clubs";
 };
 
 function NavigationBar() {
-  const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser } = useAuth();
+  const { session, userData, isLoading, signInWithGoogle, signOut, isStudentOrganiser, isVolunteer } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const isEventsPage = pathname === "/events";
-  const searchParam = searchParams.get("search") || "";
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -84,12 +91,16 @@ function NavigationBar() {
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
   const [expandedDesktopSection, setExpandedDesktopSection] = useState<string | null>(null);
   const [expandedDesktopSubSection, setExpandedDesktopSubSection] = useState<string | null>(null);
+  const [clubEditorClubs, setClubEditorClubs] = useState<Array<{club_id: string; club_name: string}>>([]);
+  const [showClubSelectionModal, setShowClubSelectionModal] = useState(false);
+  const [selectedClubId, setSelectedClubId] = useState<string>("");
   const navContainerRef = useRef<HTMLElement | null>(null);
   const logoRef = useRef<HTMLDivElement | null>(null);
   const rightControlsRef = useRef<HTMLDivElement | null>(null);
   const desktopNavMeasureRef = useRef<HTMLDivElement | null>(null);
   const roleDropdownRef = useRef<HTMLDivElement | null>(null);
   const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+  const dropdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionDisplayName =
     session?.user?.user_metadata?.full_name ||
     session?.user?.user_metadata?.name ||
@@ -98,7 +109,9 @@ function NavigationBar() {
   const displayName = userData?.name || sessionDisplayName;
   const displayAvatar = userData?.avatar_url || session?.user?.user_metadata?.avatar_url || null;
   const avatarInitial = (displayName || "U").charAt(0).toUpperCase();
+  const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
   const isMasterAdmin = Boolean((userData as any)?.is_masteradmin);
+  const canAccessAdmin = isMasterAdmin || isLocalhost;
   const isAccountsOffice = Boolean((userData as any)?.is_accounts_office);
   const isCfo = Boolean((userData as any)?.is_cfo);
   const isDean = Boolean((userData as any)?.is_dean);
@@ -114,6 +127,53 @@ function NavigationBar() {
   })();
   const isCaterer = catersList.some((c: any) => c?.is_catering);
 
+  useEffect(() => {
+    let isMounted = true;
+    const email = String(userData?.email || "").trim().toLowerCase();
+
+    if (!email) {
+      setClubEditorClubs([]);
+      return;
+    }
+
+    const resolveClubEditorDashboard = async () => {
+      const { data, error } = await supabase
+        .from("clubs")
+        .select("club_id, club_name, club_editors")
+        .order("club_name", { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Failed to resolve club editor dashboard:", error.message);
+        setClubEditorClubs([]);
+        return;
+      }
+
+      const clubs = Array.isArray(data) ? data : [];
+      const matchedClubs = clubs.filter((club) => {
+        if (isMasterAdmin) return true;
+        const editors = Array.isArray((club as any)?.club_editors)
+          ? ((club as any).club_editors as unknown[])
+          : [];
+        return editors.some(
+          (editor) => String(editor || "").trim().toLowerCase() === email
+        );
+      }).map(club => ({ club_id: club.club_id, club_name: club.club_name }));
+
+      setClubEditorClubs(matchedClubs);
+      if (matchedClubs.length > 0) {
+        setSelectedClubId(String(matchedClubs[0].club_id));
+      }
+    };
+
+    void resolveClubEditorDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userData?.email, isMasterAdmin]);
+
   const isNavLinkActive = (href: string) => {
     if (href === "/") {
       return pathname === "/";
@@ -123,17 +183,19 @@ function NavigationBar() {
   };
 
   const roleActions: RoleAction[] = [];
-  if (isMasterAdmin) roleActions.push({ key: "admin", label: "Admin", href: "/masteradmin", variant: "admin" });
+  if (canAccessAdmin) roleActions.push({ key: "admin", label: "Admin", href: "/masteradmin", variant: "admin" });
   if (isAccountsOffice) roleActions.push({ key: "accounts", label: "Accounts", href: "/accounts", variant: "accounts" });
   if (isCfo) roleActions.push({ key: "cfo", label: "CFO", href: "/cfo", variant: "cfo" });
   if (isDean) roleActions.push({ key: "dean", label: "Dean", href: "/dean", variant: "dean" });
   if (isHod) roleActions.push({ key: "hod", label: "HOD", href: "/hod", variant: "hod" });
   if (isOrganiser) roleActions.push({ key: "organiser", label: "Organiser", href: "/manage", variant: "organiser" });
   if (!isOrganiser && isStudentOrganiser) roleActions.push({ key: "student_organiser", label: "Student Organiser", href: "/manage", variant: "student_organiser" });
+  if (isSupport) roleActions.push({ key: "support", label: "Support", href: "/support/inbox", variant: "support" });
   if (isVenueManager) roleActions.push({ key: "venue", label: "Venue", href: "/venue", variant: "venue" });
   if (isCaterer) roleActions.push({ key: "catering", label: "Catering", href: "/catering", variant: "catering" });
   if (isStalls) roleActions.push({ key: "stalls", label: "Stalls", href: "/stalls", variant: "stalls" });
   if (isItSupport) roleActions.push({ key: "it", label: "IT", href: "/it", variant: "it" });
+  if (clubEditorClubs.length > 0) roleActions.push({ key: "clubs", label: "Clubs", href: clubEditorClubs.length === 1 ? `/clubeditor/${encodeURIComponent(String(clubEditorClubs[0].club_id))}` : "#clubs-modal", variant: "clubs" });
 
   const visibleRoleActions = roleActions.length > 2 ? roleActions.slice(0, 1) : roleActions;
   const dashboardDropdownRoles = roleActions.length > 2 ? roleActions.slice(1) : [];
@@ -153,6 +215,7 @@ function NavigationBar() {
     catering:  "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
     stalls:    "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
     it:        "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
+    clubs:     "border-[#154CB3]/45 text-[#154CB3] hover:bg-[#f3f3f3]",
   };
 
   const roleQuickActionMap: Record<RoleAction["variant"], string> = {
@@ -168,6 +231,7 @@ function NavigationBar() {
     catering:  "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
     stalls:    "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
     it:        "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
+    clubs:     "border-[#154CB3]/30 text-[#154CB3] hover:bg-[#154CB3]/10",
   };
 
   const getRolePillClasses = (variant: RoleAction["variant"]) => rolePillMap[variant];
@@ -177,14 +241,21 @@ function NavigationBar() {
     setAvatarLoadError(false);
   }, [displayAvatar]);
 
+  // Sync the search input with the URL whenever we land on (or leave) the events page.
+  // Uses window.location.search so NavigationBar needs no useSearchParams / Suspense.
   useEffect(() => {
-    if (isEventsPage) {
-      setSearchQuery(searchParam);
+    if (!isEventsPage) {
+      setSearchQuery("");
       return;
     }
-
-    setSearchQuery("");
-  }, [isEventsPage, searchParam]);
+    const sync = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSearchQuery(params.get("search") ?? "");
+    };
+    sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, [isEventsPage, pathname]);
 
   const closeDesktopMenu = useCallback(() => {
     setIsDesktopMenuOpen(false);
@@ -220,7 +291,9 @@ function NavigationBar() {
     }
   }, [closeDesktopMenu]);
 
-  useEffect(() => {
+  // useLayoutEffect so the compact/non-compact decision is applied before the
+  // browser paints — prevents the "navbar renders huge then shrinks" flash.
+  useLayoutEffect(() => {
     measureDesktopOverlap();
 
     const onResize = () => measureDesktopOverlap();
@@ -331,13 +404,23 @@ function NavigationBar() {
     }
   }, [isSigningIn]);
 
+  const handleProfileDropdownToggle = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      return;
+    }
+    setShowProfileDropdown((prev) => !prev);
+  }, []);
+
+  const profileAvatarClasses =
+    "w-8 h-8 rounded-full border-2 border-[#154CB3] bg-gray-200 overflow-hidden relative flex-shrink-0";
+
   const handleSearchSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const trimmedSearch = searchQuery.trim();
     const params = new URLSearchParams();
 
     if (isEventsPage) {
-      const activeCategory = searchParams.get("category");
+      const activeCategory = new URLSearchParams(window.location.search).get("category");
       if (activeCategory) {
         params.set("category", activeCategory);
       }
@@ -349,10 +432,20 @@ function NavigationBar() {
 
     const queryString = params.toString();
     router.push(queryString ? `/events?${queryString}` : "/events");
-  }, [isEventsPage, searchParams, searchQuery, router]);
+  }, [isEventsPage, searchQuery, router]);
 
   const handleDropdownHover = useCallback((linkName: string | null) => {
-    setActiveDropdown(linkName);
+    if (dropdownTimerRef.current) {
+      clearTimeout(dropdownTimerRef.current);
+      dropdownTimerRef.current = null;
+    }
+    if (linkName !== null) {
+      setActiveDropdown(linkName);
+    } else {
+      dropdownTimerRef.current = setTimeout(() => {
+        setActiveDropdown(null);
+      }, 150);
+    }
   }, []);
 
   return (
@@ -431,16 +524,18 @@ function NavigationBar() {
                 
                 {/* Dropdown Menu */}
                 {activeDropdown === link.name && link.dropdown && (
-                  <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
-                    {link.dropdown.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg"
-                      >
-                        {item.name}
-                      </Link>
-                    ))}
+                  <div className="absolute top-full left-0 pt-1 w-48 z-30">
+                    <div className="bg-white border border-gray-200 rounded-lg shadow-lg">
+                      {link.dropdown.map((item) => (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg"
+                        >
+                          {item.name}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -472,13 +567,20 @@ function NavigationBar() {
                 <div className="h-9 w-24 rounded-full bg-gray-200 animate-pulse" />
               </div>
             ) : session ? (
-              userData && hasRoleActions ? (
+              hasRoleActions ? (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
-                  <NotificationSystem />
+                  {userData && <NotificationSystem />}
                   {!isDesktopCompact && (
                     <div className="flex items-center gap-2">
                       {visibleRoleActions.map((roleAction) => (
-                        <Link key={`desktop-role-${roleAction.key}`} href={roleAction.href}>
+                        <Link key={`desktop-role-${roleAction.key}`} href={roleAction.href}
+                           onClick={(e) => {
+                             if (roleAction.href === "#clubs-modal") {
+                               e.preventDefault();
+                               setShowClubSelectionModal(true);
+                             }
+                           }}
+                        >
                           <button
                             className={`cursor-pointer font-semibold px-3 py-1.5 sm:px-4 sm:py-2 border-2 rounded-full text-xs sm:text-sm transition-all duration-200 ease-in-out ${getRolePillClasses(roleAction.variant)}`}
                           >
@@ -514,19 +616,29 @@ function NavigationBar() {
                                 <Link
                                   key={`desktop-dashboard-${roleAction.key}`}
                                   href={roleAction.href}
-                                  onClick={() => setShowRoleDropdown(false)}
+                                  onClick={(e) => {
+                                    if (roleAction.href === "#clubs-modal") {
+                                      e.preventDefault();
+                                      setShowRoleDropdown(false);
+                                      setShowClubSelectionModal(true);
+                                    } else {
+                                      setShowRoleDropdown(false);
+                                    }
+                                  }}
                                   className={`block px-4 py-2.5 text-sm font-medium transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
                                 >
                                   {roleAction.label}
                                 </Link>
                               ))}
-                              <Link
-                                href="/volunteer"
-                                onClick={() => setShowRoleDropdown(false)}
-                                className="block px-4 py-2.5 text-sm font-medium text-[#154CB3] hover:bg-gray-50 transition-colors duration-200"
-                              >
-                                Volunteer
-                              </Link>
+                              {isVolunteer && (
+                                <Link
+                                  href="/volunteer"
+                                  onClick={() => setShowRoleDropdown(false)}
+                                  className="block px-4 py-2.5 text-sm font-medium text-[#154CB3] hover:bg-gray-50 transition-colors duration-200"
+                                >
+                                  Volunteer
+                                </Link>
+                              )}
                             </div>
                           )}
                         </div>
@@ -534,12 +646,20 @@ function NavigationBar() {
                     </div>
                   )}
                   {/* CHANGED ORGANISED AND ADMIN BUTTON */}
-                  <div ref={profileDropdownRef} className="relative">
+                  <div
+                    ref={profileDropdownRef}
+                    className="relative"
+                    onMouseEnter={() => setShowProfileDropdown(true)}
+                    onMouseLeave={() => setShowProfileDropdown(false)}
+                  >
                     <button
-                      onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                      type="button"
+                      onClick={handleProfileDropdownToggle}
+                      aria-expanded={showProfileDropdown}
+                      aria-label="Open profile menu"
                       className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"
                     >
-                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden relative flex-shrink-0"> 
+                      <div className={profileAvatarClasses}>
                         {displayAvatar && !avatarLoadError ? (
                           <img
                             src={displayAvatar}
@@ -556,19 +676,21 @@ function NavigationBar() {
                       </div>
                     </button>
                     {showProfileDropdown && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
-                        <Link
-                          href="/profile"
-                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
-                        >
-                          View Profile
-                        </Link>
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
-                        >
-                          Logout
-                        </button>
+                      <div className="absolute right-0 top-full pt-2 z-30">
+                        <div className="w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
+                          <Link
+                            href="/profile"
+                            className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
+                          >
+                            View Profile
+                          </Link>
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
+                          >
+                            Logout
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -576,15 +698,23 @@ function NavigationBar() {
               ) : (
                 <div className="flex gap-2 sm:gap-4 items-center md:flex-nowrap justify-end">
                   {userData && <NotificationSystem />}
-                  <div ref={profileDropdownRef} className="relative">
+                  <div
+                    ref={profileDropdownRef}
+                    className="relative"
+                    onMouseEnter={() => setShowProfileDropdown(true)}
+                    onMouseLeave={() => setShowProfileDropdown(false)}
+                  >
                     <button
-                      onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                      type="button"
+                      onClick={handleProfileDropdownToggle}
+                      aria-expanded={showProfileDropdown}
+                      aria-label="Open profile menu"
                       className="flex items-center gap-2 lg:gap-4 min-w-0 cursor-pointer"
                     >
                       <span className="hidden lg:block font-medium truncate max-w-[140px]">
                         {displayName}
                       </span>
-                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden relative flex-shrink-0">
+                      <div className={profileAvatarClasses}>
                         {displayAvatar && !avatarLoadError ? (
                           <img
                             src={displayAvatar}
@@ -601,19 +731,21 @@ function NavigationBar() {
                       </div>
                     </button>
                     {showProfileDropdown && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
-                        <Link
-                          href="/profile"
-                          className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
-                        >
-                          View Profile
-                        </Link>
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
-                        >
-                          Logout
-                        </button>
+                      <div className="absolute right-0 top-full pt-2 z-30">
+                        <div className="w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
+                          <Link
+                            href="/profile"
+                            className="block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-[#154CB3] transition-colors duration-200 first:rounded-t-lg"
+                          >
+                            View Profile
+                          </Link>
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 last:rounded-b-lg border-t"
+                          >
+                            Logout
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -793,7 +925,15 @@ function NavigationBar() {
                     <Link
                       key={`drawer-role-${roleAction.key}`}
                       href={roleAction.href}
-                      onClick={closeDesktopMenu}
+                      onClick={(e) => {
+                        if (roleAction.href === "#clubs-modal") {
+                          e.preventDefault();
+                          closeDesktopMenu();
+                          setShowClubSelectionModal(true);
+                        } else {
+                          closeDesktopMenu();
+                        }
+                      }}
                       className={`block rounded-lg border px-3 py-2 text-sm font-semibold transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
                     >
                       {roleAction.label}
@@ -837,6 +977,12 @@ function NavigationBar() {
               <Link
                 key={`mobile-role-${roleAction.key}`}
                 href={roleAction.href}
+                onClick={(e) => {
+                  if (roleAction.href === "#clubs-modal") {
+                    e.preventDefault();
+                    setShowClubSelectionModal(true);
+                  }
+                }}
                 className={`inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm font-semibold transition-colors duration-200 ${getRoleQuickActionClasses(roleAction.variant)}`}
               >
                 {roleAction.label}
@@ -876,6 +1022,50 @@ function NavigationBar() {
           }}
           onDecline={() => setShowTermsModal(false)}
         />
+      )}
+      {showClubSelectionModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-100">
+            <h3 className="text-xl font-bold text-[#154CB3] mb-2">Select Club</h3>
+            <p className="text-sm text-gray-500 mb-6">Choose which club dashboard you want to access.</p>
+            
+            <div className="space-y-4">
+              <div className="w-full">
+                <label htmlFor="club-select" className="sr-only">Select Club</label>
+                <select
+                  id="club-select"
+                  value={selectedClubId}
+                  onChange={(e) => setSelectedClubId(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent text-gray-700 transition-all duration-200"
+                >
+                  {clubEditorClubs.map((club) => (
+                    <option key={club.club_id} value={club.club_id}>
+                      {club.club_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => setShowClubSelectionModal(false)}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowClubSelectionModal(false);
+                    router.push(`/clubeditor/${encodeURIComponent(selectedClubId)}`);
+                  }}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#154CB3] hover:bg-[#0d3a8a] rounded-lg shadow-sm transition-all duration-200 cursor-pointer"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

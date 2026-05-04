@@ -903,9 +903,24 @@ router.post(
         }
       }
 
+      // If a full organiser creates an event linked to a fest, look up that fest's creator
+      // so the fest owner retains visibility even after the organiser's role expires.
+      let festCreatorEmail = null;
+      const resolvedFestId = normalizeFestReference(fest_id ?? fest);
+      if (!req.isSubHead && resolvedFestId) {
+        try {
+          const festRow = await queryOne("fests", { where: { fest_id: resolvedFestId }, select: "created_by" });
+          if (festRow?.created_by && festRow.created_by !== req.userInfo?.email) {
+            festCreatorEmail = festRow.created_by;
+          }
+        } catch (_) { /* non-fatal — proceed without fest_creator */ }
+      }
+
       const createdByValue = req.isSubHead
-        ? { event_creator: req.userInfo.email, fest_creator: matchedSubHeadFest.created_by, fest_id: matchedSubHeadFest.fest_id }
-        : { event_creator: req.userInfo?.email };
+        ? [req.userInfo.email, matchedSubHeadFest.created_by]
+        : festCreatorEmail
+          ? [req.userInfo?.email, festCreatorEmail]
+          : [req.userInfo?.email];
 
       console.log("✅ JSON fields parsed successfully");
       console.log("About to insert event into database with:", {
@@ -1103,12 +1118,7 @@ router.patch(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  (req, res, next) => {
-    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) {
-      return next();
-    }
-    return res.status(403).json({ error: "Access denied: Organiser privileges required" });
-  },
+  requireOrganiserOrSubHead,
   requireOwnership("events", "eventId", "auth_uuid"),
   async (req, res) => {
     try {
@@ -1195,8 +1205,8 @@ router.put(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
-  requireOwnership('events', 'eventId', 'auth_uuid'),  // Check ownership using auth_uuid (master admin bypass built-in)
+  requireOrganiserOrSubHead,
+  requireOwnership('events', 'eventId', 'auth_uuid'),
   async (req, res) => {
     try {
       const { eventId } = req.params;
@@ -1672,15 +1682,8 @@ router.put(
         console.error("🔴 Supabase-specific error detected - checking connectivity...");
       }
       
-      return res.status(500).json({ 
-        error: "Internal server error while updating event.",
-        details: error.message,
-        context: {
-          endpoint: `/api/events/${req.params.eventId}`,
-          method: "PUT",
-          userId: req.userId,
-          timestamp: new Date().toISOString()
-        }
+      return res.status(500).json({
+        error: "Event could not be updated. Please try again.",
       });
     }
   }
@@ -1692,10 +1695,7 @@ router.post(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  (req, res, next) => {
-    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) return next();
-    return res.status(403).json({ error: "Access denied: Organiser privileges required." });
-  },
+  requireOrganiserOrSubHead,
   requireOwnership("events", "eventId", "auth_uuid"),
   async (req, res) => {
     try {
@@ -1752,18 +1752,88 @@ router.post(
   }
 );
 
+// PATCH update a volunteer expiration date - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
+router.patch(
+  "/:eventId/volunteers/:registerNumber",
+  authenticateUser,
+  getUserInfo(),
+  checkRoleExpiration,
+  requireOrganiserOrSubHead,
+  requireOwnership("events", "eventId", "auth_uuid"),
+  async (req, res) => {
+    try {
+      const { eventId, registerNumber } = req.params;
+      const targetRegisterNumber = normalizeRegisterNumber(registerNumber);
+      const expiresOn = String(req.body.expires_on || req.body.expires_at || "").trim();
+
+      if (!targetRegisterNumber) {
+        return res.status(400).json({ error: "Volunteer register number is required." });
+      }
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresOn)) {
+        return res.status(400).json({ error: "A valid expiration date is required." });
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const selectedDate = new Date(`${expiresOn}T00:00:00`);
+      if (Number.isNaN(selectedDate.getTime())) {
+        return res.status(400).json({ error: "A valid expiration date is required." });
+      }
+
+      selectedDate.setHours(0, 0, 0, 0);
+      if (selectedDate.getTime() < today.getTime()) {
+        return res.status(400).json({ error: "Past dates are not allowed." });
+      }
+
+      const existingVolunteers = normalizeVolunteerRecords(req.resource?.volunteers);
+      let found = false;
+      const updatedVolunteers = existingVolunteers.map((volunteer) => {
+        if (volunteer.register_number !== targetRegisterNumber) return volunteer;
+        found = true;
+        return {
+          ...volunteer,
+          expires_at: new Date(`${expiresOn}T23:59:59.999`).toISOString(),
+        };
+      });
+
+      if (!found) {
+        return res.status(404).json({ error: "Volunteer assignment not found." });
+      }
+
+      const updatedRows = await update(
+        "events",
+        {
+          volunteers: updatedVolunteers,
+          updated_at: new Date().toISOString(),
+        },
+        { event_id: eventId }
+      );
+
+      return res.status(200).json({
+        message: "Volunteer expiration updated successfully.",
+        event: updatedRows?.[0]
+          ? {
+              ...updatedRows[0],
+              volunteers: normalizeVolunteerRecords(updatedRows[0].volunteers),
+            }
+          : null,
+      });
+    } catch (error) {
+      console.error("Server error PATCH /api/events/:eventId/volunteers/:registerNumber:", error);
+      return res.status(500).json({ error: "Internal server error while updating volunteer expiration." });
+    }
+  }
+);
+
 // DELETE volunteer access - REQUIRES AUTHENTICATION + OWNERSHIP OR MASTER ADMIN
 router.delete(
   "/:eventId/volunteers/:registerNumber",
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  (req, res, next) => {
-    if (req.userInfo?.is_masteradmin || req.userInfo?.is_organiser) {
-      return next();
-    }
-    return res.status(403).json({ error: "Access denied: Organiser privileges required" });
-  },
+  requireOrganiserOrSubHead,
   requireOwnership("events", "eventId", "auth_uuid"),
   async (req, res) => {
     try {
@@ -1814,8 +1884,8 @@ router.delete(
   authenticateUser,
   getUserInfo(),
   checkRoleExpiration,
-  requireOrganiser,
-  requireOwnership('events', 'eventId', 'auth_uuid'),  // Master admin bypass built-in
+  requireOrganiserOrSubHead,
+  requireOwnership('events', 'eventId', 'auth_uuid'),
   async (req, res) => {
     try {
       const { eventId } = req.params;

@@ -216,8 +216,7 @@ router.get(
   } catch (error) {
     console.error("Error fetching registrations:", error);
     return res.status(500).json({
-      error: "Database error while fetching registrations.",
-      details: error.message,
+      error: "Could not load registrations. Please try again.",
     });
   }
 });
@@ -756,8 +755,7 @@ router.post("/register", async (req, res) => {
     }
 
     return res.status(500).json({
-      error: "Failed to create registration",
-      details: error.message,
+      error: "Registration could not be completed. Please try again.",
     });
   }
 });
@@ -939,8 +937,7 @@ router.post(
     } catch (error) {
       console.error("Error creating on-spot registration:", error);
       return res.status(500).json({
-        error: "Failed to create on-spot registration",
-        details: error.message,
+        error: "On-spot registration could not be completed. Please try again.",
       });
     }
   }

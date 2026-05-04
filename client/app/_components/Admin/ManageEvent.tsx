@@ -50,6 +50,7 @@ import {
 } from "@/app/lib/eventPreviewDraft";
 import { Info, Plus, UsersRound, X } from "lucide-react";
 import ApprovalsWorkflowBuilder, {
+  getApprovalStageSubtitle,
   type WorkflowStage as _WorkflowStage,
   type BudgetItem as _BudgetItem,
 } from "@/app/_components/UI/ApprovalsWorkflowBuilder";
@@ -1015,8 +1016,8 @@ export type BudgetItem = _BudgetItem;
 export const STANDALONE_EVENT_STAGES: WorkflowStage[] = [
   { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         blocking: true  },
   { role: 'dean',     label: 'Dean',             desc: 'Dean of the School',         blocking: true  },
-  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', blocking: true  },
-  { role: 'accounts', label: 'Accounts Office',  desc: 'Financial clearance',        blocking: true  },
+  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Chief Financial Officer',    blocking: true  },
+  { role: 'accounts', label: 'Accounts Office',  desc: 'Finance Officer',            blocking: true  },
   { role: 'it',       label: 'IT Support',       desc: 'Technical setup',            blocking: false },
   { role: 'venue',    label: 'Venue',            desc: 'Venue arrangements',         blocking: false },
   { role: 'catering', label: 'Catering',         desc: 'Food & catering vendors',    blocking: false },
@@ -2492,72 +2493,6 @@ export default function EventForm({
                   />
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[#154CB3]">
-                        <UsersRound className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#154CB3]">
-                          Volunteer Access
-                        </p>
-                        <label
-                          htmlFor="needsVolunteers"
-                          className="block text-sm font-semibold text-slate-900 cursor-pointer mt-0.5"
-                        >
-                          Need volunteers
-                        </label>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Assign trusted students who can scan QR codes for this event.
-                        </p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                      <Controller
-                        name="needsVolunteers"
-                        control={control}
-                        render={({ field }) => (
-                          <input
-                            type="checkbox"
-                            id="needsVolunteers"
-                            checked={!!field.value}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              field.onChange(checked);
-                              if (!checked) {
-                                setValue("volunteers", [], {
-                                  shouldDirty: true,
-                                  shouldValidate: true,
-                                });
-                              }
-                            }}
-                            className="sr-only peer"
-                          />
-                        )}
-                      />
-                      <div className={toggleTrackClass}></div>
-                    </label>
-                  </div>
-
-                  {watchedNeedsVolunteers && (
-                    <Controller
-                      name="volunteers"
-                      control={control}
-                      render={({ field }) => (
-                        <VolunteerAssignmentSection
-                          value={Array.isArray(field.value) ? field.value : []}
-                          onChange={field.onChange}
-                          endDate={watchedEndDate}
-                          endTime={watchedEndTime}
-                          assignedByEmail={userData?.email || session?.user?.email || ""}
-                          disabled={isSubmittingProp || rhfIsSubmitting}
-                        />
-                      )}
-                    />
-                  )}
-                </div>
-
                 <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 sm:py-3.5">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-3">
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -3121,6 +3056,112 @@ export default function EventForm({
                   />
                 </div>
 
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[#154CB3] flex-shrink-0">
+                        <UsersRound className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-[#154CB3]">
+                          Volunteer Access
+                        </p>
+                        <label
+                          htmlFor="needsVolunteers"
+                          className="block text-sm font-semibold text-slate-900 cursor-pointer mt-0.5"
+                        >
+                          Need volunteers
+                        </label>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Assign trusted students who can scan QR codes and mark attendance to students.
+                        </p>
+                      </div>
+                    </div>
+                    <Controller
+                      name="needsVolunteers"
+                      control={control}
+                      render={({ field }) => {
+                        const volunteersEnabled = Boolean(field.value);
+
+                        return (
+                          <div
+                            role="radiogroup"
+                            aria-label="Volunteer access"
+                            className="inline-flex items-center rounded-xl border border-gray-300 bg-white p-1 shadow-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              id="needsVolunteers"
+                              checked={volunteersEnabled}
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                field.onChange(checked);
+                                if (!checked) {
+                                  setValue("volunteers", [], {
+                                    shouldDirty: true,
+                                    shouldValidate: true,
+                                  });
+                                }
+                              }}
+                              className="sr-only"
+                            />
+
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={volunteersEnabled}
+                              onClick={() => field.onChange(true)}
+                              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                volunteersEnabled
+                                  ? "bg-green-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={!volunteersEnabled}
+                              onClick={() => {
+                                field.onChange(false);
+                                setValue("volunteers", [], {
+                                  shouldDirty: true,
+                                  shouldValidate: true,
+                                });
+                              }}
+                              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                !volunteersEnabled
+                                  ? "bg-red-600 text-white"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              No
+                            </button>
+                          </div>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  {watchedNeedsVolunteers && (
+                    <Controller
+                      name="volunteers"
+                      control={control}
+                      render={({ field }) => (
+                        <VolunteerAssignmentSection
+                          value={Array.isArray(field.value) ? field.value : []}
+                          onChange={field.onChange}
+                          endDate={watchedEndDate}
+                          endTime={watchedEndTime}
+                          assignedByEmail={userData?.email || session?.user?.email || ""}
+                          disabled={isSubmittingProp || rhfIsSubmitting}
+                        />
+                      )}
+                    />
+                  )}
+                </div>
+
                 {/* Custom Fields Section - Moved Up */}
                 <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-6 sm:p-7 shadow-sm">
                   <Controller
@@ -3184,10 +3225,10 @@ export default function EventForm({
                         </p>
                         <div className="space-y-2">
                           {[
-                            { role: 'hod',      label: 'HOD',             desc: 'Head of Department' },
-                            { role: 'dean',     label: 'Dean',            desc: 'Dean of the School' },
-                            { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight' },
-                            { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance' },
+                            { role: 'hod',      label: 'HOD' },
+                            { role: 'dean',     label: 'Dean' },
+                            { role: 'cfo',      label: 'CFO / Campus Dir' },
+                            { role: 'accounts', label: 'Accounts Office' },
                           ].map((s) => {
                             const festStage = festApprovalStages.find((fs: any) => fs.role === s.role);
                             const statusMap: Record<string, string> = {
@@ -3197,11 +3238,16 @@ export default function EventForm({
                               skipped:  'Skipped',
                             };
                             const statusText = festStage ? (statusMap[festStage.status] ?? festStage.status) : '—';
+                            const subtitle = getApprovalStageSubtitle(
+                              s.role,
+                              watchedOrganizingSchool || undefined,
+                              watchedOrganizingDept || undefined
+                            );
                             return (
                               <div key={s.role} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 opacity-70 cursor-not-allowed">
                                 <div>
                                   <p className="text-sm font-medium text-gray-600">{s.label}</p>
-                                  <p className="text-xs text-gray-400">{s.desc}</p>
+                                  <p className="text-xs text-gray-400">{subtitle}</p>
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
                                   {statusText}
@@ -3339,7 +3385,7 @@ export default function EventForm({
                           </svg>
                         </button>
                         {isActionsDropdownOpen && (
-                          <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                          <div className="absolute right-0 bottom-full mb-1 w-48 max-h-[50vh] overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 z-10 origin-bottom-right">
                             {onToggleArchive && !isDraft && (
                               <button
                                 type="button"

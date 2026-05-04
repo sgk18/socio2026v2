@@ -6,6 +6,9 @@ const publicPaths = ["/", "/auth/callback", "/error", "/about", "/auth", "/event
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const isLocalhostRequest = req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // 1. Skip middleware for static assets, internal Next.js requests and files with extensions
   if (
@@ -20,9 +23,16 @@ export async function middleware(req: NextRequest) {
   // 2. Handle Cookies and Supabase
   let res = NextResponse.next();
 
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. Add them to client/.env.local (or save your env file) and restart Next.js."
+    );
+    return res;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -76,24 +86,29 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/create") ||
     pathname.startsWith("/edit") ||
     pathname.startsWith("/bookvenue") ||
-    pathname.startsWith("/bookcatering");
+    pathname.startsWith("/bookcatering") ||
+    pathname.startsWith("/bookstall");
+  const isClubEditorDashboardRoute = pathname.startsWith("/clubeditor/");
 
-  const isHodRoute = pathname.startsWith("/hod");
-  const isDeanRoute = pathname.startsWith("/dean");
-  const isCfoRoute     = pathname.startsWith("/cfo");
-  const isAccountsRoute = pathname.startsWith("/accounts");
-  const isVenueRoute    = pathname.startsWith("/venue");
-  const isCateringRoute = pathname.startsWith("/catering");
-  const isItRoute       = pathname.startsWith("/it");
+  const isHodRoute         = pathname.startsWith("/hod");
+  const isDeanRoute        = pathname.startsWith("/dean");
+  const isCfoRoute         = pathname.startsWith("/cfo");
+  const isAccountsRoute    = pathname.startsWith("/accounts");
+  const isVenueRoute       = pathname.startsWith("/venue");
+  const isCateringRoute    = pathname.startsWith("/catering");
+  const isItRoute          = pathname.startsWith("/it");
+  const isStallsRoute      = pathname.startsWith("/stalls");
+  const isMasterAdminRoute = pathname.startsWith("/masteradmin");
+  const isVolunteerRoute   = pathname.startsWith("/volunteer");
 
-  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute)) {
+  if (user && (isManagementRoute || isHodRoute || isDeanRoute || isCfoRoute || isAccountsRoute || isVenueRoute || isCateringRoute || isItRoute || isStallsRoute || isMasterAdminRoute || isVolunteerRoute || isClubEditorDashboardRoute)) {
     if (!user.email) {
       return redirect("/error");
     }
 
     const { data: userData, error } = await supabase
       .from("users")
-      .select("is_organiser, is_masteradmin, is_hod, is_dean, is_cfo, is_accounts_office, is_venue_manager, is_it_support, caters")
+      .select("is_organiser, is_masteradmin, is_hod, is_dean, is_cfo, is_accounts_office, is_venue_manager, is_it_support, is_stalls, is_support, register_number, caters")
       .eq("email", user.email)
       .single();
 
@@ -101,14 +116,12 @@ export async function middleware(req: NextRequest) {
       return redirect("/error");
     }
 
-    if (pathname.startsWith("/edit/clubs/")) {
-      if (Boolean(userData.is_masteradmin)) {
-        return res;
-      }
-
-      const requestedId = decodeURIComponent(pathname.split("/")[3] || "").trim();
+    const canAccessClubEditorRoute = async (
+      requestedId: string,
+      allowMasterAdminBypass: boolean
+    ) => {
       if (!requestedId) {
-        return redirect("/error");
+        return false;
       }
 
       const byId = await supabase
@@ -125,7 +138,7 @@ export async function middleware(req: NextRequest) {
             .maybeSingle();
 
       if (resolvedClub.error || !resolvedClub.data) {
-        return redirect("/error");
+        return false;
       }
 
       const editors = Array.isArray((resolvedClub.data as any).club_editors)
@@ -135,7 +148,30 @@ export async function middleware(req: NextRequest) {
         (editor) => String(editor || "").trim().toLowerCase() === user.email!.toLowerCase()
       );
 
-      if (!isClubEditor) {
+      if (isClubEditor) {
+        return true;
+      }
+
+      if (allowMasterAdminBypass && Boolean(userData.is_masteradmin)) {
+        return true;
+      }
+
+      return false;
+    };
+
+    if (pathname.startsWith("/edit/clubs/")) {
+      const requestedId = decodeURIComponent(pathname.split("/")[3] || "").trim();
+      const hasAccess = await canAccessClubEditorRoute(requestedId, true);
+      if (!hasAccess) {
+        return redirect("/error");
+      }
+      return res;
+    }
+
+    if (isClubEditorDashboardRoute) {
+      const requestedId = decodeURIComponent(pathname.split("/")[2] || "").trim();
+      const hasAccess = await canAccessClubEditorRoute(requestedId, true);
+      if (!hasAccess) {
         return redirect("/error");
       }
       return res;
@@ -158,38 +194,50 @@ export async function middleware(req: NextRequest) {
         );
       }) ?? false;
 
-      if (!isSubHead) return redirect("/error");
+      if (!isSubHead) return redirect("/error?error=not_authorized");
     }
 
     if (isHodRoute && !userData?.is_hod && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isDeanRoute && !userData?.is_dean && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isCfoRoute && !userData?.is_cfo && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isAccountsRoute && !userData?.is_accounts_office && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isVenueRoute && !userData?.is_venue_manager && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
     }
 
     if (isCateringRoute && !userData?.is_masteradmin) {
       const caters = (userData as any)?.caters;
       const list = Array.isArray(caters) ? caters : caters ? [caters] : [];
       const isCaterer = list.some((c: any) => c?.is_catering);
-      if (!isCaterer) return redirect("/error");
+      if (!isCaterer) return redirect("/error?error=not_authorized");
     }
 
     if (isItRoute && !(userData as any)?.is_it_support && !userData?.is_masteradmin) {
-      return redirect("/error");
+      return redirect("/error?error=not_authorized");
+    }
+
+    if (isStallsRoute && !(userData as any)?.is_stalls && !userData?.is_masteradmin) {
+      return redirect("/error?error=not_authorized");
+    }
+
+    if (isMasterAdminRoute && !userData?.is_masteradmin && !isLocalhostRequest) {
+      return redirect("/error?error=not_authorized");
+    }
+
+    if (isVolunteerRoute && !(userData as any)?.register_number) {
+      return redirect("/error?error=not_authorized");
     }
   }
 
