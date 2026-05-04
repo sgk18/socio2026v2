@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from 'url';
 import "./config/loadEnv.js";
 import * as Sentry from "@sentry/node";
+import rateLimit from "express-rate-limit";
 import { initializeDatabase } from "./config/database.js";
 
 // Initialize Sentry for error tracking.
@@ -30,6 +31,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import { csrfProtection, csrfTokenProvider } from "./middleware/csrfMiddleware.js";
 import statuscheckRoutes from "./routes/statuscheckRoutes.js";
 import approvalRoutes from "./routes/approvalRoutes.js";
 import serviceRequestRoutes from "./routes/serviceRequestRoutes.js";
@@ -185,6 +187,27 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Serve public files (Google verification, robots.txt, etc.)
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Global error sanitization utility
+const sanitizeError = (err) => {
+  console.error("[ERROR]", err);
+  return "An unexpected error occurred. Please try again later.";
+};
+
+// Rate limiting for general API (100 requests per 15 minutes)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/', // Skip health check
+});
+
+app.use(generalLimiter);
+// Apply CSRF token provider first to add tokens to responses
+app.use(csrfTokenProvider);
+// Apply CSRF protection to validate tokens on state-changing requests
+app.use(csrfProtection);
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
@@ -205,6 +228,14 @@ app.get('/', (req, res) => {
       report: '/api/report',
       analytics: '/api/analytics/*'
     }
+  });
+});
+
+app.get('/api/csrf-token', (req, res) => {
+  const csrfToken = res.locals.csrfToken || '';
+  res.json({ 
+    message: 'CSRF token provided in headers',
+    token: csrfToken
   });
 });
 

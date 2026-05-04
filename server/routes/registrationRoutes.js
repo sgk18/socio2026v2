@@ -651,6 +651,24 @@ router.post("/register", async (req, res) => {
     console.log('🎪 Event ID:', normalizedEventId);
     console.log('👥 Registration Type:', normalizedRegistrationType);
 
+    // DUPLICATE REGISTRATION CHECK
+    if (processedData.user_email && processedData.user_email !== 'unknown@example.com') {
+      const existingUserRegistration = await queryOne("registrations", {
+        where: {
+          event_id: normalizedEventId,
+          user_email: processedData.user_email
+        }
+      });
+
+      if (existingUserRegistration) {
+        return res.status(409).json({
+          error: "Already registered",
+          details: "You are already registered for this event.",
+          code: "DUPLICATE_REGISTRATION"
+        });
+      }
+    }
+
     // For Christ members, add a simple QR string: "registerNumber/eventId"
     if (participantOrganization === 'christ_member') {
       const regNo = processedData.individual_register_number || processedData.team_leader_register_number || effectiveParticipantEmail;

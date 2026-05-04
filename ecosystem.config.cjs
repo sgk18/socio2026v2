@@ -26,8 +26,7 @@ module.exports = {
     {
       name: "socio-client",
       cwd: "./client",
-      script: "node_modules/.bin/next",
-      args: "start",
+      script: "pm2-next-start.js",
       instances: 1,
       exec_mode: "fork",
       watch: false,
