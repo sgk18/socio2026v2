@@ -547,7 +547,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `claims_${eventTitle}_${claimsDate}.xlsx`;
+    a.download = `claims_${eventTitle.replace(/[/\\?%*:|"<>]/g, "-")}_${claimsDate}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
