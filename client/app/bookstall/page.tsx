@@ -243,7 +243,7 @@ function BookStallContent() {
       if (!res.ok) throw new Error(json.error || "Failed to submit booking");
       const urlEventFestId = searchParams?.get("event_fest_id");
       const linkedTypeForRedirect: LinkedType = linkedType !== "none" ? linkedType : (urlEventFestId || eventFestId || "").toUpperCase().startsWith("EV-") ? "event" : "fest";
-      toast.success("Stall booking submitted!");
+      toast.success("Request sent.");
       if (urlEventFestId) { router.push(`/approvals/${urlEventFestId}?type=${linkedTypeForRedirect}`); return; }
       setDescription(""); setHardboardStalls("0"); setCanopyStalls("0");
       setCampus(userData && (userData as any).is_organiser ? ((userData as any).campus || "") : "");
@@ -278,7 +278,7 @@ function BookStallContent() {
             </div>
             <div>
               <h1 className="text-base font-bold text-[#0f2a6b] leading-none">Book a Stall</h1>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Request stalls for your event or fest</p>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Request stalls for an event or fest.</p>
             </div>
           </div>
 
@@ -301,7 +301,7 @@ function BookStallContent() {
 
         {/* ── Tab bar ── */}
         <div className="flex items-center gap-8 border-b border-slate-200 mb-8">
-          {([["book", "Book a Stall"], ["mine", "My Bookings"]] as [Tab, string][]).map(([key, label]) => (
+          {([["book", "Book a Stall"], ["mine", "My Requests"]] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => switchTab(key)}
@@ -402,7 +402,7 @@ function BookStallContent() {
                 <h2 className="text-sm font-semibold text-slate-800">Link to Event or Fest</h2>
                 <span className="text-xs text-slate-400 font-normal ml-1">optional</span>
               </div>
-              <p className="text-xs text-slate-400 mb-4 ml-9">Associate this stall request with one of your events or fests.</p>
+              <p className="text-xs text-slate-400 mb-4 ml-9">Link this request to your event or fest.</p>
 
               <div className="flex gap-2 mb-4">
                 {(["none", "event", "fest"] as LinkedType[]).map(t => (
@@ -444,14 +444,14 @@ function BookStallContent() {
                         onChange={e => setEventFestId(e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#154CB3]/20 focus:border-[#154CB3] bg-slate-50/50 text-slate-700"
                       >
-                        <option value="">— Select {linkedType === "event" ? "event" : "fest"} —</option>
+                        <option value="">Select {linkedType === "event" ? "event" : "fest"}</option>
                         {linkedType === "event"
                           ? events.map(ev => <option key={ev.event_id} value={ev.event_id}>{ev.title} ({formatDate(ev.event_date)})</option>)
                           : fests.map(ft => <option key={ft.fest_id} value={ft.fest_id}>{ft.fest_title} ({formatDate(ft.opening_date)})</option>)}
                       </select>
                     )}
-                    {linkedType === "event" && events.length === 0 && <p className="text-xs text-slate-400 mt-2">No events found. Create an event first from the Manage page.</p>}
-                    {linkedType === "fest" && fests.length === 0 && <p className="text-xs text-slate-400 mt-2">No fests found. Create a fest first from the Manage page.</p>}
+                    {linkedType === "event" && events.length === 0 && <p className="text-xs text-slate-400 mt-2">No events found.</p>}
+                    {linkedType === "fest" && fests.length === 0 && <p className="text-xs text-slate-400 mt-2">No fests found.</p>}
                   </>
                 )
               )}
@@ -466,7 +466,7 @@ function BookStallContent() {
               {submitting ? (
                 <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Submitting…</>
               ) : (
-                <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Submit Stall Booking</>
+                <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Submit Request</>
               )}
             </button>
           </form>
@@ -488,7 +488,7 @@ function BookStallContent() {
                   </svg>
                 </div>
                 <p className="text-slate-700 font-semibold text-sm">No stall bookings yet</p>
-                <p className="text-xs text-slate-400 mt-1">Switch to &ldquo;Book a Stall&rdquo; to submit a request</p>
+                <p className="text-xs text-slate-400 mt-1">Switch to Book a Stall to submit.</p>
                 <button
                   onClick={() => switchTab("book")}
                   className="mt-4 px-5 py-2 rounded-full bg-[#154CB3] text-white text-sm font-semibold hover:bg-[#0d3a8a] transition-colors"
@@ -499,7 +499,7 @@ function BookStallContent() {
             ) : (
               <div className="space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  {bookings.length} booking{bookings.length !== 1 ? "s" : ""} · most recent first
+                  {bookings.length} request{bookings.length !== 1 ? "s" : ""} · newest first
                 </p>
                 {bookings.map(b => {
                   const desc = b.description || {};

@@ -409,7 +409,7 @@ function BookCateringContent() {
         selectedEventFestType ||
         ((returnEventFestId || selectedEventFestId || "").toUpperCase().startsWith("EV-") ? "event" : "fest");
 
-      toast.success("Catering request sent — awaiting caterer's response.");
+      toast.success("Request sent.");
 
       if (returnEventFestId) {
         router.push(`/approvals/${returnEventFestId}?type=${returnType}`);
@@ -499,7 +499,7 @@ function BookCateringContent() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[#0f2557] leading-tight">Book Catering</h1>
-              <p className="text-xs text-gray-500 mt-0.5">Send a catering request and track its status.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Send a request. Track status.</p>
             </div>
           </div>
 
@@ -511,7 +511,7 @@ function BookCateringContent() {
                 tab === "book" ? "bg-[#154CB3] text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               }`}
             >
-              Book Caterer
+              Book
             </button>
             <button
               onClick={() => switchTab("mine")}
@@ -519,7 +519,7 @@ function BookCateringContent() {
                 tab === "mine" ? "bg-[#154CB3] text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               }`}
             >
-              My Bookings
+              My Requests
               {statusCounts.all > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                   tab === "mine" ? "bg-white text-[#154CB3]" : "bg-gray-200 text-gray-600"
@@ -561,7 +561,7 @@ function BookCateringContent() {
             ) : filteredMyBookings.length === 0 ? (
               <div className="py-16 text-center text-sm text-gray-400">
                 {myBookings.length === 0
-                  ? "You haven't made any catering bookings yet."
+                  ? "No requests yet."
                   : `No ${mineStatusFilter} requests.`}
               </div>
             ) : (
@@ -637,7 +637,7 @@ function BookCateringContent() {
           <div className="col-span-2 max-lg:col-span-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-gray-800">Available Caterers</p>
+                <p className="text-sm font-semibold text-gray-800">Caterers</p>
                 <select
                   value={campusFilter}
                   onChange={e => setCampusFilter(e.target.value)}
@@ -652,7 +652,7 @@ function BookCateringContent() {
                 <input
                   value={vendorQuery}
                   onChange={e => setVendorQuery(e.target.value)}
-                  placeholder="Search caterer, location or campus…"
+                  placeholder="Search caterer, location, or campus"
                   className="w-full h-8 rounded-lg border border-gray-200 bg-white px-9 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#154CB3] focus:border-transparent"
                 />
                 {vendorQuery ? (
@@ -681,7 +681,7 @@ function BookCateringContent() {
                 <span>
                   {vendorQueryDebounced
                     ? `${filteredVendors.length} match${filteredVendors.length === 1 ? "" : "es"}`
-                    : `${vendors.length} caterer${vendors.length === 1 ? "" : "s"} available`}
+                    : `${vendors.length} caterer${vendors.length === 1 ? "" : "s"}`}
                 </span>
                 {vendorQueryDebounced && (
                   <button
@@ -750,7 +750,7 @@ function BookCateringContent() {
                   <IconChefHat />
                 </div>
                 <p className="text-sm font-semibold text-gray-700">Select a caterer</p>
-                <p className="text-xs text-gray-400 mt-1">Pick a vendor on the left to begin your booking request.</p>
+                <p className="text-xs text-gray-400 mt-1">Pick a vendor to start.</p>
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -776,11 +776,11 @@ function BookCateringContent() {
                 </div>
 
                 <div className="px-5 py-5 space-y-4">
-                  <FormField label="Description / Order details">
+                  <FormField label="Order details">
                     <textarea
                       value={description}
                       onChange={e => setDescription(e.target.value.slice(0, 1500))}
-                      placeholder="e.g. Lunch for 120 guests on 2026-05-10 at 1pm — vegetarian buffet, tea/coffee service, setup near Block A foyer."
+                      placeholder="e.g. Lunch for 120 guests, vegetarian buffet, tea/coffee, Block A foyer"
                       className={`${inputCls} h-28 resize-none pt-2`}
                     />
                     <p className="text-[10px] text-gray-400 mt-0.5 text-right">{description.length}/1500</p>
@@ -811,7 +811,7 @@ function BookCateringContent() {
                           }}
                           className={selectCls}
                         >
-                          <option value="">— Not linked to a specific event or fest —</option>
+                          <option value="">Not linked to event/fest</option>
                           {combinedEventFest.length > 0 && <optgroup label="Events" />}
                           {myEvents.map((e: any) => (
                             <option key={`event-${e.event_id}`} value={e.event_id}>
@@ -825,7 +825,7 @@ function BookCateringContent() {
                         </select>
                         {combinedEventFest.length === 0 && (
                           <p className="text-[11px] text-gray-400 mt-1">
-                            You have no upcoming events or fests. You can still submit a standalone request.
+                            No upcoming events or fests. You can still submit.
                           </p>
                         )}
                       </>
@@ -833,7 +833,7 @@ function BookCateringContent() {
                   </FormField>
 
                   <div>
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Your contact details</p>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Contact</p>
                     <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
                       <FormField label="Name">
                         <input
@@ -878,7 +878,7 @@ function BookCateringContent() {
                     disabled={!canSubmit}
                     className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#154CB3] text-white hover:bg-[#0f3a7a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Sending…" : "Send booking request"}
+                    {submitting ? "Sending…" : "Send request"}
                   </button>
                 </div>
               </div>

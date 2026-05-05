@@ -299,7 +299,7 @@ export default function ItDashboard() {
                   type="text"
                   value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
-                  placeholder="Search by event, dept, venue…"
+                  placeholder="Search event, dept, venue"
                   className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#154CB3]/25 focus:border-[#154CB3] w-56 transition-all"
                 />
               </div>
@@ -320,8 +320,8 @@ export default function ItDashboard() {
                   {q
                     ? `No results for "${searchQuery}". Try a different keyword.`
                     : activeTab === "pending"
-                    ? "All caught up! Check the Reviewed tab for past decisions."
-                    : "Requests you approve, decline, or return will appear here."}
+                    ? "All caught up."
+                    : "Approved, declined, and returned requests appear here."}
                 </p>
               </div>
             )}
@@ -426,7 +426,7 @@ export default function ItDashboard() {
                       {/* ── Expanded: Decline panel ── */}
                       {isExpanded && expandType === "decline" && (
                         <div className="border border-red-200 bg-red-50 rounded-xl px-4 py-4 space-y-3 mb-4">
-                          <p className="text-sm font-semibold text-red-700">Decline this IT request?</p>
+                          <p className="text-sm font-semibold text-red-700">Decline request?</p>
                           <textarea
                             rows={3}
                             value={noteText}
@@ -457,7 +457,7 @@ export default function ItDashboard() {
                       {/* ── Expanded: Return for revision panel ── */}
                       {isExpanded && expandType === "return" && (
                         <div className="border border-amber-200 bg-amber-50 rounded-xl px-4 py-4 space-y-3 mb-4">
-                          <p className="text-sm font-semibold text-amber-700">Return for Revision</p>
+                          <p className="text-sm font-semibold text-amber-700">Return for revision</p>
                           <textarea
                             rows={3}
                             value={noteText}

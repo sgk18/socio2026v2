@@ -418,7 +418,7 @@ const EventsPageContent = () => {
                 Explore events
               </h1>
               <p className="text-gray-500 mt-1 text-sm sm:text-base">
-                Browse through all upcoming events happening on campus.
+                Find upcoming events.
               </p>
             </div>
             <Link

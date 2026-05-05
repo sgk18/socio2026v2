@@ -50,6 +50,7 @@ import {
 } from "@/app/lib/eventPreviewDraft";
 import { Info, Plus, UsersRound, X } from "lucide-react";
 import ApprovalsWorkflowBuilder, {
+  getApprovalStageSubtitle,
   type WorkflowStage as _WorkflowStage,
   type BudgetItem as _BudgetItem,
 } from "@/app/_components/UI/ApprovalsWorkflowBuilder";
@@ -1015,8 +1016,8 @@ export type BudgetItem = _BudgetItem;
 export const STANDALONE_EVENT_STAGES: WorkflowStage[] = [
   { role: 'hod',      label: 'HOD',             desc: 'Head of Department',         blocking: true  },
   { role: 'dean',     label: 'Dean',             desc: 'Dean of the School',         blocking: true  },
-  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight', blocking: true  },
-  { role: 'accounts', label: 'Accounts Office',  desc: 'Financial clearance',        blocking: true  },
+  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Chief Financial Officer',    blocking: true  },
+  { role: 'accounts', label: 'Accounts Office',  desc: 'Finance Officer',            blocking: true  },
   { role: 'it',       label: 'IT Support',       desc: 'Technical setup',            blocking: false },
   { role: 'venue',    label: 'Venue',            desc: 'Venue arrangements',         blocking: false },
   { role: 'catering', label: 'Catering',         desc: 'Food & catering vendors',    blocking: false },
@@ -3224,10 +3225,10 @@ export default function EventForm({
                         </p>
                         <div className="space-y-2">
                           {[
-                            { role: 'hod',      label: 'HOD',             desc: 'Head of Department' },
-                            { role: 'dean',     label: 'Dean',            desc: 'Dean of the School' },
-                            { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight' },
-                            { role: 'accounts', label: 'Accounts Office', desc: 'Financial clearance' },
+                            { role: 'hod',      label: 'HOD' },
+                            { role: 'dean',     label: 'Dean' },
+                            { role: 'cfo',      label: 'CFO / Campus Dir' },
+                            { role: 'accounts', label: 'Accounts Office' },
                           ].map((s) => {
                             const festStage = festApprovalStages.find((fs: any) => fs.role === s.role);
                             const statusMap: Record<string, string> = {
@@ -3237,11 +3238,16 @@ export default function EventForm({
                               skipped:  'Skipped',
                             };
                             const statusText = festStage ? (statusMap[festStage.status] ?? festStage.status) : '—';
+                            const subtitle = getApprovalStageSubtitle(
+                              s.role,
+                              watchedOrganizingSchool || undefined,
+                              watchedOrganizingDept || undefined
+                            );
                             return (
                               <div key={s.role} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 opacity-70 cursor-not-allowed">
                                 <div>
                                   <p className="text-sm font-medium text-gray-600">{s.label}</p>
-                                  <p className="text-xs text-gray-400">{s.desc}</p>
+                                  <p className="text-xs text-gray-400">{subtitle}</p>
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
                                   {statusText}
