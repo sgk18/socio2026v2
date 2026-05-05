@@ -308,7 +308,7 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
             isPendingApproval ? "text-amber-700" : "text-[#154CB3]"
           }`}>
             <CheckCircle2 className="w-4 h-4" />
-            {isPendingApproval ? "Pending — View Approvals" : "View Approvals"}
+            {isPendingApproval ? "Pending — View Approvals / Bookings" : "View Approvals / Bookings"}
           </div>
           <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
             isPendingApproval ? "text-amber-500" : "text-[#154CB3]"
@@ -985,7 +985,7 @@ const MappedEventCard = ({
           isPendingApproval ? "text-amber-700" : "text-[#154CB3]"
         }`}>
           <CheckCircle2 className="w-4 h-4" />
-          {isPendingApproval ? "Pending — View Approvals" : "View Approvals"}
+          {isPendingApproval ? "Pending — View Approvals / Bookings" : "View Approvals / Bookings"}
         </div>
         <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
           isPendingApproval ? "text-amber-500" : "text-[#154CB3]"

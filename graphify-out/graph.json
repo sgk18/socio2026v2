@@ -3634,7 +3634,7 @@
       "label": "handleAdd()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L407",
+      "source_location": "L399",
       "id": "manage_page_handleadd",
       "community": 3,
       "norm_label": "handleadd()"
@@ -3643,7 +3643,7 @@
       "label": "handleRevoke()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L433",
+      "source_location": "L425",
       "id": "manage_page_handlerevoke",
       "community": 3,
       "norm_label": "handlerevoke()"
@@ -3652,7 +3652,7 @@
       "label": "handleOpenEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L454",
+      "source_location": "L446",
       "id": "manage_page_handleopenedit",
       "community": 3,
       "norm_label": "handleopenedit()"
@@ -3661,7 +3661,7 @@
       "label": "handleCloseEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L460",
+      "source_location": "L452",
       "id": "manage_page_handlecloseedit",
       "community": 3,
       "norm_label": "handlecloseedit()"
@@ -3670,7 +3670,7 @@
       "label": "handleSaveEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L467",
+      "source_location": "L459",
       "id": "manage_page_handlesaveedit",
       "community": 3,
       "norm_label": "handlesaveedit()"
@@ -3679,7 +3679,7 @@
       "label": "setActiveTab()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1170",
+      "source_location": "L1175",
       "id": "manage_page_setactivetab",
       "community": 3,
       "norm_label": "setactivetab()"
@@ -3688,7 +3688,7 @@
       "label": "normalizeEmail()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1223",
+      "source_location": "L1228",
       "id": "manage_page_normalizeemail",
       "community": 3,
       "norm_label": "normalizeemail()"
@@ -3697,7 +3697,7 @@
       "label": "isCurrentUserFestHead()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1226",
+      "source_location": "L1231",
       "id": "manage_page_iscurrentuserfesthead",
       "community": 3,
       "norm_label": "iscurrentuserfesthead()"
@@ -3706,7 +3706,7 @@
       "label": "isOwnedByCurrentUser()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1239",
+      "source_location": "L1244",
       "id": "manage_page_isownedbycurrentuser",
       "community": 3,
       "norm_label": "isownedbycurrentuser()"
@@ -3715,7 +3715,7 @@
       "label": "handleClickOutside()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1359",
+      "source_location": "L1364",
       "id": "manage_page_handleclickoutside",
       "community": 3,
       "norm_label": "handleclickoutside()"
@@ -3724,7 +3724,7 @@
       "label": "getToken()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1371",
+      "source_location": "L1376",
       "id": "manage_page_gettoken",
       "community": 3,
       "norm_label": "gettoken()"
@@ -3733,7 +3733,7 @@
       "label": "fetchLiveEvents()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1395",
+      "source_location": "L1400",
       "id": "manage_page_fetchliveevents",
       "community": 3,
       "norm_label": "fetchliveevents()"
@@ -3742,7 +3742,7 @@
       "label": "getValidDate()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1475",
+      "source_location": "L1480",
       "id": "manage_page_getvaliddate",
       "community": 3,
       "norm_label": "getvaliddate()"
@@ -3751,7 +3751,7 @@
       "label": "isPastDate()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1482",
+      "source_location": "L1487",
       "id": "manage_page_ispastdate",
       "community": 3,
       "norm_label": "ispastdate()"
@@ -3760,7 +3760,7 @@
       "label": "isAutoArchivedEvent()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1488",
+      "source_location": "L1493",
       "id": "manage_page_isautoarchivedevent",
       "community": 3,
       "norm_label": "isautoarchivedevent()"
@@ -3769,7 +3769,7 @@
       "label": "toBoolean()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1501",
+      "source_location": "L1506",
       "id": "manage_page_toboolean",
       "community": 3,
       "norm_label": "toboolean()"
@@ -3778,7 +3778,7 @@
       "label": "getEffectiveArchiveState()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1504",
+      "source_location": "L1509",
       "id": "manage_page_geteffectivearchivestate",
       "community": 3,
       "norm_label": "geteffectivearchivestate()"
@@ -3787,7 +3787,7 @@
       "label": "getEffectiveFestArchiveState()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1527",
+      "source_location": "L1532",
       "id": "manage_page_geteffectivefestarchivestate",
       "community": 3,
       "norm_label": "geteffectivefestarchivestate()"
@@ -3796,7 +3796,7 @@
       "label": "matchesStatus()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1540",
+      "source_location": "L1545",
       "id": "manage_page_matchesstatus",
       "community": 3,
       "norm_label": "matchesstatus()"
@@ -3805,7 +3805,7 @@
       "label": "matchesEventStatus()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1550",
+      "source_location": "L1555",
       "id": "manage_page_matcheseventstatus",
       "community": 3,
       "norm_label": "matcheseventstatus()"
@@ -3814,7 +3814,7 @@
       "label": "matchesFestStatus()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1560",
+      "source_location": "L1565",
       "id": "manage_page_matchesfeststatus",
       "community": 3,
       "norm_label": "matchesfeststatus()"
@@ -3823,7 +3823,7 @@
       "label": "paginateArray()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1625",
+      "source_location": "L1630",
       "id": "manage_page_paginatearray",
       "community": 3,
       "norm_label": "paginatearray()"
@@ -3832,7 +3832,7 @@
       "label": "scrollToTop()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1639",
+      "source_location": "L1644",
       "id": "manage_page_scrolltotop",
       "community": 3,
       "norm_label": "scrolltotop()"
@@ -3841,7 +3841,7 @@
       "label": "refreshLiveEvents()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1663",
+      "source_location": "L1668",
       "id": "manage_page_refreshliveevents",
       "community": 3,
       "norm_label": "refreshliveevents()"
@@ -3850,7 +3850,7 @@
       "label": "handleGenerateReport()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1690",
+      "source_location": "L1695",
       "id": "manage_page_handlegeneratereport",
       "community": 3,
       "norm_label": "handlegeneratereport()"
@@ -3859,7 +3859,7 @@
       "label": "handleToggleArchive()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1909",
+      "source_location": "L1914",
       "id": "manage_page_handletogglearchive",
       "community": 3,
       "norm_label": "handletogglearchive()"
@@ -3868,7 +3868,7 @@
       "label": "handleToggleArchiveFest()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L1998",
+      "source_location": "L2003",
       "id": "manage_page_handletogglearchivefest",
       "community": 3,
       "norm_label": "handletogglearchivefest()"
@@ -3877,7 +3877,7 @@
       "label": "handleRevokeVolunteer()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L2106",
+      "source_location": "L2111",
       "id": "manage_page_handlerevokevolunteer",
       "community": 3,
       "norm_label": "handlerevokevolunteer()"
@@ -3886,7 +3886,7 @@
       "label": "handleRevokeFestSubHead()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L2145",
+      "source_location": "L2150",
       "id": "manage_page_handlerevokefestsubhead",
       "community": 3,
       "norm_label": "handlerevokefestsubhead()"
@@ -3895,7 +3895,7 @@
       "label": "openSubHeadExpiryEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L2174",
+      "source_location": "L2179",
       "id": "manage_page_opensubheadexpiryedit",
       "community": 3,
       "norm_label": "opensubheadexpiryedit()"
@@ -3904,7 +3904,7 @@
       "label": "openEventVolunteerExpiryEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L2180",
+      "source_location": "L2185",
       "id": "manage_page_openeventvolunteerexpiryedit",
       "community": 3,
       "norm_label": "openeventvolunteerexpiryedit()"
@@ -3913,7 +3913,7 @@
       "label": "closeExpiryEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L2186",
+      "source_location": "L2191",
       "id": "manage_page_closeexpiryedit",
       "community": 3,
       "norm_label": "closeexpiryedit()"
@@ -3922,7 +3922,7 @@
       "label": "saveExpiryEdit()",
       "file_type": "code",
       "source_file": "client\\app\\manage\\page.tsx",
-      "source_location": "L2193",
+      "source_location": "L2198",
       "id": "manage_page_saveexpiryedit",
       "community": 3,
       "norm_label": "saveexpiryedit()"
