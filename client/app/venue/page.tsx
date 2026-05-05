@@ -317,16 +317,48 @@ export default function VenueDashboard() {
   const pagedPending  = filteredPending.slice( (pendingPage  - 1) * PAGE_SIZE, pendingPage  * PAGE_SIZE);
   const pagedReviewed = filteredReviewed.slice((reviewedPage - 1) * PAGE_SIZE, reviewedPage * PAGE_SIZE);
 
-  return (
-    <div className="min-h-screen bg-gray-50 pt-[72px]">
-      <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
+  const totalApproved = reviewed.filter(r => r.status === "approved").length;
+  const totalRejected = reviewed.filter(r => r.status === "rejected").length;
 
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Venue Requests</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Review venue requests for your campus.
-          </p>
+  return (
+    <div className="min-h-screen bg-[#faf8ff]">
+
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#154CB3]/10 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#154CB3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </div>
+            <h1 className="text-lg font-bold text-[#063168]">Venue Requests</h1>
+          </div>
+          <button
+            onClick={fetchQueue}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-[#154CB3] text-[#154CB3] hover:bg-[#154CB3] hover:text-white transition-all disabled:opacity-50"
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-2">
+          {[
+            { label: "Total", value: pending.length + reviewed.length, color: "text-[#063168]" },
+            { label: "Pending", value: pending.length, color: "text-amber-600" },
+            { label: "Approved", value: totalApproved, color: "text-green-600" },
+            { label: "Rejected / Returned", value: totalRejected + reviewed.filter(r => r.status === "returned_for_revision").length, color: "text-red-500" },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4">
+              <p className="text-xs text-slate-500 font-medium mb-1">{s.label}</p>
+              <p className={`text-2xl font-bold ${s.color}`}>{loading ? "—" : s.value}</p>
+            </div>
+          ))}
         </div>
 
         {/* Tab bar + venue filter */}

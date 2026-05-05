@@ -133,6 +133,7 @@ export default function CreateClubForm({
   const [webLink, setWebLink] = useState(initialClub?.club_web_link ?? "");
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerUrlInput, setBannerUrlInput] = useState(initialClub?.club_banner_url ?? "");
+  const [isDraggingBanner, setIsDraggingBanner] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(
     Boolean(initialClub?.club_registrations)
   );
@@ -362,13 +363,7 @@ export default function CreateClubForm({
     return true;
   };
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-
-    if (!file) {
-      return;
-    }
-
+  const processBannerFile = (file: File) => {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setBannerFile(null);
       const message = "Only JPG and PNG files are allowed.";
@@ -383,13 +378,23 @@ export default function CreateClubForm({
       showValidationToast(message);
       return;
     }
-
     setBannerFile(file);
-    setErrors((prev) => {
-      const nextErrors = { ...prev };
-      delete nextErrors.banner;
-      return nextErrors;
-    });
+    setErrors((prev) => { const e = { ...prev }; delete e.banner; return e; });
+  };
+
+  const handleBannerDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingBanner(true); };
+  const handleBannerDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingBanner(false); };
+  const handleBannerDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingBanner(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processBannerFile(file);
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) return;
+    processBannerFile(file);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -644,8 +649,19 @@ export default function CreateClubForm({
             <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
               {entityLabel} banner: (max 3MB) - JPG/PNG <span className="text-red-500">*</span>
             </label>
-            <div className="rounded-md border border-dashed border-[#8da1bb] bg-white px-4 py-5 text-center">
-              <p className="mb-2 text-[11px] text-[#5a6d84]">JPEG, PNG (max 3MB)</p>
+            <div
+              className={`rounded-md border border-dashed bg-white px-4 py-5 text-center transition-colors ${
+                isDraggingBanner ? "border-[#1f57c3] bg-blue-50" : "border-[#8da1bb]"
+              }`}
+              onDragOver={handleBannerDragOver}
+              onDragLeave={handleBannerDragLeave}
+              onDrop={handleBannerDrop}
+            >
+              {isDraggingBanner ? (
+                <p className="mb-2 text-[11px] font-semibold text-[#1f57c3]">Drop image here</p>
+              ) : (
+                <p className="mb-2 text-[11px] text-[#5a6d84]">Drag & drop or click · JPEG, PNG (max 3MB)</p>
+              )}
               {!bannerFile && bannerUrlInput ? (
                 <a
                   href={bannerUrlInput}
