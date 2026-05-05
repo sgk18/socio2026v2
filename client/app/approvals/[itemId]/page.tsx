@@ -390,7 +390,7 @@ function ApprovalsPage() {
                 href={`/bookstall?event_fest_id=${itemId}&event_fest_type=${itemType}`}
                 className="inline-flex items-center px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"
               >
-                Book a Stall
+                Book Stall
               </a>
               <a
                 href={`/bookvenue?entity_id=${itemId}&entity_type=${itemType}`}
@@ -527,7 +527,7 @@ function ApprovalsPage() {
                         <div key={s.stall_id} className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${STATUS_COLORS[stepStatus]}`}>
                           <StatusIcon status={stepStatus} className="h-5 w-5 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">Stall Request</p>
+                            <p className="font-medium text-sm">Stall</p>
                             {descText && <p className="text-xs opacity-70 mt-0.5 truncate">{descText}</p>}
                           </div>
                           <span className="text-xs font-semibold uppercase tracking-wide">{stepStatus}</span>

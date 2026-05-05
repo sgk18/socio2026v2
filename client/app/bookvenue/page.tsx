@@ -259,11 +259,11 @@ function BookVenuePageInner() {
                   <span>›</span>
                 </>
               )}
-              <span className="text-gray-600 font-medium">Venue Booking</span>
+              <span className="text-gray-600 font-medium">Book Venue</span>
             </div>
             {entityId && (
               <p className="text-xs text-[#154CB3] mt-0.5 font-medium">
-                Booking will be linked to your {entityType || "event"}.
+                Linked to {entityType || "event"}.
               </p>
             )}
           </div>
@@ -271,16 +271,16 @@ function BookVenuePageInner() {
           {/* Compact tab strip */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 max-md:hidden">
             <TabButton active={tab === "mine"}     onClick={() => switchTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
-            <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
-            <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+            <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book by Venue" />
+            <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Free Venue" />
           </div>
         </div>
 
         {/* Mobile tab strip */}
         <div className="hidden max-md:flex flex-col gap-1.5 mb-3">
           <TabButton active={tab === "mine"}     onClick={() => switchTab("mine")}     icon={<IconCalendar />}  label="My Bookings" />
-          <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book Specific Venue" />
-          <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Available Venue" />
+          <TabButton active={tab === "specific"} onClick={() => switchTab("specific")} icon={<IconBuilding />}  label="Book by Venue" />
+          <TabButton active={tab === "any"}      onClick={() => switchTab("any")}      icon={<IconSearch />}    label="Find Free Venue" />
         </div>
 
         {tab === "mine"     && <MyBookingsView session={session} />}
@@ -443,7 +443,7 @@ function SpecificVenueView({ session, userData, entityId, entityType, onBookingS
               disabled={!canSwitchCampus}
               className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
             >
-              <option value="">Select campus…</option>
+              <option value="">Select campus</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </FormField>
@@ -456,13 +456,13 @@ function SpecificVenueView({ session, userData, entityId, entityType, onBookingS
               className={selectCls}
             >
               {!selectedCampus
-                ? <option>Select campus first</option>
+                ? <option>Pick campus first</option>
                 : loadingBlocks
                   ? <option>Loading…</option>
                   : blocks.length === 0
-                    ? <option>No locations found</option>
+                    ? <option>No locations</option>
                     : <>
-                        <option value="">Select location…</option>
+                        <option value="">Select location</option>
                         {blocks.map(b => <option key={b} value={b}>{b}</option>)}
                       </>
               }
@@ -477,13 +477,13 @@ function SpecificVenueView({ session, userData, entityId, entityType, onBookingS
               className={selectCls}
             >
               {!selectedBlock
-                ? <option>Select location first</option>
+                ? <option>Pick location first</option>
                 : loadingVenues
                   ? <option>Loading…</option>
                   : venues.length === 0
-                    ? <option>No venues found</option>
+                    ? <option>No venues</option>
                     : <>
-                        <option value="">Select venue…</option>
+                        <option value="">Select venue</option>
                         {venues.map(v => (
                           <option key={v.id} value={v.id}>
                             {v.name}{v.capacity ? ` · cap ${v.capacity}` : ""}
@@ -515,7 +515,7 @@ function SpecificVenueView({ session, userData, entityId, entityType, onBookingS
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {!selectedVenueId ? (
           <div className="py-16 text-center text-sm text-gray-400">
-            Select a campus, location, and venue to view the calendar.
+            Pick campus, location, and venue.
           </div>
         ) : (
           <WeekCalendar
@@ -767,7 +767,7 @@ function WeekCalendar({
 
       {venueName && (
         <div className="px-5 py-2.5 border-t border-gray-200 bg-gray-50 text-xs text-gray-400">
-          Approved bookings for <span className="font-semibold text-gray-600">{venueName}</span> are visible to everyone. Your pending/rejected bookings are visible only to you. Click any empty slot to book.
+          Approved bookings for <span className="font-semibold text-gray-600">{venueName}</span> are public. Your pending and rejected bookings are private. Click an empty slot to book.
         </div>
       )}
     </div>
@@ -788,7 +788,7 @@ function BookingModal({
   const [date,      setDate]      = useState(initial.date);
   const [startTime, setStartTime] = useState(initial.start_time);
   const [endTime,   setEndTime]   = useState(initial.end_time);
-  const [title,     setTitle]     = useState(`Venue booking — ${userData?.name || userData?.email || ""}`);
+  const [title,     setTitle]     = useState(`Venue booking - ${userData?.name || userData?.email || ""}`);
   const [headcount, setHeadcount] = useState("");
   const [notes,     setNotes]     = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -832,13 +832,13 @@ function BookingModal({
       if (!res.ok) {
         if (res.status === 409 && body.conflict) {
           const conflictLabel = body.conflict.title || `${body.conflict.start_time}–${body.conflict.end_time}`;
-          setError(`This slot is already booked for "${conflictLabel}". Please choose a different time.`);
+          setError(`This slot is booked for "${conflictLabel}". Choose another time.`);
         } else {
           setError(body.error || "Failed to submit.");
         }
         return;
       }
-      toast.success(body.auto_approved ? "Venue booked and confirmed!" : "Booking submitted — awaiting approval.");
+      toast.success(body.auto_approved ? "Venue booked." : "Request sent for approval.");
       onSuccess();
     } catch {
       setError("Network error. Please try again.");
@@ -861,7 +861,7 @@ function BookingModal({
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-0.5">New booking</p>
             <p className="text-base font-semibold text-gray-900">{venue.name}</p>
             {entityId && (
-              <p className="text-[11px] text-[#154CB3] mt-0.5">Linked to your {entityType || "event"}</p>
+              <p className="text-[11px] text-[#154CB3] mt-0.5">Linked to {entityType || "event"}</p>
             )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5">
@@ -913,7 +913,7 @@ function BookingModal({
               value={notes}
               onChange={e => setNotes(e.target.value.slice(0, 500))}
               className={`${inputCls} h-20 resize-none pt-2`}
-              placeholder="Microphone, projector, seating layout…"
+              placeholder="Microphone, projector, seating layout"
             />
           </FormField>
 
@@ -932,7 +932,7 @@ function BookingModal({
             disabled={!canSubmit}
             className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#154CB3] text-white hover:bg-[#0f3a7a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? "Submitting…" : "Submit booking"}
+            {submitting ? "Submitting…" : "Submit"}
           </button>
         </div>
       </div>
@@ -1171,7 +1171,7 @@ function AnyAvailableView({ session, userData, entityId, entityType }: { session
               disabled={!canSwitchCampus}
               className={`${selectCls} ${!canSwitchCampus ? "bg-gray-50 text-gray-600 cursor-default" : ""}`}
             >
-              <option value="">Select…</option>
+              <option value="">Select campus</option>
               {campuses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </FormField>
@@ -1246,7 +1246,7 @@ function AnyAvailableView({ session, userData, entityId, entityType }: { session
               <p className="text-sm font-semibold text-red-700">Unavailable — {occupied.length}</p>
             </div>
             {occupied.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-gray-400 text-center">None.</p>
+              <p className="px-4 py-8 text-sm text-gray-400 text-center">No unavailable venues.</p>
             ) : (
               <>
                 <ul className="divide-y divide-gray-100">

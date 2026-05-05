@@ -17,11 +17,44 @@ export interface BudgetItem {
   unitPrice: number;
 }
 
+export function getApprovalStageSubtitle(
+  role: string,
+  organizingSchool?: string,
+  organizingDept?: string
+): string {
+  const school = String(organizingSchool ?? "").trim();
+  const dept = String(organizingDept ?? "").trim();
+
+  switch (role) {
+    case 'hod':
+      return dept ? `Head of Department of ${dept}` : 'Head of Department';
+    case 'dean':
+      return school ? `Dean of ${school}` : 'Dean of the School';
+    case 'cfo':
+      return 'Chief Financial Officer';
+    case 'accounts':
+      return 'Finance Officer';
+    default:
+      return '';
+  }
+}
+
+export function normalizeApprovalStageSubtitles(
+  stages: WorkflowStage[],
+  organizingSchool?: string,
+  organizingDept?: string
+): WorkflowStage[] {
+  return stages.map((stage) => ({
+    ...stage,
+    desc: getApprovalStageSubtitle(stage.role, organizingSchool, organizingDept),
+  }));
+}
+
 export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
-  { role: 'hod',      label: 'HOD',             desc: 'Head of Dept — matched by dept + campus',     blocking: true, required: true,  enabled: true },
-  { role: 'dean',     label: 'Dean',             desc: 'Dean of School — matched by school + campus', blocking: true, required: true,  enabled: true },
-  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Finance & campus oversight',                  blocking: true, required: false, enabled: false },
-  { role: 'accounts', label: 'Finance Officer',  desc: 'Accounts Office — matched by campus',         blocking: true, required: false, enabled: false },
+  { role: 'hod',      label: 'HOD',             desc: 'Head of Department',     blocking: true, required: true,  enabled: true },
+  { role: 'dean',     label: 'Dean',             desc: 'Dean of the School',      blocking: true, required: true,  enabled: true },
+  { role: 'cfo',      label: 'CFO / Campus Dir', desc: 'Chief Financial Officer', blocking: true, required: false, enabled: false },
+  { role: 'accounts', label: 'Finance Officer',  desc: 'Finance Officer',         blocking: true, required: false, enabled: false },
 ];
 
 export interface ApprovalsWorkflowBuilderProps {
@@ -60,7 +93,13 @@ export function ApprovalsWorkflowBuilder({
   onUpdateFest,
   onBackToDetails,
 }: ApprovalsWorkflowBuilderProps) {
-  const [stages, setStages] = React.useState<WorkflowStage[]>(initialStages && initialStages.length > 0 ? initialStages : DEFAULT_WORKFLOW_STAGES);
+  const [stages, setStages] = React.useState<WorkflowStage[]>(
+    normalizeApprovalStageSubtitles(
+      initialStages && initialStages.length > 0 ? initialStages : DEFAULT_WORKFLOW_STAGES,
+      organizingSchool,
+      organizingDept
+    )
+  );
   const [draggedRole, setDraggedRole] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<{
     role: string | null;
@@ -71,9 +110,18 @@ export function ApprovalsWorkflowBuilder({
 
   React.useEffect(() => {
     if (initialStages && initialStages.length > 0) {
-      setStages(initialStages);
+      setStages(normalizeApprovalStageSubtitles(initialStages, organizingSchool, organizingDept));
     }
-  }, [initialStages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialStages, organizingSchool, organizingDept]);
+
+  React.useEffect(() => {
+    setStages((prev) =>
+      prev.map((stage) => ({
+        ...stage,
+        desc: getApprovalStageSubtitle(stage.role, organizingSchool, organizingDept),
+      }))
+    );
+  }, [organizingSchool, organizingDept]);
 
   React.useEffect(() => {
     if (initialBudgetItems && initialBudgetItems.length > 0) {

@@ -282,7 +282,7 @@ const CentresPageContent = () => {
                 Explore centres, cells & clubs
               </h1>
               <p className="text-gray-500 mt-1 text-sm sm:text-base">
-                Browse all centres, cells, and clubs at Christ University that support academic excellence, research, innovation, and student development.
+                Find centres, cells, and clubs.
               </p>
             </div>
             <Link
