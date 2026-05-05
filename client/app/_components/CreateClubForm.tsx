@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import toast from "react-hot-toast";
-import type { Toast } from "react-hot-toast";
 import { ClubRecord, createClub, updateClub } from "../actions/clubs";
 import { toClubCategories } from "../lib/clubCategory";
 import { christCampuses } from "../lib/eventFormSchema";
@@ -47,6 +46,7 @@ type FormErrors = {
   description?: string;
   webLink?: string;
   banner?: string;
+  image?: string;
   campus?: string;
   roles?: string;
   editors?: string;
@@ -91,25 +91,7 @@ const toStringArray = (value: unknown): string[] => {
     .filter(Boolean);
 };
 
-const showValidationToast = (message: string) => {
-  const toastId = `club-validation-${message}`;
-  toast(
-    (t: Toast) => (
-      <div className="flex max-w-sm items-start gap-2 rounded-md bg-[#202939] px-3 py-2 text-sm text-white shadow-lg">
-        <span className="flex-1 leading-5">{message}</span>
-        <button
-          type="button"
-          onClick={() => toast.dismiss(t.id)}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-          aria-label="Dismiss notification"
-        >
-          ×
-        </button>
-      </div>
-    ),
-    { id: toastId, duration: 3000 }
-  );
-};
+
 
 export default function CreateClubForm({
   mode = "create",
@@ -134,6 +116,9 @@ export default function CreateClubForm({
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerUrlInput, setBannerUrlInput] = useState(initialClub?.club_banner_url ?? "");
   const [isDraggingBanner, setIsDraggingBanner] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState(initialClub?.club_image_url ?? "");
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(
     Boolean(initialClub?.club_registrations)
   );
@@ -182,6 +167,8 @@ export default function CreateClubForm({
     setWebLink(initialClub.club_web_link ?? "");
     setBannerUrlInput(initialClub.club_banner_url ?? "");
     setBannerFile(null);
+    setImageUrlInput(initialClub.club_image_url ?? "");
+    setImageFile(null);
     setRegistrationsOpen(Boolean(initialClub.club_registrations));
     setSelectedCampuses(toStringArray(initialClub.club_campus));
     const roles = toStringArray(initialClub.club_roles_available).filter(
@@ -256,7 +243,7 @@ export default function CreateClubForm({
   const addOtherRole = () => {
     const custom = normalize(otherRoleInput);
     if (!custom || custom.toLowerCase() === "member") {
-      showValidationToast("Provide a valid custom role.");
+      toast.error("Provide a valid custom role.", { duration: 3000 });
       return;
     }
     setRoleRows((prev) =>
@@ -275,7 +262,7 @@ export default function CreateClubForm({
   const addEditorRow = () => {
     const hasEmptyEmailField = editorRows.some((row) => !normalizeEmail(row.email));
     if (hasEmptyEmailField) {
-      showValidationToast("Please fill in the current email field before adding another.");
+      toast.error("Please fill in the current email field before adding another.", { duration: 3000 });
       return;
     }
     setEditorRows((prev) => [...prev, { id: nextRowId(), email: "" }]);
@@ -330,10 +317,17 @@ export default function CreateClubForm({
       nextErrors.webLink = "Website must start with https://";
 
     const normalizedBannerUrl = normalize(bannerUrlInput);
-    if (!bannerFile && !normalizedBannerUrl) {
-      nextErrors.banner = `${entityLabel} image is required.`;
-    } else if (normalizedBannerUrl && !/^https:\/\/.+/i.test(normalizedBannerUrl)) {
-      nextErrors.banner = "Image URL must start with https://";
+    if (normalizedBannerUrl && !/^https:\/\/.+/i.test(normalizedBannerUrl)) {
+      nextErrors.banner = "Banner URL must start with https://";
+    }
+
+    const normalizedImageUrl = normalize(imageUrlInput);
+    let imageMissingError = false;
+    if (!imageFile && !normalizedImageUrl) {
+      nextErrors.image = `${entityLabel} image is required.`;
+      imageMissingError = true;
+    } else if (normalizedImageUrl && !/^https:\/\/.+/i.test(normalizedImageUrl)) {
+      nextErrors.image = "Image URL must start with https://";
     }
     if (selectedCampuses.length === 0) nextErrors.campus = "Select at least one campus.";
 
@@ -353,33 +347,76 @@ export default function CreateClubForm({
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
+      if (imageMissingError) {
+        toast.error(`${entityLabel} image is required.`, { duration: 3000 });
+      }
       const uniqueMessages = Array.from(
-        new Set(Object.values(nextErrors).filter((message): message is string => Boolean(message)))
+        new Set(
+          Object.entries(nextErrors)
+            .filter(([key]) => !(key === "image" && imageMissingError))
+            .map(([, message]) => message)
+            .filter((message): message is string => Boolean(message))
+        )
       );
-      uniqueMessages.forEach((message) => showValidationToast(message));
+      uniqueMessages.forEach((message) => toast.error(message, { duration: 3000 }));
       return false;
     }
 
     return true;
   };
 
-  const processBannerFile = (file: File) => {
+  const handleBannerChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setBannerFile(null);
       const message = "Only JPG and PNG files are allowed.";
       setErrors((prev) => ({ ...prev, banner: message }));
-      showValidationToast(message);
+      toast.error(message, { duration: 3000 });
       return;
     }
     if (file.size > MAX_IMAGE_SIZE) {
       setBannerFile(null);
-      const message = "Image size must be under 3MB.";
+      const message = "Banner size must be under 3MB.";
       setErrors((prev) => ({ ...prev, banner: message }));
-      showValidationToast(message);
+      toast.error(message, { duration: 3000 });
       return;
     }
     setBannerFile(file);
     setErrors((prev) => { const e = { ...prev }; delete e.banner; return e; });
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageFile(null);
+      const message = "Only JPG and PNG files are allowed.";
+      setErrors((prev) => ({ ...prev, image: message }));
+      toast.error(message, { duration: 3000 });
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageFile(null);
+      const message = "Image size must be under 3MB.";
+      setErrors((prev) => ({ ...prev, image: message }));
+      toast.error(message, { duration: 3000 });
+      return;
+    }
+
+    setImageFile(file);
+    setErrors((prev) => {
+      const nextErrors = { ...prev };
+      delete nextErrors.image;
+      return nextErrors;
+    });
   };
 
   const handleBannerDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingBanner(true); };
@@ -388,13 +425,16 @@ export default function CreateClubForm({
     e.preventDefault();
     setIsDraggingBanner(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) processBannerFile(file);
+    if (file) handleBannerChange({ target: { files: [file] } } as any);
   };
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    if (!file) return;
-    processBannerFile(file);
+  const handleImageDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingImage(true); };
+  const handleImageDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingImage(false); };
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleImageChange({ target: { files: [file] } } as any);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -409,76 +449,109 @@ export default function CreateClubForm({
     setIsSubmitting(true);
     setIsUploadingImage(true);
 
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    if (sessionError || !session?.access_token) {
-      setIsSubmitting(false);
-      setIsUploadingImage(false);
-      toast.error("Please log in again and retry.");
-      return;
-    }
-
-    let bannerUrl = normalize(bannerUrlInput) || null;
-    if (bannerFile) {
-      const uploadFormData = new FormData();
-      uploadFormData.append("file", bannerFile);
-
-      const uploadResponse = await fetch(`${API_URL}/api/upload/fest-image`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: uploadFormData,
-      });
-
-      const uploadData = await readApiBodySafely(uploadResponse);
-      if (!uploadResponse.ok || !uploadData?.url) {
+      if (sessionError || !session?.access_token) {
         setIsSubmitting(false);
         setIsUploadingImage(false);
-        toast.error(
-          uploadData?.error || uploadData?.message || `Failed to upload ${entityLabelLower} image.`
-        );
+        toast.error("Please log in again and retry.");
         return;
       }
 
-      bannerUrl = uploadData.url;
+      let bannerUrl = normalize(bannerUrlInput) || null;
+      let imageUrl = normalize(imageUrlInput) || null;
+
+      if (bannerFile) {
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", bannerFile);
+
+        const uploadResponse = await fetch(`${API_URL}/api/upload/fest-image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: uploadFormData,
+        });
+
+        const uploadData = await readApiBodySafely(uploadResponse);
+        if (!uploadResponse.ok || !uploadData?.url) {
+          toast.error(
+            uploadData?.error || uploadData?.message || `Failed to upload ${entityLabelLower} banner.`
+          );
+          return;
+        }
+
+        bannerUrl = uploadData.url;
+      }
+
+      if (imageFile) {
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", imageFile);
+
+        const uploadResponse = await fetch(`${API_URL}/api/upload/fest-image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: uploadFormData,
+        });
+
+        const uploadData = await readApiBodySafely(uploadResponse);
+        if (!uploadResponse.ok || !uploadData?.url) {
+          toast.error(
+            uploadData?.error || uploadData?.message || `Failed to upload ${entityLabelLower} image.`
+          );
+          return;
+        }
+
+        imageUrl = uploadData.url;
+      }
+
+      setIsUploadingImage(false);
+
+      const resolvedRoles = getResolvedRoles();
+      const resolvedEditors = getResolvedEditors();
+      const payload = {
+        type: (initialClub?.type ?? clubType) as "club" | "centre" | "cell",
+        club_name: clubName,
+        subtitle,
+        category: selectedCategories,
+        club_description: description,
+        club_banner_url: bannerUrl,
+        club_image_url: imageUrl,
+        club_registrations: registrationsOpen,
+        club_campus: selectedCampuses,
+        club_roles_available: resolvedRoles,
+        club_editors: resolvedEditors,
+        club_web_link: webLink,
+      };
+      const result =
+        isEditMode && initialClub?.club_id
+          ? await updateClub(initialClub.club_id, payload)
+          : await createClub(payload);
+
+      if (!result.ok) {
+        toast.error(result.error || `Failed to save ${entityLabelLower}.`);
+        return;
+      }
+
+      toast.success(
+        isEditMode
+          ? `${entityLabel} updated successfully`
+          : `${entityLabel} created successfully`
+      );
+      const savedClubId = result.club?.club_id ?? (isEditMode ? initialClub?.club_id : null);
+      router.push(savedClubId ? `/club/${savedClubId}` : "/clubs");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : `Failed to save ${entityLabelLower}.`;
+      toast.error(message.includes("Failed to fetch")
+        ? `Server unreachable. Make sure the backend is running.`
+        : message
+      );
+    } finally {
+      setIsSubmitting(false);
+      setIsUploadingImage(false);
     }
-
-    setIsUploadingImage(false);
-
-    const resolvedRoles = getResolvedRoles();
-    const resolvedEditors = getResolvedEditors();
-    const payload = {
-      type: (initialClub?.type ?? clubType) as "club" | "centre" | "cell",
-      club_name: clubName,
-      subtitle,
-      category: selectedCategories,
-      club_description: description,
-      club_banner_url: bannerUrl,
-      club_registrations: registrationsOpen,
-      club_campus: selectedCampuses,
-      club_roles_available: resolvedRoles,
-      club_editors: resolvedEditors,
-      club_web_link: webLink,
-    };
-    const result =
-      isEditMode && initialClub?.club_id
-        ? await updateClub(initialClub.club_id, payload)
-        : await createClub(payload);
-    setIsSubmitting(false);
-
-    if (!result.ok) {
-      toast.error(result.error || `Failed to save ${entityLabelLower}.`);
-      return;
-    }
-
-    toast.success(
-      isEditMode
-        ? `${entityLabel} updated successfully`
-        : `${entityLabel} created successfully`
-    );
-    router.push("/masteradmin");
   };
 
   return (
@@ -500,7 +573,7 @@ export default function CreateClubForm({
           </>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-4">
           {!isEditMode ? (
             <div>
               <label className="mb-2 block text-[11px] font-semibold text-[#29364a]">
@@ -600,7 +673,7 @@ export default function CreateClubForm({
                         if (selectedCategories.includes(item)) {
                           setSelectedCategories(selectedCategories.filter((c) => c !== item));
                         } else if (selectedCategories.length >= 3) {
-                          showValidationToast("You can only select up to 3 categories.");
+                          toast.error("You can only select up to 3 categories.", { duration: 3000 });
                         } else {
                           setSelectedCategories([...selectedCategories, item]);
                         }
@@ -645,67 +718,136 @@ export default function CreateClubForm({
             {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description}</p>}
           </div>
 
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
-              {entityLabel} banner: (max 3MB) - JPG/PNG <span className="text-red-500">*</span>
-            </label>
-            <div
-              className={`rounded-md border border-dashed bg-white px-4 py-5 text-center transition-colors ${
-                isDraggingBanner ? "border-[#1f57c3] bg-blue-50" : "border-[#8da1bb]"
-              }`}
-              onDragOver={handleBannerDragOver}
-              onDragLeave={handleBannerDragLeave}
-              onDrop={handleBannerDrop}
-            >
-              {isDraggingBanner ? (
-                <p className="mb-2 text-[11px] font-semibold text-[#1f57c3]">Drop image here</p>
-              ) : (
-                <p className="mb-2 text-[11px] text-[#5a6d84]">Drag & drop or click · JPEG, PNG (max 3MB)</p>
-              )}
-              {!bannerFile && bannerUrlInput ? (
-                <a
-                  href={bannerUrlInput}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mb-2 block text-xs font-medium text-[#1f57c3] underline"
-                >
-                  View current banner
-                </a>
-              ) : null}
-              {bannerFile && (
-                <p className="mb-2 text-xs font-medium text-[#2e4560] break-all">{bannerFile.name}</p>
-              )}
-              <input
-                type="file"
-                id="club-image-upload-input"
-                accept="image/jpeg,image/png"
-                onChange={handleImageChange}
-                className="hidden"
-                required={!bannerUrlInput}
-              />
-              <label
-                htmlFor="club-image-upload-input"
-                className="inline-flex cursor-pointer rounded-full bg-[#1f57c3] px-4 py-1 text-[11px] font-semibold text-white"
-              >
-                {bannerFile || bannerUrlInput ? "Change Image" : "Choose File"}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
+                {entityLabel} image: (max 3MB) - JPG/PNG <span className="text-red-500">*</span>
               </label>
-              <div className="mt-3 text-left">
-                <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
-                  Or paste image URL
-                </label>
-                <input
-                  value={bannerUrlInput}
-                  onChange={(e) => {
-                    setBannerUrlInput(e.target.value);
-                    if (normalize(e.target.value)) {
-                      setBannerFile(null);
-                    }
-                  }}
-                  placeholder="https://example.com/banner-image.jpg"
-                  className="h-9 w-full rounded-md border border-[#bcc8d6] bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3]"
-                />
+              <div
+                className={`flex h-full flex-col justify-between rounded-md border border-dashed bg-white px-4 py-5 text-center transition-colors ${
+                  isDraggingImage ? "border-[#1f57c3] bg-blue-50" : "border-[#8da1bb]"
+                }`}
+                onDragOver={handleImageDragOver}
+                onDragLeave={handleImageDragLeave}
+                onDrop={handleImageDrop}
+              >
+                <div>
+                  {isDraggingImage ? (
+                    <p className="mb-2 text-[11px] font-semibold text-[#1f57c3]">Drop image here</p>
+                  ) : (
+                    <p className="mb-2 text-[11px] text-[#5a6d84]">Drag & drop or click · JPEG, PNG (max 3MB)</p>
+                  )}
+                  {!imageFile && imageUrlInput ? (
+                    <a
+                      href={imageUrlInput.startsWith("https://") ? imageUrlInput : "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mb-2 block text-xs font-medium text-[#1f57c3] underline"
+                    >
+                      View current image
+                    </a>
+                  ) : null}
+                  {imageFile && (
+                    <p className="mb-2 text-xs font-medium text-[#2e4560] break-all">{imageFile.name}</p>
+                  )}
+                  <input
+                    type="file"
+                    id="club-image-upload-input"
+                    accept="image/jpeg,image/png"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    required={!imageUrlInput}
+                  />
+                  <label
+                    htmlFor="club-image-upload-input"
+                    className="inline-flex cursor-pointer rounded-full bg-[#1f57c3] px-4 py-1 text-[11px] font-semibold text-white"
+                  >
+                    {imageFile || imageUrlInput ? "Change Image" : "Choose File"}
+                  </label>
+                </div>
+                <div className="mt-4 text-left">
+                  <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
+                    Or paste image URL
+                  </label>
+                  <input
+                    value={imageUrlInput}
+                    onChange={(e) => {
+                      setImageUrlInput(e.target.value);
+                      if (normalize(e.target.value)) {
+                        setImageFile(null);
+                      }
+                    }}
+                    placeholder="https://example.com/image.jpg"
+                    className="h-9 w-full rounded-md border border-[#bcc8d6] bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3]"
+                  />
+                </div>
+                {errors.image && <p className="text-red-500 text-xs mt-2">{errors.image}</p>}
               </div>
-              {errors.banner && <p className="text-red-500 text-xs mt-2">{errors.banner}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
+                {entityLabel} banner: (max 3MB) - JPG/PNG (optional)
+              </label>
+              <div
+                className={`flex h-full flex-col justify-between rounded-md border border-dashed bg-white px-4 py-5 text-center transition-colors ${
+                  isDraggingBanner ? "border-[#1f57c3] bg-blue-50" : "border-[#8da1bb]"
+                }`}
+                onDragOver={handleBannerDragOver}
+                onDragLeave={handleBannerDragLeave}
+                onDrop={handleBannerDrop}
+              >
+                <div>
+                  {isDraggingBanner ? (
+                    <p className="mb-2 text-[11px] font-semibold text-[#1f57c3]">Drop image here</p>
+                  ) : (
+                    <p className="mb-2 text-[11px] text-[#5a6d84]">Drag & drop or click · JPEG, PNG (max 3MB)</p>
+                  )}
+                  {!bannerFile && bannerUrlInput ? (
+                    <a
+                      href={bannerUrlInput.startsWith("https://") ? bannerUrlInput : "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mb-2 block text-xs font-medium text-[#1f57c3] underline"
+                    >
+                      View current banner
+                    </a>
+                  ) : null}
+                  {bannerFile && (
+                    <p className="mb-2 text-xs font-medium text-[#2e4560] break-all">{bannerFile.name}</p>
+                  )}
+                  <input
+                    type="file"
+                    id="club-banner-upload-input"
+                    accept="image/jpeg,image/png"
+                    onChange={handleBannerChange}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="club-banner-upload-input"
+                    className="inline-flex cursor-pointer rounded-full bg-[#1f57c3] px-4 py-1 text-[11px] font-semibold text-white"
+                  >
+                    {bannerFile || bannerUrlInput ? "Change Banner" : "Choose File"}
+                  </label>
+                </div>
+                <div className="mt-4 text-left">
+                  <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
+                    Or paste banner URL
+                  </label>
+                  <input
+                    value={bannerUrlInput}
+                    onChange={(e) => {
+                      setBannerUrlInput(e.target.value);
+                      if (normalize(e.target.value)) {
+                        setBannerFile(null);
+                      }
+                    }}
+                    placeholder="https://example.com/banner.jpg"
+                    className="h-9 w-full rounded-md border border-[#bcc8d6] bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3]"
+                  />
+                </div>
+                {errors.banner && <p className="text-red-500 text-xs mt-2">{errors.banner}</p>}
+              </div>
             </div>
           </div>
 

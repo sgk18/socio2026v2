@@ -9,6 +9,7 @@ export interface ClubRecord {
   club_name: string;
   club_description: string | null;
   club_banner_url: string | null;
+  club_image_url?: string | null;
   club_web_link: string | null;
   club_registrations: boolean;
   club_campus: string[];
@@ -42,6 +43,7 @@ export interface CreateClubInput {
   category?: string[] | string | null;
   club_description: string;
   club_banner_url?: string | null;
+  club_image_url?: string | null;
   club_registrations: boolean;
   club_campus: string[];
   club_editors?: string[];
@@ -159,6 +161,7 @@ export async function createClub(input: CreateClubInput): Promise<{
     const category = serializeClubCategories(categoryValues);
     const website = normalizeUrl(input.club_web_link);
     const bannerInput = normalizeUrl(input.club_banner_url);
+    const imageInput = normalizeUrl(input.club_image_url);
     const campus = (Array.isArray(input.club_campus) ? input.club_campus : [])
       .map((c) => String(c).trim())
       .filter(Boolean);
@@ -183,10 +186,18 @@ export async function createClub(input: CreateClubInput): Promise<{
     if (bannerInput && !bannerInput.startsWith("https://")) {
       return { ok: false, error: "Banner URL must be a valid https:// URL." };
     }
+    if (imageInput && !imageInput.startsWith("https://")) {
+      return { ok: false, error: "Image URL must be a valid https:// URL." };
+    }
 
     const validatedBanner = normalizeAndValidateBannerUrl(bannerInput);
     if (!validatedBanner.ok) {
       return { ok: false, error: validatedBanner.error };
+    }
+
+    const validatedImage = normalizeAndValidateBannerUrl(imageInput);
+    if (!validatedImage.ok) {
+      return { ok: false, error: validatedImage.error };
     }
 
     const slug = `${slugify(clubName) || "club"}-${Date.now().toString(36)}`;
@@ -201,6 +212,7 @@ export async function createClub(input: CreateClubInput): Promise<{
         category,
         club_description: description,
         club_banner_url: validatedBanner.url,
+        club_image_url: validatedImage.url,
         club_registrations: Boolean(input.club_registrations),
         club_campus: campus,
         club_editors: editors,
@@ -235,6 +247,7 @@ export async function updateClub(
     const category = serializeClubCategories(categoryValues);
     const website = normalizeUrl(input.club_web_link);
     const bannerInput = normalizeUrl(input.club_banner_url);
+    const imageInput = normalizeUrl(input.club_image_url);
     const campus = (Array.isArray(input.club_campus) ? input.club_campus : [])
       .map((c) => String(c).trim())
       .filter(Boolean);
@@ -269,10 +282,18 @@ export async function updateClub(
     if (bannerInput && !bannerInput.startsWith("https://")) {
       return { ok: false, error: "Banner URL must be a valid https:// URL." };
     }
+    if (imageInput && !imageInput.startsWith("https://")) {
+      return { ok: false, error: "Image URL must be a valid https:// URL." };
+    }
 
     const validatedBanner = normalizeAndValidateBannerUrl(bannerInput);
     if (!validatedBanner.ok) {
       return { ok: false, error: validatedBanner.error };
+    }
+
+    const validatedImage = normalizeAndValidateBannerUrl(imageInput);
+    if (!validatedImage.ok) {
+      return { ok: false, error: validatedImage.error };
     }
 
     const { data, error } = await supabase
@@ -284,6 +305,7 @@ export async function updateClub(
         category,
         club_description: description,
         club_banner_url: validatedBanner.url,
+        club_image_url: validatedImage.url,
         club_registrations: Boolean(input.club_registrations),
         club_campus: campus,
         club_editors: editors,
