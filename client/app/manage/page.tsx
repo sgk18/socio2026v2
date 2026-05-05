@@ -295,6 +295,28 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
           {fest.description || "No description provided. Click edit to add one."}
         </p>
       </div>
+      {!readOnly && (
+        <Link
+          href={`/approvals/${fest.fest_id}?type=fest`}
+          className={`flex items-center justify-between px-5 py-2.5 border-t transition-colors group ${
+            isPendingApproval
+              ? "bg-amber-50 border-amber-200 hover:bg-amber-100"
+              : "bg-blue-50 border-blue-100 hover:bg-blue-100"
+          }`}
+        >
+          <div className={`flex items-center gap-2 font-bold text-sm ${
+            isPendingApproval ? "text-amber-700" : "text-[#154CB3]"
+          }`}>
+            <CheckCircle2 className="w-4 h-4" />
+            {isPendingApproval ? "Pending — View Approvals" : "View Approvals"}
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
+            isPendingApproval ? "text-amber-500" : "text-[#154CB3]"
+          }`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+          </svg>
+        </Link>
+      )}
       <div className="px-5 py-3.5 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
         <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
           <Calendar className="w-4 h-4 text-slate-400" />
@@ -302,33 +324,14 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
         </div>
         {!readOnly && (isDraft ? (
           <div className="flex items-center gap-2">
-            <Link
-              href={`/approvals/${fest.fest_id}?type=fest`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
-              title="View approvals"
-              aria-label="View approvals"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-            </Link>
             <Link href={`/${baseUrl}/${fest.fest_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
               Edit <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         ) : isArchived ? (
           <div className="flex items-center gap-2">
-            <Link
-              href={`/approvals/${fest.fest_id}?type=fest`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
-              title="View approvals"
-              aria-label="View approvals"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-            </Link>
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                onArchiveToggle?.(fest.fest_id, false);
-              }}
+              onClick={(e) => { e.preventDefault(); onArchiveToggle?.(fest.fest_id, false); }}
               disabled={isArchiveUpdating}
               className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -337,19 +340,8 @@ const MappedFestCard = ({ fest, baseUrl, isArchiveUpdating = false, onArchiveTog
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Link
-              href={`/approvals/${fest.fest_id}?type=fest`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
-              title="View approvals"
-              aria-label="View approvals"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-            </Link>
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                onArchiveToggle?.(fest.fest_id, true);
-              }}
+              onClick={(e) => { e.preventDefault(); onArchiveToggle?.(fest.fest_id, true); }}
               disabled={isArchiveUpdating}
               className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -981,6 +973,27 @@ const MappedEventCard = ({
           {(event as any).short_description || (event as any).description || "No description provided."}
         </p>
       </div>
+      <Link
+        href={`/approvals/${event.event_id}?type=event`}
+        className={`flex items-center justify-between px-5 py-2.5 border-t transition-colors group ${
+          isPendingApproval
+            ? "bg-amber-50 border-amber-200 hover:bg-amber-100"
+            : "bg-blue-50 border-blue-100 hover:bg-blue-100"
+        }`}
+      >
+        <div className={`flex items-center gap-2 font-bold text-sm ${
+          isPendingApproval ? "text-amber-700" : "text-[#154CB3]"
+        }`}>
+          <CheckCircle2 className="w-4 h-4" />
+          {isPendingApproval ? "Pending — View Approvals" : "View Approvals"}
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
+          isPendingApproval ? "text-amber-500" : "text-[#154CB3]"
+        }`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+        </svg>
+      </Link>
+
       <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 space-y-2">
         <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
           <Calendar className="w-4 h-4 text-slate-400" />
@@ -1019,14 +1032,6 @@ const MappedEventCard = ({
           )}
           <Link href={`/${baseUrl}/${event.event_id}`} className="flex items-center gap-1.5 text-[#154cb3] font-semibold text-sm hover:underline">
             Edit <Pencil className="w-4 h-4" />
-          </Link>
-          <Link
-            href={`/approvals/${event.event_id}?type=event`}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-[#154cb3] hover:bg-[#154cb3]/10"
-            title="View approvals"
-            aria-label="View approvals"
-          >
-            <CheckCircle2 className="w-4 h-4" />
           </Link>
           {!isDraft && (
             <EventReminderButton
