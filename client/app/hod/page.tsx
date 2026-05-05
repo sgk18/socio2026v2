@@ -206,6 +206,7 @@ function HodDashboard() {
   }
 
   const campus = (userData as any)?.campus;
+  const department = (userData as any)?.department;
   const pendingItems = queue.filter((q) => hodStatus(q) === "pending");
   const reviewedItems = queue.filter((q) => hodStatus(q) !== "pending");
   const visible = activeTab === "reviewed" ? reviewedItems : pendingItems;
@@ -237,8 +238,10 @@ function HodDashboard() {
             </div>
             <div>
               <h1 className="text-base font-bold text-[#0f2a6b] leading-none">HOD Approvals</h1>
-              {campus && (
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5 uppercase tracking-wider">{campus}</p>
+              {(campus || department) && (
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5 uppercase tracking-wider">
+                  {[department, campus].filter(Boolean).join(" · ")}
+                </p>
               )}
             </div>
           </div>
