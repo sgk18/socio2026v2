@@ -12,9 +12,11 @@ export function generateQRCodeData(registrationId, eventId, participantEmail) {
   const timestamp = Date.now();
   const expiryTime = timestamp + (24 * 60 * 60 * 1000); // 24 hours from now
   
-  // Create a hash for security verification
+  // Create a HMAC for security verification
   const dataToHash = `${registrationId}:${eventId}:${participantEmail}:${timestamp}`;
-  const hash = crypto.createHash('sha256').update(dataToHash + process.env.QR_SECRET || 'default-secret').digest('hex');
+  const hmac = crypto.createHmac('sha256', process.env.QR_SECRET || 'default-secret')
+    .update(dataToHash)
+    .digest('hex');
   
   return {
     registrationId,
@@ -22,7 +24,7 @@ export function generateQRCodeData(registrationId, eventId, participantEmail) {
     participantEmail,
     timestamp,
     expiryTime,
-    hash
+    hash: hmac
   };
 }
 
@@ -86,9 +88,11 @@ export function verifyQRCodeData(qrData) {
       return { valid: false, message: 'QR code has expired' };
     }
     
-    // Verify hash
+    // Verify hmac
     const dataToHash = `${registrationId}:${eventId}:${participantEmail}:${timestamp}`;
-    const expectedHash = crypto.createHash('sha256').update(dataToHash + (process.env.QR_SECRET || 'default-secret')).digest('hex');
+    const expectedHash = crypto.createHmac('sha256', process.env.QR_SECRET || 'default-secret')
+      .update(dataToHash)
+      .digest('hex');
     
     if (hash !== expectedHash) {
       return { valid: false, message: 'Invalid QR code: security verification failed' };

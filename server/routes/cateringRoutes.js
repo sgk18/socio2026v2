@@ -572,11 +572,28 @@ router.get(
         return res.status(400).json({ error: "No catering_id associated with this user" });
       }
 
-      const { data: bookings, error } = await supabase
+      const status = (req.query.status || "").trim();
+      let query = supabase
         .from("cater_bookings")
-        .select("*")
-        .in("catering_id", scopeIds)
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" })
+        .in("catering_id", scopeIds);
+
+      if (status) {
+        const statuses = status.split(",").map(s => s.trim()).filter(Boolean);
+        if (statuses.length) {
+          query = query.in("status", statuses);
+        }
+      }
+
+      // Pagination
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 10;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data: bookings, error, count } = await query
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
 
@@ -618,7 +635,17 @@ router.get(
         .in("catering_id", allowed.length ? allowed : ["__none__"])
       ).data || [];
 
-      return res.json({ catering_ids: allowed, vendors, bookings: enriched });
+      return res.json({ 
+        catering_ids: allowed, 
+        vendors, 
+        bookings: enriched,
+        pagination: {
+          totalItems: count || 0,
+          totalPages: Math.ceil((count || 0) / pageSize),
+          currentPage: page,
+          pageSize
+        }
+      });
     } catch (err) {
       console.error("[Caterers] GET /catering/bookings error:", err);
       return res.status(500).json({ error: err?.message || "Internal server error" });
