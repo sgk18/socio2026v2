@@ -7,6 +7,10 @@ import {
   sendPushToEmail,
   sendPushToAll,
 } from "../utils/webPushService.js";
+import {
+  sendOneSignalToEmail,
+  sendOneSignalToAll,
+} from "../utils/oneSignalService.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -156,11 +160,20 @@ router.post(
 
     if (error) throw error;
 
+    // 1. Web Push (VAPID)
     await sendPushToAll({
       title,
       body: message,
       tag: data.id,
       actionUrl: action_url || "/notifications",
+    });
+
+    // 2. Mobile Push (OneSignal)
+    await sendOneSignalToAll({
+      title,
+      body: message,
+      actionUrl: action_url || "/notifications",
+      data: { notificationId: data.id }
     });
 
     console.log(`[BROADCAST API] Created broadcast (id: ${data.id}): ${title}`);
@@ -259,11 +272,20 @@ router.post(
 
       if (error) throw error;
 
+      // 1. Web Push (VAPID)
       await sendPushToAll({
         title: tpl.title,
         body: tpl.message,
         tag: data.id,
         actionUrl: `/event/${event.event_id}`,
+      });
+
+      // 2. Mobile Push (OneSignal)
+      await sendOneSignalToAll({
+        title: tpl.title,
+        body: tpl.message,
+        actionUrl: `/event/${event.event_id}`,
+        data: { notificationId: data.id, eventId: event.event_id }
       });
 
       console.log(`[EVENT-REMINDER] Organiser ${req.userInfo.email} sent "${template}" for event "${event.title}" (id: ${data.id})`);
@@ -429,11 +451,20 @@ router.post("/notifications", async (req, res) => {
 
     if (error) throw error;
 
+    // 1. Web Push (VAPID)
     await sendPushToEmail(targetEmail, {
       title,
       body: message,
       tag: notification.id,
       actionUrl: action_url || "/notifications",
+    });
+
+    // 2. Mobile Push (OneSignal)
+    await sendOneSignalToEmail(targetEmail, {
+      title,
+      body: message,
+      actionUrl: action_url || "/notifications",
+      data: { notificationId: notification.id }
     });
 
     return res.status(201).json({ notification });
@@ -532,11 +563,20 @@ export async function sendBroadcastNotification({ title, message, type = 'info',
       throw error;
     }
 
+    // 1. Web Push (VAPID)
     await sendPushToAll({
       title,
       body: message,
       tag: data.id,
       actionUrl: action_url || "/notifications",
+    });
+
+    // 2. Mobile Push (OneSignal)
+    await sendOneSignalToAll({
+      title,
+      body: message,
+      actionUrl: action_url || "/notifications",
+      data: { notificationId: data.id }
     });
 
     console.log(`[BROADCAST] Created 1 broadcast row (id: ${data.id}) — all users will see it`);
