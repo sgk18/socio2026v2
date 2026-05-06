@@ -415,37 +415,45 @@ router.post(
     // Send push notification and save to database
     const participantEmail = registration.individual_email || registration.team_leader_email;
     if (participantEmail) {
-      try {
-        const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
-        const event = await queryOne("events", { where: { event_id: eventId } });
-        const eventTitle = event?.title || "Event";
-        
-        // 1. Mobile Push
-        await sendOneSignalToEmail(participantEmail, {
-          title: "Attendance Marked ✅",
-          body: `You have successfully checked in for ${eventTitle}. Enjoy the event!`,
-          actionUrl: `/event/${eventId}`,
-          data: {
-            eventId,
-            type: "attendance_confirmed"
-          }
-        });
+      (async () => {
+        try {
+          const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
+          const { sendPushToEmail } = await import("../utils/webPushService.js");
+          const event = await queryOne("events", { where: { event_id: eventId } });
+          const eventTitle = event?.title || "Event";
+          
+          const notifPayload = {
+            title: "Attendance Marked ✅",
+            body: `You have successfully checked in for ${eventTitle}. Enjoy the event!`,
+            actionUrl: `/event/${eventId}`,
+            data: {
+              eventId,
+              type: "attendance_confirmed"
+            }
+          };
 
-        // 2. In-app Notification
-        await insert("notifications", [
-          {
-            user_email: participantEmail.toLowerCase(),
-            title: "Attendance Confirmed",
-            message: `Your attendance for "${eventTitle}" has been marked.`,
-            type: "attendance",
-            event_id: eventId,
-            event_title: eventTitle,
-            action_url: `/event/${eventId}`,
-          },
-        ]);
-      } catch (pushError) {
-        console.warn("[Notification] Failed to deliver attendance confirmation:", pushError.message);
-      }
+          // 1. Mobile App Push (OneSignal)
+          await sendOneSignalToEmail(participantEmail, notifPayload);
+
+          // 2. PWA Web Push (VAPID)
+          await sendPushToEmail(participantEmail, notifPayload);
+
+          // 3. In-app Notification (Database)
+          await insert("notifications", [
+            {
+              user_email: participantEmail.toLowerCase(),
+              title: "Attendance Confirmed",
+              message: `Your attendance for "${eventTitle}" has been marked.`,
+              type: "attendance",
+              event_id: eventId,
+              event_title: eventTitle,
+              action_url: `/event/${eventId}`,
+            },
+          ]);
+        } catch (notifError) {
+          console.warn("[Notification] Multi-channel delivery failed:", notifError.message);
+        }
+      })();
     }
 
     return res.status(200).json({
