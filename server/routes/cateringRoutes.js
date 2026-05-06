@@ -588,8 +588,6 @@ router.get(
       }
 
       // Pagination
-      const page = parseInt(req.query.page) || 1;
-      const pageSize = parseInt(req.query.pageSize) || 10;
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 

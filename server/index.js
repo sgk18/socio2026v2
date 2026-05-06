@@ -201,7 +201,11 @@ const generalLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/', // Skip health check
+  skip: (req) => {
+    if (req.path === '/') return true; // health check
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    return ip === '::1' || ip === '127.0.0.1' || ip.endsWith('::ffff:127.0.0.1');
+  },
 });
 
 app.use(generalLimiter);

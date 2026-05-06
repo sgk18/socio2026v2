@@ -5,14 +5,30 @@ import ExcelJS from "exceljs";
 import { useAuth } from "@/context/AuthContext";
 import { QRScanner } from "./QRScanner";
 
+interface TeammateInfo {
+  name?: string;
+  email?: string;
+  registerNumber?: string;
+}
+
+interface TeammateStatusEntry {
+  status?: "attended" | "absent";
+  marked_at?: string;
+  marked_by?: string;
+}
+
 interface Participant {
   id: string;
+  registrationId: string;
   name: string;
   email: string;
   registerNumber?: string;
   teamName?: string;
-  status: "registered" | "attended" | "absent";
+  status: "attended" | "absent";
   attendedAt?: string;
+  registrationType?: "individual" | "team" | string;
+  teammates?: TeammateInfo[];
+  teammateStatuses?: Record<string, TeammateStatusEntry>;
 }
 
 interface AttendanceManagerProps {
@@ -225,6 +241,17 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+
+  const toggleTeam = (id: string) => {
+    setExpandedTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const [showClaimsModal, setShowClaimsModal] = useState(false);
   const [claimsDate, setClaimsDate] = useState<string>("");
   const [dateError, setDateError] = useState<string | null>(null);
@@ -271,15 +298,18 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
 
       const data = await response.json();
 
-      const mappedParticipants = data.participants?.map((p: any) => ({
+      const mappedParticipants: Participant[] = data.participants?.map((p: any) => ({
         id: p.id,
+        registrationId: p.id,
         name: p.individual_name || p.team_leader_name || 'Unknown',
         email: p.individual_email || p.team_leader_email || '',
         registerNumber: p.individual_register_number || p.team_leader_register_number || '',
         teamName: p.registration_type === 'team' ? p.team_name : undefined,
-        status: p.attendance_status === 'attended' ? 'attended' :
-               p.attendance_status === 'absent' ? 'absent' : 'registered',
-        attendedAt: p.marked_at || undefined
+        status: p.attendance_status === 'attended' ? 'attended' : 'absent',
+        attendedAt: p.marked_at || undefined,
+        registrationType: p.registration_type,
+        teammates: Array.isArray(p.teammates) ? p.teammates : [],
+        teammateStatuses: p.teammate_statuses && typeof p.teammate_statuses === 'object' ? p.teammate_statuses : {},
       })) || [];
 
       setParticipants(mappedParticipants);
@@ -330,6 +360,61 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       );
     } catch (err: any) {
       console.error("Error marking attendance:", err);
+    }
+  };
+
+  const markTeammateAttendance = async (
+    participantId: string,
+    registrationId: string,
+    teammateRegisterNumber: string,
+    status: "attended" | "absent"
+  ) => {
+    if (!session?.access_token) return;
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/events/${eventId}/teammate-attendance`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            registrationId,
+            teammateRegisterNumber,
+            status,
+            markedBy: userData?.email,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to mark teammate attendance");
+      }
+
+      const now = new Date().toISOString();
+      setParticipants(prev =>
+        prev.map(p =>
+          p.id === participantId
+            ? {
+                ...p,
+                teammateStatuses: {
+                  ...(p.teammateStatuses || {}),
+                  [teammateRegisterNumber]: {
+                    status,
+                    marked_at: now,
+                    marked_by: userData?.email,
+                  },
+                },
+              }
+            : p
+        )
+      );
+    } catch (err: any) {
+      console.error("Error marking teammate attendance:", err);
     }
   };
 
@@ -453,11 +538,50 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Claims");
 
-    const present = participants
-      .filter((p) => p.status === "attended" && /@[^.]+\.christuniversity\.in$/i.test(p.email))
-      .sort((a, b) =>
-        (a.registerNumber || "").localeCompare(b.registerNumber || "", undefined, { numeric: true })
-      );
+    const isChristEmail = (email: string) => /@[^.]+\.christuniversity\.in$/i.test(email);
+
+    type ClaimEntry = { registerNumber: string; name: string; email: string };
+    const entries: ClaimEntry[] = [];
+
+    for (const p of participants) {
+      if (p.registrationType === "team") {
+        // Gate the entire team on the leader's email being a christ email
+        if (!isChristEmail(p.email)) continue;
+        const leaderReg = String(p.registerNumber || "").trim();
+
+        if (p.status === "attended") {
+          entries.push({
+            registerNumber: leaderReg,
+            name: p.name || "",
+            email: p.email || "",
+          });
+        }
+
+        for (const tm of p.teammates || []) {
+          const tmReg = String(tm.registerNumber || "").trim();
+          if (!tmReg || tmReg === leaderReg) continue;
+          const tmStatus = p.teammateStatuses?.[tmReg]?.status;
+          if (tmStatus !== "attended") continue;
+          entries.push({
+            registerNumber: tmReg,
+            name: tm.name || "",
+            email: tm.email || "",
+          });
+        }
+      } else {
+        if (p.status !== "attended") continue;
+        if (!isChristEmail(p.email)) continue;
+        entries.push({
+          registerNumber: String(p.registerNumber || "").trim(),
+          name: p.name || "",
+          email: p.email || "",
+        });
+      }
+    }
+
+    const present = entries.sort((a, b) =>
+      (a.registerNumber || "").localeCompare(b.registerNumber || "", undefined, { numeric: true })
+    );
 
     const sortedTimes = [...periods].map((s) => s.trim()).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const periodCols = sortedTimes.map((t) => toPeriodColumnName(t));
@@ -583,10 +707,20 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     total: participants.length,
     attended: participants.filter(p => p.status === "attended").length,
     absent: participants.filter(p => p.status === "absent").length,
-    pending: participants.filter(p => p.status === "registered").length,
   };
 
-  const presentCount = attendanceStats.attended;
+  const presentCount = participants.reduce((sum, p) => {
+    let count = p.status === "attended" ? 1 : 0;
+    if (p.registrationType === "team") {
+      const leaderReg = String(p.registerNumber || "").trim();
+      for (const tm of p.teammates || []) {
+        const tmReg = String(tm.registerNumber || "").trim();
+        if (!tmReg || tmReg === leaderReg) continue;
+        if (p.teammateStatuses?.[tmReg]?.status === "attended") count++;
+      }
+    }
+    return sum + count;
+  }, 0);
 
   if (loading) {
     return (
@@ -678,7 +812,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-blue-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-[#154CB3]">{attendanceStats.total}</div>
             <div className="text-sm text-blue-700">Total</div>
@@ -690,10 +824,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
           <div className="bg-red-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-red-600">{attendanceStats.absent}</div>
             <div className="text-sm text-red-700">Absent</div>
-          </div>
-          <div className="bg-yellow-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-600">{attendanceStats.pending}</div>
-            <div className="text-sm text-yellow-700">Pending</div>
           </div>
         </div>
 
@@ -715,7 +845,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154CB3] focus:border-transparent"
             >
               <option value="all">All Status</option>
-              <option value="registered">Registered</option>
               <option value="attended">Attended</option>
               <option value="absent">Absent</option>
             </select>
@@ -749,56 +878,147 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredParticipants.map((participant) => (
-                  <tr key={participant.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{participant.name}</div>
-                        <div className="text-sm text-gray-500">{participant.email}</div>
-                        {participant.registerNumber && (
-                          <div className="text-sm text-gray-500">Reg: {participant.registerNumber}</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {participant.teamName || "Individual"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        participant.status === "attended"
-                          ? "bg-green-100 text-green-800"
-                          : participant.status === "absent"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}>
-                        {participant.status === "registered" ? "Pending" : participant.status}
-                      </span>
-                      {participant.attendedAt && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {new Date(participant.attendedAt).toLocaleString()}
-                        </div>
+                {filteredParticipants.map((participant) => {
+                  const leaderReg = String(participant.registerNumber || "").trim();
+                  const otherTeammates = (participant.teammates || []).filter(
+                    (tm) => String(tm.registerNumber || "").trim() !== leaderReg
+                  );
+                  const isTeam = participant.registrationType === "team" && otherTeammates.length > 0;
+                  const isExpanded = isTeam && expandedTeams.has(participant.id);
+                  return (
+                    <React.Fragment key={participant.id}>
+                      <tr
+                        onClick={isTeam ? () => toggleTeam(participant.id) : undefined}
+                        role={isTeam ? "button" : undefined}
+                        tabIndex={isTeam ? 0 : undefined}
+                        aria-expanded={isTeam ? isExpanded : undefined}
+                        onKeyDown={isTeam ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleTeam(participant.id);
+                          }
+                        } : undefined}
+                        className={`hover:bg-gray-50 ${isTeam ? "cursor-pointer" : ""}`}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-start gap-2">
+                            {isTeam ? (
+                              <span
+                                aria-hidden="true"
+                                className="flex items-center justify-center w-6 h-6 rounded text-gray-600 mt-0.5"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  strokeWidth={2}
+                                  stroke="currentColor"
+                                  className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                                </svg>
+                              </span>
+                            ) : (
+                              <span className="inline-block w-6" aria-hidden />
+                            )}
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                              <div className="text-sm text-gray-500">{participant.email}</div>
+                              {participant.registerNumber && (
+                                <div className="text-sm text-gray-500">Reg: {participant.registerNumber}</div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {participant.teamName || "Individual"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            participant.status === "attended"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}>
+                            {participant.status}
+                          </span>
+                          {participant.attendedAt && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {new Date(participant.attendedAt).toLocaleString()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                          {participant.status !== "attended" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); markAttendance(participant.id, "attended"); }}
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                            >
+                              Mark Present
+                            </button>
+                          )}
+                          {participant.status !== "absent" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); markAttendance(participant.id, "absent"); }}
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                            >
+                              Mark Absent
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={4} className="px-6 py-5">
+                            <div className="pl-10">
+                              <div className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-3">
+                                Teammates ({otherTeammates.length})
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                {otherTeammates.map((tm, idx) => {
+                                  const tmReg = String(tm.registerNumber || "").trim();
+                                  const tmStatusEntry = participant.teammateStatuses?.[tmReg];
+                                  const tmStatus: "attended" | "absent" =
+                                    tmStatusEntry?.status === "attended" ? "attended" : "absent";
+                                  return (
+                                    <div key={`${participant.id}-tm-${idx}`} className="flex items-center gap-3 text-base text-gray-800">
+                                      <span className="text-gray-500">{idx + 1}.</span>
+                                      <span className="min-w-[110px]">{tmReg || "N/A"}</span>
+                                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                        tmStatus === "attended"
+                                          ? "bg-green-100 text-green-800"
+                                          : "bg-red-100 text-red-800"
+                                      }`}>
+                                        {tmStatus}
+                                      </span>
+                                      <div className="ml-auto flex items-center gap-2">
+                                        {tmStatus !== "attended" && tmReg && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); markTeammateAttendance(participant.id, participant.registrationId, tmReg, "attended"); }}
+                                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
+                                          >
+                                            Mark Present
+                                          </button>
+                                        )}
+                                        {tmStatus !== "absent" && tmReg && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); markTeammateAttendance(participant.id, participant.registrationId, tmReg, "absent"); }}
+                                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+                                          >
+                                            Mark Absent
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                      {participant.status !== "attended" && (
-                        <button
-                          onClick={() => markAttendance(participant.id, "attended")}
-                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                        >
-                          Mark Present
-                        </button>
-                      )}
-                      {participant.status !== "absent" && (
-                        <button
-                          onClick={() => markAttendance(participant.id, "absent")}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                        >
-                          Mark Absent
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

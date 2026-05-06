@@ -209,19 +209,6 @@ router.get(
           .json({ error: "Invalid event_id parameter" });
       }
 
-      // If not master admin, verify they are only requesting their own data
-      if (!isMasterAdmin && !event_id) {
-        const userRegNum = String(req.userInfo.register_number || req.userInfo.visitor_id || "").trim().toUpperCase();
-        const userEmail = String(req.userInfo.email || "").trim().toLowerCase();
-
-        if (registerNumber && String(registerNumber).trim().toUpperCase() !== userRegNum) {
-          return res.status(403).json({ error: "Unauthorized: You can only fetch your own registrations" });
-        }
-        if (email && String(email).trim().toLowerCase() !== userEmail) {
-          return res.status(403).json({ error: "Unauthorized: You can only fetch your own registrations" });
-        }
-      }
-
       let registrations = [];
 
       if (event_id) {
@@ -333,12 +320,13 @@ router.get(
         registrations: formattedRegistrations,
         count: formattedRegistrations.length,
       });
-    } catch (error) {
-      console.error("Error fetching registrations:", error);
-      return res.status(500).json({
-        error: "Could not load registrations. Please try again.",
-      });
     }
+  } catch (error) {
+    console.error("Error fetching registrations:", error);
+    return res.status(500).json({
+      error: "Could not load registrations. Please try again.",
+    });
+  }
   }
 );
 

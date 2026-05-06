@@ -58,7 +58,14 @@ export const csrfProtection = (req, res, next) => {
 
   // Skip CSRF for certain public endpoints that don't require auth
   const publicEndpoints = ["/api/contact", "/api/register"];
-  if (publicEndpoints.some((ep) => req.path.startsWith(ep))) {
+  const publicEndpointPatterns = [
+    /^\/api\/events\/[^/]+\/attendance$/,
+    /^\/api\/events\/[^/]+\/teammate-attendance$/,
+  ];
+  if (
+    publicEndpoints.some((ep) => req.path.startsWith(ep)) ||
+    publicEndpointPatterns.some((re) => re.test(req.path))
+  ) {
     return next();
   }
 
