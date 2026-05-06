@@ -820,6 +820,43 @@ router.post("/register", async (req, res) => {
       { event_id: normalizedEventId }
     );
 
+    // Send notifications (Non-blocking)
+    const registrationEmail = effectiveParticipantEmail;
+    if (registrationEmail && registrationEmail !== "unknown@example.com") {
+      (async () => {
+        try {
+          const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
+          const eventTitle = event.title || "Event";
+          
+          // 1. Mobile Push
+          await sendOneSignalToEmail(registrationEmail, {
+            title: "Registration Confirmed 🎟️",
+            body: `You're all set for ${eventTitle}! View your ticket in the app.`,
+            actionUrl: `/event/${normalizedEventId}`,
+            data: {
+              eventId: normalizedEventId,
+              type: "registration_confirmed"
+            }
+          });
+
+          // 2. In-app Notification
+          await insert("notifications", [
+            {
+              user_email: registrationEmail.toLowerCase(),
+              title: "Event Registered",
+              message: `You have successfully registered for "${eventTitle}".`,
+              type: "registration",
+              event_id: normalizedEventId,
+              event_title: eventTitle,
+              action_url: `/event/${normalizedEventId}`,
+            },
+          ]);
+        } catch (notifError) {
+          console.warn("[Notification] Registration notification failed:", notifError.message);
+        }
+      })();
+    }
+
     return res.status(201).json({
       message: "Registration successful",
       registration: {
