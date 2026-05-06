@@ -709,6 +709,20 @@ router.post("/register", async (req, res) => {
       custom_field_responses: req.body.custom_field_responses || null,
     });
 
+    // Initialize attendance status as 'pending'
+    await insert("attendance_status", [
+      {
+        registration_id,
+        event_id: normalizedEventId,
+        status: "pending",
+        marked_at: new Date().toISOString(),
+        marked_by: "system_registration",
+      },
+    ]).catch((err) => {
+      console.warn("Failed to initialize attendance status:", err.message);
+      // Non-blocking for registration flow
+    });
+
     console.log('✅ Registration saved:', registration);
 
     // ===== AUTO-CREATE USER RECORDS FOR TEAMMATES (NEW) =====
