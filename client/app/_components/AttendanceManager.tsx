@@ -968,54 +968,68 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                       </tr>
                       {isExpanded && (
                         <tr className="bg-gray-50">
-                          <td colSpan={4} className="px-6 py-5">
-                            <div className="pl-10">
-                              <div className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-3">
-                                Teammates ({otherTeammates.length})
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                {otherTeammates.map((tm, idx) => {
-                                  const tmReg = String(tm.registerNumber || "").trim();
-                                  const tmStatusEntry = participant.teammateStatuses?.[tmReg];
-                                  const tmStatus: "attended" | "absent" =
-                                    tmStatusEntry?.status === "attended" ? "attended" : "absent";
-                                  return (
-                                    <div key={`${participant.id}-tm-${idx}`} className="flex items-center gap-3 text-base text-gray-800">
-                                      <span className="text-gray-500">{idx + 1}.</span>
-                                      <span className="min-w-[110px]">{tmReg || "N/A"}</span>
-                                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                        tmStatus === "attended"
-                                          ? "bg-green-100 text-green-800"
-                                          : "bg-red-100 text-red-800"
-                                      }`}>
-                                        {tmStatus}
-                                      </span>
-                                      <div className="ml-auto flex items-center gap-2">
-                                        {tmStatus !== "attended" && tmReg && (
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); markTeammateAttendance(participant.id, participant.registrationId, tmReg, "attended"); }}
-                                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
-                                          >
-                                            Mark Present
-                                          </button>
-                                        )}
-                                        {tmStatus !== "absent" && tmReg && (
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); markTeammateAttendance(participant.id, participant.registrationId, tmReg, "absent"); }}
-                                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
-                                          >
-                                            Mark Absent
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                          <td colSpan={4} className="px-6 pt-5 pb-2">
+                            <div className="pl-10 text-sm uppercase tracking-wide text-gray-500 font-semibold">
+                              Teammates ({otherTeammates.length})
                             </div>
                           </td>
                         </tr>
                       )}
+                      {isExpanded && otherTeammates.map((tm, idx) => {
+                        const tmReg = String(tm.registerNumber || "").trim();
+                        const tmStatusEntry = participant.teammateStatuses?.[tmReg];
+                        const tmStatus: "attended" | "absent" =
+                          tmStatusEntry?.status === "attended" ? "attended" : "absent";
+                        return (
+                          <tr
+                            key={`${participant.id}-tm-${idx}`}
+                            className="bg-gray-50"
+                            style={idx === 0 ? { borderTopWidth: 0 } : undefined}
+                          >
+                            <td className="px-6 py-3 whitespace-nowrap">
+                              <div className="pl-10 text-base text-gray-800">
+                                <span className="text-gray-500 mr-3">{idx + 1}.</span>
+                                {tmReg || "N/A"}
+                              </div>
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">
+                              {participant.teamName || ""}
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                tmStatus === "attended"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}>
+                                {tmStatus}
+                              </span>
+                              {tmStatusEntry?.marked_at && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {new Date(tmStatusEntry.marked_at).toLocaleString()}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap text-sm space-x-2">
+                              {tmStatus !== "attended" && tmReg && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); markTeammateAttendance(participant.id, participant.registrationId, tmReg, "attended"); }}
+                                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                >
+                                  Mark Present
+                                </button>
+                              )}
+                              {tmStatus !== "absent" && tmReg && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); markTeammateAttendance(participant.id, participant.registrationId, tmReg, "absent"); }}
+                                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                >
+                                  Mark Absent
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </React.Fragment>
                   );
                 })}
