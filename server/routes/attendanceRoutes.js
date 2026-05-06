@@ -192,6 +192,36 @@ router.post(
         }
       }
 
+      // 1b. Try Gated URL parsing (e.g., https://gated.withsocio.com/verify?id=[visitorId])
+      if (!qrData && typeof qrCodeData === "string" && qrCodeData.includes("gated.withsocio.com/verify")) {
+        try {
+          const url = new URL(qrCodeData);
+          const visitorId = url.searchParams.get("id");
+          if (visitorId) {
+            isSimpleQR = true;
+            qrData = {
+              identifier: visitorId,
+              isGatedId: true,
+              eventId: eventId,
+            };
+          }
+        } catch (e) {
+          console.warn("[Scanner] Failed to parse Gated URL:", qrCodeData);
+        }
+      }
+
+      // 1c. Try Simple Slash parsing (e.g., [RegisterNumber]/[EventID])
+      if (!qrData && typeof qrCodeData === "string" && qrCodeData.includes("/")) {
+        const parts = qrCodeData.split("/");
+        if (parts.length === 2 && /^\d+$/.test(parts[0])) {
+           isSimpleQR = true;
+           qrData = {
+             identifier: parts[0], // registerNumber
+             eventId: parts[1] || eventId,
+           };
+        }
+      }
+
       // 2. Try JSON parsing (Signed QR)
       if (!qrData) {
         const parsed = parseQRCodeData(qrCodeData);
@@ -309,6 +339,14 @@ router.post(
                 normalizedId
             )
               return true;
+            
+            // Check Gated Visitor ID if applicable
+            if (qrData.isGatedId) {
+              try {
+                const qdata = typeof reg.qr_code_data === 'string' ? JSON.parse(reg.qr_code_data) : reg.qr_code_data;
+                if (qdata?.gated_visitor_id === qrData.identifier) return true;
+              } catch (e) {}
+            }
 
             if (reg.teammates) {
               try {
