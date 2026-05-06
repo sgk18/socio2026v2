@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import ExcelJS from "exceljs";
 import { useAuth } from "@/context/AuthContext";
 import { QRScanner } from "./QRScanner";
-import supabase from "@/lib/supabaseClient";
 
 interface Participant {
   id: string;
@@ -221,8 +220,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const { userData, session } = useAuth();
 
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -234,17 +231,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   const [periods, setPeriods] = useState<string[]>([""]);
   const [periodErrors, setPeriodErrors] = useState<Record<number, string>>({});
   const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showExportMenu]);
 
   useEffect(() => {
     fetchParticipants();
@@ -347,88 +333,24 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     }
   };
 
-  const buildAttendanceExportData = async () => {
-    const periodSlots: { label: string; startMin: number; endMin: number }[] = [
-      { label: "Period07_45AM", startMin: 7 * 60 + 45,  endMin: 8 * 60 + 45 },
-      { label: "Period08_45AM", startMin: 8 * 60 + 45,  endMin: 9 * 60 + 45 },
-      { label: "Period09_45AM", startMin: 9 * 60 + 45,  endMin: 10 * 60 + 45 },
-      { label: "Period10_45AM", startMin: 10 * 60 + 45, endMin: 11 * 60 + 45 },
-      { label: "Period11_45AM", startMin: 11 * 60 + 45, endMin: 12 * 60 + 45 },
-      { label: "Period12_45PM", startMin: 12 * 60 + 45, endMin: 13 * 60 + 45 },
-      { label: "Period01_45PM", startMin: 13 * 60 + 45, endMin: 14 * 60 + 45 },
-      { label: "Period02_45PM", startMin: 14 * 60 + 45, endMin: 15 * 60 + 45 },
-      { label: "Period03_45PM", startMin: 15 * 60 + 45, endMin: 16 * 60 + 45 },
-      { label: "Period04_45PM", startMin: 16 * 60 + 45, endMin: 17 * 60 + 45 },
-      { label: "Period05_45PM", startMin: 17 * 60 + 45, endMin: 18 * 60 + 45 },
-    ];
-    const periodColumns = periodSlots.map((s) => s.label);
-    const headers = ["Date", "Name", "Register Number", "Class", ...periodColumns];
+  const exportAttendance = () => {
+    const csvContent = [
+      ["Name", "Email", "Register Number", "Team Name", "Status", "Attended At"].join(","),
+      ...participants.map(p => [
+        p.name,
+        p.email,
+        p.registerNumber || "",
+        p.teamName || "",
+        p.status,
+        p.attendedAt ? new Date(p.attendedAt).toLocaleString() : "",
+      ].join(","))
+    ].join("\n");
 
-    const parseTimeToMinutes = (raw: unknown): number | null => {
-      if (raw == null) return null;
-      const s = String(raw).trim();
-      if (!s) return null;
-      const m = s.match(/^(\d{1,2}):(\d{2})/);
-      if (!m) return null;
-      const hh = parseInt(m[1], 10);
-      const mm = parseInt(m[2], 10);
-      if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-      return hh * 60 + mm;
-    };
-
-    let eventStartMin: number | null = null;
-    let eventEndMin: number | null = null;
-    let eventDateFormatted = "";
-    try {
-      const { data: ev } = await supabase
-        .from("events")
-        .select("event_date, event_time, end_time")
-        .eq("event_id", eventId)
-        .maybeSingle();
-      if (ev) {
-        eventStartMin = parseTimeToMinutes((ev as any).event_time);
-        eventEndMin = parseTimeToMinutes((ev as any).end_time);
-        const evDate = (ev as any).event_date as string | null;
-        if (evDate) {
-          const m = evDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
-          if (m) eventDateFormatted = `${m[3]}/${m[2]}/${m[1]}`;
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch event timing for export:", err);
-    }
-
-    const dateForRow = eventDateFormatted || (() => {
-      const t = new Date();
-      return `${String(t.getDate()).padStart(2, "0")}/${String(t.getMonth() + 1).padStart(2, "0")}/${t.getFullYear()}`;
-    })();
-
-    const matchedSet = new Set<string>(
-      eventStartMin != null && eventEndMin != null && eventEndMin > eventStartMin
-        ? periodSlots
-            .filter((s) => s.startMin < eventEndMin! && s.endMin > eventStartMin!)
-            .map((s) => s.label)
-        : []
-    );
-
-    const attendedParticipants = participants.filter((p) => p.status === "attended");
-
-    const dataRows = attendedParticipants.map((p) => [
-      dateForRow,
-      p.name || "",
-      p.registerNumber || "",
-      "",
-      ...periodColumns.map((label) => (matchedSet.has(label) ? label : "")),
-    ]);
-
-    return { headers, periodColumns, dataRows };
-  };
-
-  const triggerDownload = (blob: Blob, filename: string) => {
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_${eventTitle}_${todayLocalISO()}.csv`;
+    a.download = `attendance_${eventTitle}_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -531,14 +453,18 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Claims");
 
-    const present = participants.filter((p) => p.status === "attended");
+    const present = participants
+      .filter((p) => p.status === "attended" && /@[^.]+\.christuniversity\.in$/i.test(p.email))
+      .sort((a, b) =>
+        (a.registerNumber || "").localeCompare(b.registerNumber || "", undefined, { numeric: true })
+      );
 
     const sortedTimes = [...periods].map((s) => s.trim()).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const periodCols = sortedTimes.map((t) => toPeriodColumnName(t));
 
-    const headers = ["Date", "Name", "Register Number", "Class", ...periodCols];
+    const headers = ["SI No", "Register Number", "Name", "Class", "Date", ...periodCols];
     const totalCols = headers.length;
-    const firstPeriodCol = 5;
+    const firstPeriodCol = 6;
     const lastPeriodCol = totalCols;
 
     const earliest = sortedTimes[0];
@@ -580,17 +506,26 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     headerRow.height = 24;
     ws.views = [{ state: "frozen", ySplit: 2 }];
 
-    const colWidths: number[] = headers.map((h) => Math.max(14, Math.min(40, h.length + 2)));
-
     const dateStr = formatDDMMYYYY(claimsDate);
-    present.forEach((p) => {
-      const row: (string)[] = [
-        dateStr,
-        p.name,
-        p.registerNumber || "",
-        deriveClassFromEmail(p.email),
-        ...periodCols,
-      ];
+    const dataRows: (string | number)[][] = present.map((p, idx) => [
+      idx + 1,
+      p.registerNumber || "",
+      p.name,
+      deriveClassFromEmail(p.email),
+      dateStr,
+      ...periodCols,
+    ]);
+
+    const colWidths: number[] = headers.map((h, i) => {
+      let max = h.length;
+      for (const row of dataRows) {
+        const len = String(row[i] ?? "").length;
+        if (len > max) max = len;
+      }
+      return Math.max(4, Math.min(40, max + 2));
+    });
+
+    dataRows.forEach((row) => {
       const r = ws.addRow(row);
       r.eachCell((cell) => {
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
@@ -605,7 +540,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       let neededLines = 1;
       row.forEach((val, i) => {
         const len = String(val ?? "").length;
-        const w = colWidths[i] || 14;
+        const w = colWidths[i] || 4;
         const lines = Math.max(1, Math.ceil(len / Math.max(1, w - 2)));
         if (lines > neededLines) neededLines = lines;
       });
