@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import ExcelJS from "exceljs";
 import { useAuth } from "@/context/AuthContext";
 import { QRScanner } from "./QRScanner";
 import supabase from "@/lib/supabaseClient";
@@ -20,6 +21,196 @@ interface AttendanceManagerProps {
   eventTitle: string;
 }
 
+const BRAND_BLUE = "#154CB3";
+const BRAND_NAVY = "#063168";
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+const todayLocalISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const formatDDMMYYYY = (isoDate: string) => {
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+};
+
+const toAmPmLabel = (hhmm: string) => {
+  const [hStr, mStr] = hhmm.split(":");
+  const h = Number(hStr);
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${pad2(h)}:${mStr}${ampm}`;
+};
+
+const toPeriodColumnName = (hhmm: string) => {
+  const [hStr, mStr] = hhmm.split(":");
+  const h = Number(hStr);
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `Period${pad2(h)}_${mStr}${ampm}`;
+};
+
+const deriveClassFromEmail = (email: string): string => {
+  const m = email.toLowerCase().match(/@([^.]+)\.christuniversity\.in$/);
+  return m ? m[1].toUpperCase() : "";
+};
+
+interface TimePickerProps {
+  initial: string;
+  onOk: (hhmm: string) => void;
+  onCancel: () => void;
+}
+
+const TimePicker: React.FC<TimePickerProps> = ({ initial, onOk, onCancel }) => {
+  const initH = initial ? Number(initial.split(":")[0]) : 0;
+  const initM = initial ? Number(initial.split(":")[1]) : 0;
+  const [hour, setHour] = useState<number>(isNaN(initH) ? 0 : initH);
+  const [minute, setMinute] = useState<number>(isNaN(initM) ? 0 : initM);
+
+  const ampm = hour >= 12 ? "PM" : "AM";
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+  const handleHourChange = (v: string) => {
+    if (v === "") { setHour(0); return; }
+    const n = parseInt(v, 10);
+    if (!isNaN(n)) setHour(clamp(n, 0, 23));
+  };
+  const handleMinuteChange = (v: string) => {
+    if (v === "") { setMinute(0); return; }
+    const n = parseInt(v, 10);
+    if (!isNaN(n)) setMinute(clamp(n, 0, 59));
+  };
+
+  const inputBase: React.CSSProperties = {
+    width: "64px",
+    height: "44px",
+    textAlign: "center",
+    fontSize: "20px",
+    fontVariantNumeric: "tabular-nums",
+    borderRadius: "8px",
+    outline: "none",
+  };
+
+  const chip30Active = minute === 30;
+  const chip45Active = minute === 45;
+
+  return (
+    <div className="mt-2 border border-gray-200 rounded-lg bg-white p-4 shadow-sm">
+      <div className="text-[10px] font-semibold tracking-wider text-gray-500 mb-2">
+        ENTER TIME (24H)
+      </div>
+      <div className="flex items-center justify-center gap-2">
+        <input
+          type="number"
+          min={0}
+          max={23}
+          value={pad2(hour)}
+          onChange={(e) => handleHourChange(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          className="no-spin"
+          style={{ ...inputBase, border: `2px solid ${BRAND_BLUE}`, background: "#fff" }}
+        />
+        <span className="text-2xl font-semibold text-gray-700">:</span>
+        <input
+          type="number"
+          min={0}
+          max={59}
+          value={pad2(minute)}
+          onChange={(e) => handleMinuteChange(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          className="no-spin minute-input"
+          style={inputBase}
+        />
+        <div
+          aria-readonly
+          className="select-none"
+          style={{
+            ...inputBase,
+            width: "56px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f3f4f6",
+            color: "#374151",
+            fontSize: "14px",
+            fontWeight: 600,
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          {ampm}
+        </div>
+      </div>
+
+      <div className="mt-4 text-[10px] font-semibold tracking-wider text-gray-500 mb-2">
+        POPULAR TIMINGS
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setMinute(30)}
+          className="px-3 py-1.5 text-sm rounded-md border transition-colors"
+          style={
+            chip30Active
+              ? { background: BRAND_BLUE, color: "#fff", borderColor: BRAND_BLUE }
+              : { background: "#fff", color: BRAND_BLUE, borderColor: BRAND_BLUE }
+          }
+        >
+          {pad2(hour)}:30
+        </button>
+        <button
+          type="button"
+          onClick={() => setMinute(45)}
+          className="px-3 py-1.5 text-sm rounded-md border transition-colors"
+          style={
+            chip45Active
+              ? { background: BRAND_BLUE, color: "#fff", borderColor: BRAND_BLUE }
+              : { background: "#fff", color: BRAND_BLUE, borderColor: BRAND_BLUE }
+          }
+        >
+          {pad2(hour)}:45
+        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-sm rounded-md text-gray-700 hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onOk(`${pad2(hour)}:${pad2(minute)}`)}
+            className="px-4 py-1.5 text-sm rounded-md text-white"
+            style={{ background: BRAND_BLUE }}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .no-spin::-webkit-outer-spin-button,
+        .no-spin::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .no-spin {
+          -moz-appearance: textfield;
+        }
+        .minute-input {
+          background: #f3f4f6;
+          border: 1px solid #e5e7eb;
+        }
+        .minute-input:focus {
+          background: #ffffff;
+          border: 2px solid ${BRAND_BLUE};
+        }
+      `}</style>
+    </div>
+  );
+};
+
 export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   eventId,
   eventTitle,
@@ -34,6 +225,16 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const { userData, session } = useAuth();
 
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const [showClaimsModal, setShowClaimsModal] = useState(false);
+  const [claimsDate, setClaimsDate] = useState<string>("");
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [periods, setPeriods] = useState<string[]>([""]);
+  const [periodErrors, setPeriodErrors] = useState<Record<number, string>>({});
+  const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
+
   useEffect(() => {
     if (!showExportMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -47,15 +248,27 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
 
   useEffect(() => {
     fetchParticipants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportMenuOpen]);
 
   const fetchParticipants = async () => {
     if (!session?.access_token) return;
-    
+
     setLoading(true);
     setError(null);
     const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
-    
+
     try {
       const response = await fetch(
         `${API_URL}/api/events/${eventId}/participants`,
@@ -71,19 +284,18 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       }
 
       const data = await response.json();
-      
-      // Map API response to Participant interface
+
       const mappedParticipants = data.participants?.map((p: any) => ({
         id: p.id,
         name: p.individual_name || p.team_leader_name || 'Unknown',
         email: p.individual_email || p.team_leader_email || '',
         registerNumber: p.individual_register_number || p.team_leader_register_number || '',
         teamName: p.registration_type === 'team' ? p.team_name : undefined,
-        status: p.attendance_status === 'attended' ? 'attended' : 
+        status: p.attendance_status === 'attended' ? 'attended' :
                p.attendance_status === 'absent' ? 'absent' : 'registered',
         attendedAt: p.marked_at || undefined
       })) || [];
-      
+
       setParticipants(mappedParticipants);
     } catch (err: any) {
       setError(err.message || "Failed to load participants");
@@ -119,7 +331,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
         throw new Error("Failed to mark attendance");
       }
 
-      // Update local state
       setParticipants(prev =>
         prev.map(p =>
           p.id === participantId
@@ -133,7 +344,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       );
     } catch (err: any) {
       console.error("Error marking attendance:", err);
-      // You might want to show a toast notification here
     }
   };
 
@@ -218,72 +428,148 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = `attendance_${eventTitle}_${todayLocalISO()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
 
-  const baseFilename = () =>
-    `attendance_${eventTitle}_${new Date().toISOString().split("T")[0]}`;
+  const openClaimsModal = () => {
+    setClaimsDate("");
+    setDateError(null);
+    setPeriods([""]);
+    setPeriodErrors({});
+    setPickerOpenIdx(null);
+    setShowClaimsModal(true);
+  };
 
-  const exportAsExcel = async () => {
-    setShowExportMenu(false);
-    const { headers, dataRows } = await buildAttendanceExportData();
+  const closeClaimsModal = () => {
+    setShowClaimsModal(false);
+    setPickerOpenIdx(null);
+  };
 
-    const ExcelJS = (await import("exceljs")).default;
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Attendance");
+  const anyPeriodEmpty = periods.some((p) => p.trim() === "");
 
+  const sortedOrder = useMemo(() => {
+    const idxs = periods.map((_, i) => i);
+    return idxs.sort((a, b) => {
+      const va = periods[a].trim();
+      const vb = periods[b].trim();
+      if (va === "" && vb === "") return a - b;
+      if (va === "") return 1;
+      if (vb === "") return -1;
+      if (va === vb) return a - b;
+      return va < vb ? -1 : 1;
+    });
+  }, [periods]);
+
+  const addPeriod = () => {
+    if (anyPeriodEmpty) return;
+    setPeriods((prev) => [...prev, ""]);
+  };
+
+  const removePeriod = (idx: number) => {
+    if (periods.length <= 1) return;
+    setPeriods((prev) => prev.filter((_, i) => i !== idx));
+    setPeriodErrors((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = Number(k);
+        if (ki === idx) return;
+        next[ki > idx ? ki - 1 : ki] = v;
+      });
+      return next;
+    });
+    if (pickerOpenIdx !== null) {
+      if (pickerOpenIdx === idx) setPickerOpenIdx(null);
+      else if (pickerOpenIdx > idx) setPickerOpenIdx(pickerOpenIdx - 1);
+    }
+  };
+
+  const setPeriodValue = (idx: number, value: string) => {
+    setPeriods((prev) => prev.map((p, i) => (i === idx ? value : p)));
+    setPeriodErrors((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  };
+
+  const validateAndGenerate = async () => {
+    let ok = true;
+    if (!claimsDate) {
+      setDateError("Date is required");
+      ok = false;
+    } else {
+      setDateError(null);
+    }
+
+    const errs: Record<number, string> = {};
+    const firstSeen: Record<string, number> = {};
+    periods.forEach((p, i) => {
+      const v = p.trim();
+      if (v === "") {
+        errs[i] = "Time is required";
+        ok = false;
+      } else if (firstSeen[v] !== undefined) {
+        errs[i] = `Duplicate of field ${firstSeen[v] + 1}. Please modify.`;
+        ok = false;
+      } else {
+        firstSeen[v] = i;
+      }
+    });
+    setPeriodErrors(errs);
+
+    if (!ok) return;
+
+    await generateClaimsXlsx();
+    closeClaimsModal();
+  };
+
+  const generateClaimsXlsx = async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Claims");
+
+    const present = participants.filter((p) => p.status === "attended");
+
+    const sortedTimes = [...periods].map((s) => s.trim()).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const periodCols = sortedTimes.map((t) => toPeriodColumnName(t));
+
+    const headers = ["Date", "Name", "Register Number", "Class", ...periodCols];
     const totalCols = headers.length;
     const firstPeriodCol = 5;
     const lastPeriodCol = totalCols;
 
-    const bannerRow = worksheet.addRow(
-      Array.from({ length: totalCols }, (_, i) =>
-        i === firstPeriodCol - 1 ? "Hours missed(please specify - Period9_45)" : ""
-      )
-    );
-    bannerRow.height = 26;
-    const navyBorder = {
-      top: { style: "thin" as const, color: { argb: "FF1F2937" } },
-      left: { style: "thin" as const, color: { argb: "FF1F2937" } },
-      bottom: { style: "thin" as const, color: { argb: "FF1F2937" } },
-      right: { style: "thin" as const, color: { argb: "FF1F2937" } },
-    };
-    worksheet.mergeCells(1, 1, 1, firstPeriodCol - 1);
-    const eventCell = worksheet.getCell(1, 1);
-    eventCell.value = eventTitle || "";
-    eventCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
-    eventCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-    eventCell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF063168" },
-    };
-    eventCell.border = navyBorder;
-    worksheet.mergeCells(1, firstPeriodCol, 1, lastPeriodCol);
-    const bannerCell = worksheet.getCell(1, firstPeriodCol);
-    bannerCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
-    bannerCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-    bannerCell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF063168" },
-    };
-    bannerCell.border = navyBorder;
+    const earliest = sortedTimes[0];
+    const latest = sortedTimes[sortedTimes.length - 1];
+    const bannerLeft = eventTitle;
+    const bannerRight = `Hours missed (${toAmPmLabel(earliest)} - ${toAmPmLabel(latest)})`;
 
-    const headerRow = worksheet.addRow(headers);
-    headerRow.height = 22;
+    ws.addRow(new Array(totalCols).fill(""));
+    const bannerRowNum = 1;
+
+    if (firstPeriodCol - 1 >= 1) {
+      ws.mergeCells(bannerRowNum, 1, bannerRowNum, firstPeriodCol - 1);
+      const leftCell = ws.getCell(bannerRowNum, 1);
+      leftCell.value = bannerLeft;
+      leftCell.alignment = { vertical: "middle", horizontal: "center" };
+      leftCell.font = { color: { argb: "FFFFFFFF" }, bold: true };
+      leftCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF063168" } };
+    }
+    ws.mergeCells(bannerRowNum, firstPeriodCol, bannerRowNum, lastPeriodCol);
+    const rightCell = ws.getCell(bannerRowNum, firstPeriodCol);
+    rightCell.value = bannerRight;
+    rightCell.alignment = { vertical: "middle", horizontal: "center" };
+    rightCell.font = { color: { argb: "FFFFFFFF" }, bold: true };
+    rightCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF063168" } };
+    ws.getRow(bannerRowNum).height = 28;
+
+    const headerRow = ws.addRow(headers);
     headerRow.eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF154CB3" },
-      };
+      cell.font = { color: { argb: "FFFFFFFF" }, bold: true };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF154CB3" } };
+      cell.alignment = { vertical: "middle", horizontal: "left" };
       cell.border = {
         top: { style: "thin", color: { argb: "FF1F2937" } },
         left: { style: "thin", color: { argb: "FF1F2937" } },
@@ -291,67 +577,62 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
         right: { style: "thin", color: { argb: "FF1F2937" } },
       };
     });
+    headerRow.height = 24;
+    ws.views = [{ state: "frozen", ySplit: 2 }];
 
-    dataRows.forEach((rowValues) => {
-      const row = worksheet.addRow(rowValues);
-      row.eachCell({ includeEmpty: true }, (cell) => {
+    const colWidths: number[] = headers.map((h) => Math.max(14, Math.min(40, h.length + 2)));
+
+    const dateStr = formatDDMMYYYY(claimsDate);
+    present.forEach((p) => {
+      const row: (string)[] = [
+        dateStr,
+        p.name,
+        p.registerNumber || "",
+        deriveClassFromEmail(p.email),
+        ...periodCols,
+      ];
+      const r = ws.addRow(row);
+      r.eachCell((cell) => {
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
         cell.border = {
-          top: { style: "thin", color: { argb: "FFD1D5DB" } },
-          left: { style: "thin", color: { argb: "FFD1D5DB" } },
-          bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
-          right: { style: "thin", color: { argb: "FFD1D5DB" } },
+          top: { style: "thin", color: { argb: "FFE5E7EB" } },
+          left: { style: "thin", color: { argb: "FFE5E7EB" } },
+          bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+          right: { style: "thin", color: { argb: "FFE5E7EB" } },
         };
       });
-    });
 
-    headers.forEach((header, idx) => {
-      const col = worksheet.getColumn(idx + 1);
-      let max = header.length;
-      for (let r = 2; r <= worksheet.rowCount; r++) {
-        const cell = worksheet.getCell(r, idx + 1);
-        const value = cell.value == null ? "" : String(cell.value);
-        if (value.length > max) max = value.length;
+      let neededLines = 1;
+      row.forEach((val, i) => {
+        const len = String(val ?? "").length;
+        const w = colWidths[i] || 14;
+        const lines = Math.max(1, Math.ceil(len / Math.max(1, w - 2)));
+        if (lines > neededLines) neededLines = lines;
+      });
+      if (neededLines > 1) {
+        r.height = Math.min(120, 18 + (neededLines - 1) * 15);
       }
-      col.width = Math.min(Math.max(max + 4, 14), 40);
     });
 
-    worksheet.views = [{ state: "frozen", ySplit: 2 }];
+    for (let c = 1; c <= totalCols; c++) {
+      ws.getColumn(c).width = colWidths[c - 1];
+    }
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    triggerDownload(blob, `${baseFilename()}.xlsx`);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `claims_${eventTitle.replace(/[/\\?%*:|"<>]/g, "-")}_${claimsDate}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
-  const exportAsCsv = async () => {
-    setShowExportMenu(false);
-    const { headers, dataRows } = await buildAttendanceExportData();
-
-    const escapeCsv = (value: unknown) => {
-      const s = value == null ? "" : String(value);
-      const needsQuoting = /[",\n\r]/.test(s);
-      const escaped = s.replace(/"/g, '""');
-      return needsQuoting ? `"${escaped}"` : escaped;
-    };
-
-    const lines = [
-      headers.map(escapeCsv).join(","),
-      ...dataRows.map((row) => row.map(escapeCsv).join(",")),
-    ];
-    const csv = "﻿" + lines.join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    triggerDownload(blob, `${baseFilename()}.csv`);
-  };
-
-  const exportAsGoogleSheet = async () => {
-    await exportAsExcel();
-    window.open("https://docs.google.com/spreadsheets/u/0/", "_blank", "noopener,noreferrer");
-  };
-
-  const handleQRScanSuccess = (result: any) => {
-    // Refresh participants list to show updated attendance
+  const handleQRScanSuccess = (_result: any) => {
     fetchParticipants();
   };
 
@@ -370,6 +651,8 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     pending: participants.filter(p => p.status === "registered").length,
   };
 
+  const presentCount = attendanceStats.attended;
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -381,7 +664,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 [&_button:not(:disabled)]:cursor-pointer">
         <div className="flex items-center">
           <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -400,7 +683,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 [&_button:not(:disabled)]:cursor-pointer">
       {/* Header with stats */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -419,52 +702,39 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
             </button>
             <div className="relative" ref={exportMenuRef}>
               <button
-                onClick={() => setShowExportMenu((v) => !v)}
+                onClick={() => setExportMenuOpen((v) => !v)}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
                 aria-haspopup="menu"
-                aria-expanded={showExportMenu}
+                aria-expanded={exportMenuOpen}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Export
-                <svg
-                  className={`w-4 h-4 transition-transform ${showExportMenu ? "rotate-180" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              {showExportMenu && (
+              {exportMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden"
+                  className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden"
                 >
                   <button
-                    onClick={exportAsGoogleSheet}
                     role="menuitem"
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2"
+                    onClick={() => { setExportMenuOpen(false); exportAttendance(); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                   >
-                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                    Google Sheet
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-600" aria-hidden />
+                    Attendance
                   </button>
                   <button
-                    onClick={exportAsExcel}
                     role="menuitem"
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
+                    onClick={() => { setExportMenuOpen(false); openClaimsModal(); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                   >
-                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-700" />
-                    Excel (.xlsx)
-                  </button>
-                  <button
-                    onClick={exportAsCsv}
-                    role="menuitem"
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
-                  >
-                    <span className="inline-block w-2 h-2 rounded-full bg-gray-500" />
-                    CSV (.csv)
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-800" aria-hidden />
+                    Claims
                   </button>
                 </div>
               )}
@@ -609,7 +879,127 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
           onClose={() => setShowQRScanner(false)}
         />
       )}
+
+      {/* Claims Modal */}
+      {showClaimsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md p-4">
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold" style={{ color: BRAND_NAVY }}>
+                Claim sheet
+              </h3>
+            </div>
+            <div className="px-6 py-4 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={claimsDate}
+                  onChange={(e) => { setClaimsDate(e.target.value); if (e.target.value) setDateError(null); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#154CB3] focus:border-transparent"
+                />
+                {dateError && (
+                  <div className="mt-1 text-xs text-red-600">{dateError}</div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Time periods <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  {sortedOrder.map((idx) => {
+                    const value = periods[idx];
+                    const isOpen = pickerOpenIdx === idx;
+                    const isOnlyRow = periods.length === 1;
+                    const err = periodErrors[idx];
+                    return (
+                      <div key={idx}>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPickerOpenIdx(isOpen ? null : idx)}
+                            className="flex-1 flex items-center justify-between px-3 py-2 border rounded-md text-left bg-white hover:bg-gray-50"
+                            style={{ borderColor: err ? "#dc2626" : "#d1d5db" }}
+                          >
+                            <span className={value ? "text-gray-900" : "text-gray-400"}>
+                              {value || "Select time"}
+                            </span>
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePeriod(idx)}
+                            disabled={isOnlyRow}
+                            className={`w-8 h-8 flex items-center justify-center rounded-md ${
+                              isOnlyRow
+                                ? "text-red-300 cursor-not-allowed"
+                                : "text-red-600 hover:bg-red-50"
+                            }`}
+                            aria-label="Remove period"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        {err && (
+                          <div className="mt-1 text-xs text-red-600">{err}</div>
+                        )}
+                        {isOpen && (
+                          <TimePicker
+                            initial={value}
+                            onCancel={() => setPickerOpenIdx(null)}
+                            onOk={(hhmm) => { setPeriodValue(idx, hhmm); setPickerOpenIdx(null); }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={addPeriod}
+                  disabled={anyPeriodEmpty}
+                  title={anyPeriodEmpty ? "Fill the current time field to add next" : undefined}
+                  className={`mt-3 inline-flex items-center px-3 py-1.5 text-sm font-medium border rounded-md transition-colors ${
+                    anyPeriodEmpty
+                      ? "text-gray-400 border-gray-200 bg-gray-50 cursor-not-allowed"
+                      : "text-[#154CB3] border-[#154CB3] bg-white hover:bg-[#154CB3]/5"
+                  }`}
+                >
+                  + Add period
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                {presentCount} present participant{presentCount === 1 ? "" : "s"} will be included.
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeClaimsModal}
+                className="px-4 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={validateAndGenerate}
+                className="px-4 py-2 text-sm rounded-md text-white"
+                style={{ background: BRAND_BLUE }}
+              >
+                Generate &amp; Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-

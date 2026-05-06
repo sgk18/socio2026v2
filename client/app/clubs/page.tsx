@@ -94,7 +94,7 @@ const CentresPageContent = () => {
         const { data, error } = await supabase
           .from("clubs")
           .select(
-            "club_id,club_name,subtitle,club_description,club_web_link,slug,club_banner_url,type,category,club_editors,club_registrations"
+            "club_id,club_name,subtitle,club_description,club_web_link,slug,club_banner_url,club_image_url,type,category,club_editors,club_registrations"
           )
           .order("club_name", { ascending: true });
 
@@ -427,7 +427,7 @@ const CentresPageContent = () => {
                         description={centre.club_description ?? "No description provided."}
                         link={centre.club_web_link ?? undefined}
                         slug={centre.slug ?? undefined}
-                        image={centre.club_banner_url ?? undefined}
+                        image={centre.club_image_url ?? undefined}
                         categories={toClubCategories(centre.category)}
                         registrationsOpen={Boolean(centre.club_registrations)}
                         type={

@@ -483,8 +483,14 @@ const DiscoverPageContent = () => {
               {campusCarouselEventsFiltered.length > 0 ? (
                 <FullWidthCarousel images={campusCarouselEventsFiltered} />
               ) : (
-                <div className="text-center py-8 md:py-12 text-gray-500">
-                  No carousel events found for {selectedCampus}.
+                <div className="flex flex-col items-center justify-center mb-8 md:mb-12 rounded-xl bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-100 py-14 px-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-[#154CB3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-base font-semibold text-slate-700">No featured events yet</p>
+                  <p className="text-sm text-slate-400 mt-1">Nothing happening at {selectedCampus} right now — check back soon.</p>
                 </div>
               )}
 
@@ -499,8 +505,11 @@ const DiscoverPageContent = () => {
                   approvalStatuses={approvalStatuses}
                 />
               ) : (
-                <div className="my-8 p-6 bg-gray-50 rounded-lg text-center text-gray-500">
-                  No trending events found for {selectedCampus}.
+                <div className="my-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm text-slate-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  No trending events at {selectedCampus} right now.
                 </div>
               )}
             </>
@@ -550,8 +559,11 @@ const DiscoverPageContent = () => {
                   approvalStatuses={approvalStatuses}
                 />
               ) : (
-                <div className="my-8 p-6 bg-gray-50 rounded-lg text-center text-gray-500">
-                  No upcoming fests found for {selectedCampus}.
+                <div className="my-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm text-slate-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  No upcoming fests at {selectedCampus} right now.
                 </div>
               )}
             </>
@@ -589,8 +601,11 @@ const DiscoverPageContent = () => {
                 approvalStatuses={approvalStatuses}
               />
             ) : (
-                <div className="my-8 p-6 bg-gray-50 rounded-lg text-center text-gray-500">
-                  No upcoming events found for {selectedCampus}.
+                <div className="my-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm text-slate-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  No upcoming events at {selectedCampus} right now.
                 </div>
               )}
           </>

@@ -87,8 +87,10 @@ export default function CateringDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionBookingId, setActionBookingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "reviewed">("pending");
+  const [pendingPage, setPendingPage] = useState(1);
   const [reviewedPage, setReviewedPage] = useState(1);
-  const REVIEWED_PER_PAGE = 10;
+  const PAGE_SIZE = 8;
 
   useEffect(() => {
     if (isLoading) return;
@@ -163,20 +165,23 @@ export default function CateringDashboard() {
   const visibleBookings = vendorFilter === "all"
     ? bookings
     : bookings.filter(b => b.catering_id === vendorFilter);
-  const pendingBookings = visibleBookings.filter(b => b.status === "pending");
+  const pendingBookings  = visibleBookings.filter(b => b.status === "pending");
   const reviewedBookings = visibleBookings.filter(b => b.status !== "pending");
-  
-  // Pagination for reviewed bookings
-  const totalReviewedPages = Math.ceil(reviewedBookings.length / REVIEWED_PER_PAGE);
-  const paginatedReviewedBookings = reviewedBookings.slice(
-    (reviewedPage - 1) * REVIEWED_PER_PAGE,
-    reviewedPage * REVIEWED_PER_PAGE
-  );
-  
-  // Reset to page 1 when vendor filter changes
+
+  const activeItems  = activeTab === "pending" ? pendingBookings  : reviewedBookings;
+  const activePage   = activeTab === "pending" ? pendingPage       : reviewedPage;
+  const totalPages   = Math.max(1, Math.ceil(activeItems.length / PAGE_SIZE));
+  const pagedBookings = activeItems.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+
   useEffect(() => {
+    setPendingPage(1);
     setReviewedPage(1);
   }, [vendorFilter]);
+
+  useEffect(() => {
+    if (activeTab === "pending") setPendingPage(1);
+    else setReviewedPage(1);
+  }, [activeTab]);
 
   function BookingCard({ booking, showActions }: { booking: Booking; showActions: boolean }) {
     const contact = parseContact(booking.contact_details);
@@ -288,95 +293,114 @@ export default function CateringDashboard() {
     );
   }
 
+  const acceptedCount = reviewedBookings.filter(b => b.status === "accepted").length;
+  const declinedCount = reviewedBookings.filter(b => b.status === "declined").length;
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Catering Orders</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {vendors.length === 0
-                ? "Incoming orders for your catering service."
-                : vendors.length === 1
-                ? `Incoming orders for your catering service (${vendors[0].catering_name}).`
-                : `Incoming orders across ${vendors.length} catering services you manage.`}
-            </p>
+    <div className="min-h-screen bg-[#faf8ff]">
+
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#154CB3]/10 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#154CB3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-[#063168]">Catering Orders</h1>
+            </div>
           </div>
-          {vendors.length > 1 && (
-            <div className="flex items-center gap-2">
-              <label htmlFor="vendor-filter" className="text-xs font-medium text-gray-600">
-                Shop:
-              </label>
+          <div className="flex items-center gap-3">
+            {vendors.length > 1 && (
               <select
-                id="vendor-filter"
                 value={vendorFilter}
                 onChange={(e) => setVendorFilter(e.target.value)}
-                className="text-sm rounded-lg border border-gray-300 px-3 py-1.5 bg-white"
+                className="text-sm rounded-lg border border-gray-200 px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#154CB3]"
               >
                 <option value="all">All shops</option>
                 {vendors.map(v => (
                   <option key={v.catering_id} value={v.catering_id}>{v.catering_name}</option>
                 ))}
               </select>
+            )}
+            <button
+              onClick={fetchBookings}
+              disabled={loading}
+              className="px-4 py-2 rounded-lg text-sm font-medium border border-[#154CB3] text-[#154CB3] hover:bg-[#154CB3] hover:text-white transition-all disabled:opacity-50"
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: "Total Orders", value: visibleBookings.length, color: "text-[#063168]" },
+            { label: "Pending", value: pendingBookings.length, color: "text-amber-600" },
+            { label: "Accepted", value: acceptedCount, color: "text-green-600" },
+            { label: "Declined", value: declinedCount, color: "text-red-500" },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4">
+              <p className="text-xs text-slate-500 font-medium mb-1">{s.label}</p>
+              <p className={`text-2xl font-bold ${s.color}`}>{loading ? "—" : s.value}</p>
             </div>
-          )}
+          ))}
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("pending")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === "pending" ? "bg-white text-[#154CB3] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            Pending ({pendingBookings.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("reviewed")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === "reviewed" ? "bg-white text-[#154CB3] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            Reviewed ({reviewedBookings.length})
+          </button>
         </div>
 
         {loading ? (
           <p className="text-gray-500 text-sm">Loading orders…</p>
+        ) : activeItems.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+            <p className="text-gray-400 text-sm">
+              {activeTab === "pending" ? "No pending orders." : "No reviewed orders yet."}
+            </p>
+          </div>
         ) : (
           <>
-            {/* Pending */}
-            <section>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2">
-                Pending <span className="text-gray-400 font-normal">({pendingBookings.length})</span>
-              </h2>
-              {pendingBookings.length === 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
-                  <p className="text-gray-400 text-sm">No pending orders.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingBookings.map(b => (
-                    <BookingCard key={b.booking_id} booking={b} showActions />
-                  ))}
-                </div>
-              )}
-            </section>
+            <div className="space-y-4">
+              {pagedBookings.map(b => (
+                <BookingCard key={b.booking_id} booking={b} showActions={activeTab === "pending"} />
+              ))}
+            </div>
 
-            {/* Reviewed */}
-            {reviewedBookings.length > 0 && (
-              <section>
-                <h2 className="text-sm font-semibold text-gray-700 mb-2">
-                  Reviewed <span className="text-gray-400 font-normal">({reviewedBookings.length})</span>
-                </h2>
-                <div className="space-y-3">
-                  {paginatedReviewedBookings.map(b => (
-                    <BookingCard key={b.booking_id} booking={b} showActions={false} />
-                  ))}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 py-3">
+                <span className="text-xs text-gray-500">Page {activePage} of {totalPages}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={activePage <= 1}
+                    onClick={() => activeTab === "pending" ? setPendingPage(p => p - 1) : setReviewedPage(p => p - 1)}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >← Prev</button>
+                  <button
+                    disabled={activePage >= totalPages}
+                    onClick={() => activeTab === "pending" ? setPendingPage(p => p + 1) : setReviewedPage(p => p + 1)}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >Next →</button>
                 </div>
-                {totalReviewedPages > 1 && (
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => setReviewedPage(p => Math.max(p - 1, 1))}
-                      disabled={reviewedPage === 1}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ← Prev
-                    </button>
-                    <span className="text-sm text-gray-600">
-                      Page {reviewedPage} of {totalReviewedPages}
-                    </span>
-                    <button
-                      onClick={() => setReviewedPage(p => Math.min(p + 1, totalReviewedPages))}
-                      disabled={reviewedPage === totalReviewedPages}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next →
-                    </button>
-                  </div>
-                )}
-              </section>
+              </div>
             )}
           </>
         )}

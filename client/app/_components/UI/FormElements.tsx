@@ -478,6 +478,7 @@ export function FileInput<T extends FieldValues>({
   currentFileUrl,
 }: FileInputProps<T>) {
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { onChange: rhfOnChange, ...restRegisterProps } = register(name, {
@@ -485,6 +486,33 @@ export function FileInput<T extends FieldValues>({
       setFileName(e.target.files?.[0]?.name || null);
     },
   });
+
+  const processFile = (file: File) => {
+    setFileName(file.name);
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const fakeEvent = {
+      target: { files: dt.files, name: name as string },
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+    rhfOnChange(fakeEvent);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  };
 
   const displayFileName =
     fileName ||
@@ -502,10 +530,23 @@ export function FileInput<T extends FieldValues>({
       <label className="block mb-2 text-sm font-medium text-gray-700">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <div className="border border-dashed border-gray-500 rounded-lg p-6 sm:p-8 py-10 sm:py-14 text-center">
-        <p className="text-gray-500 mb-4 text-sm sm:text-base truncate max-w-full px-2">
-          {displayFileName}
-        </p>
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`border border-dashed rounded-lg p-6 sm:p-8 py-10 sm:py-14 text-center transition-colors ${
+          isDragging
+            ? "border-[#154CB3] bg-blue-50"
+            : "border-gray-500 hover:border-gray-400"
+        }`}
+      >
+        {isDragging ? (
+          <p className="text-[#154CB3] font-medium mb-4 text-sm sm:text-base">Drop file here</p>
+        ) : (
+          <p className="text-gray-500 mb-4 text-sm sm:text-base truncate max-w-full px-2">
+            {displayFileName}
+          </p>
+        )}
         {currentFileUrl && !fileName && (
           <a
             href={currentFileUrl}
@@ -532,7 +573,7 @@ export function FileInput<T extends FieldValues>({
           }}
         />
         <label htmlFor={name as string} className={chooseFileButtonClasses}>
-          Choose file
+          {fileName ? "Change file" : "Choose file"}
         </label>
         {fileName && (
           <button

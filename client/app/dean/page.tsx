@@ -203,6 +203,7 @@ function DeanDashboard() {
   }
 
   const campus = (userData as any)?.campus;
+  const school = (userData as any)?.school;
   const pendingItems = queue.filter((q) => deanStatus(q) === "pending");
   const reviewedItems = queue.filter((q) => deanStatus(q) !== "pending");
   const visible = activeTab === "reviewed" ? reviewedItems : pendingItems;
@@ -234,8 +235,10 @@ function DeanDashboard() {
             </div>
             <div>
               <h1 className="text-base font-bold text-[#0f2a6b] leading-none">Dean Approvals</h1>
-              {campus && (
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5 uppercase tracking-wider">{campus}</p>
+              {(campus || school) && (
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5 uppercase tracking-wider">
+                  {[school, campus].filter(Boolean).join(" · ")}
+                </p>
               )}
             </div>
           </div>

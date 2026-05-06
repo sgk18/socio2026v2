@@ -192,16 +192,51 @@ export default function FinanceDashboard() {
     else setReviewedPage(1);
   }, [activeTab]);
 
+  const approvedCount = reviewedItems.filter(i => i.stages.find(s => s.role === "accounts")?.status === "approved").length;
+  const returnedCount = reviewedItems.filter(i => i.stages.find(s => s.role === "accounts")?.status !== "approved").length;
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Accounts Officer Queue</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Review budget estimates and approve or return submissions.
-          </p>
+    <div className="min-h-screen bg-[#faf8ff]">
+
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#154CB3]/10 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#154CB3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <h1 className="text-lg font-bold text-[#063168]">Accounts Queue</h1>
+          </div>
+          <button
+            onClick={fetchQueue}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-[#154CB3] text-[#154CB3] hover:bg-[#154CB3] hover:text-white transition-all disabled:opacity-50"
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: "Total", value: queue.length, color: "text-[#063168]" },
+            { label: "Pending", value: pendingItems.length, color: "text-amber-600" },
+            { label: "Approved", value: approvedCount, color: "text-green-600" },
+            { label: "Returned", value: returnedCount, color: "text-red-500" },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4">
+              <p className="text-xs text-slate-500 font-medium mb-1">{s.label}</p>
+              <p className={`text-2xl font-bold ${s.color}`}>{loading ? "—" : s.value}</p>
+            </div>
+          ))}
         </div>
 
+        {/* Tabs */}
         <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 w-fit">
           <button
             onClick={() => setActiveTab("pending")}

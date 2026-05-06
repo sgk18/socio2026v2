@@ -190,11 +190,15 @@ const ClubDetailsPage = () => {
   const name = club.club_name || entityLabel;
   const subtitle = club.subtitle || "";
   const description = club.club_description || "";
-  const bannerUrl = club.club_banner_url || "";
+  const bannerUrl = club.club_banner_url || club.club_image_url || "";
   const website = club.club_web_link || "";
   const categories = toClubCategories(club.category);
   const category = categories[0] || "Uncategorized";
-  const bannerCandidates = getClubBannerCandidates(bannerUrl);
+  const baseBannerCandidates = getClubBannerCandidates(bannerUrl);
+  const bannerCandidates = [
+    ...baseBannerCandidates,
+    ...(club.club_image_url && club.club_image_url !== bannerUrl ? [club.club_image_url] : [])
+  ];
   const activeBannerUrl = bannerCandidates[imageCandidateIndex] ?? bannerUrl;
   const editors = Array.isArray(club.club_editors) ? club.club_editors : [];
   const canEditClub =

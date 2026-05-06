@@ -111,16 +111,102 @@ const countParticipantsInRegistration = (registration) => {
 // Get registrations for an event (or all registrations if no event_id)
 router.get(
   "/registrations",
-  authenticateUser,
-  getUserInfo(),
-  async (req, res) => {
-    try {
-      const { event_id, registerNumber, email } = req.query;
-      const isMasterAdmin = req.userInfo?.is_masteradmin;
+  (req, res, next) => {
+    // If querying by specific user (self-lookup), just authenticate
+    if (req.query.registerNumber || req.query.email) {
+      return authenticateUser(req, res, next);
+    }
 
-      // If no event_id, and not a master admin, we must have a personal identifier
-      if (!event_id && !isMasterAdmin && !registerNumber && !email) {
-        return res.status(403).json({ error: "Master Admin role required to fetch all registrations" });
+    // If event_id is provided, it's likely a public check for a specific event's participants (less sensitive)
+    if (req.query.event_id) return next();
+
+    // If no specific filters, we're fetching ALL registrations (Highly sensitive)
+    return authenticateUser(req, res, () => {
+      getUserInfo()(req, res, () => {
+        checkRoleExpiration(req, res, () => {
+          requireMasterAdmin(req, res, next);
+        });
+      });
+    });
+  },
+  async (req, res) => {
+  try {
+    const { event_id, registerNumber, email } = req.query;
+    
+    let registrations;
+    if (registerNumber || email) {
+      // Fetch for a specific user (self-lookup)
+      const regId = String(registerNumber || "").trim();
+      const emailId = String(email || "").trim().toLowerCase();
+
+      // Only search if we have valid non-'undefined' identifiers
+      const isValidRegId = regId && regId !== "undefined" && regId !== "null";
+      const isValidEmail = emailId && emailId !== "undefined" && emailId !== "null";
+
+      if (!isValidRegId && !isValidEmail) {
+        return res.status(200).json({ registrations: [], count: 0 });
+      }
+
+      const queries = [];
+      if (isValidRegId) {
+        queries.push(supabase.from("registrations").select("*").eq("individual_register_number", regId));
+        queries.push(supabase.from("registrations").select("*").eq("team_leader_register_number", regId));
+      }
+      if (isValidEmail) {
+        queries.push(supabase.from("registrations").select("*").eq("user_email", emailId));
+        queries.push(supabase.from("registrations").select("*").eq("individual_email", emailId));
+        queries.push(supabase.from("registrations").select("*").eq("team_leader_email", emailId));
+      }
+
+      const results = await Promise.allSettled(queries);
+      const allRegs = [];
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.data) {
+          allRegs.push(...result.value.data);
+        }
+      }
+
+      // Check teammates array as well
+      try {
+        const { data: teammateRegs } = await supabase.from("registrations").select("*").not("teammates", "is", null);
+        if (teammateRegs) {
+          const matchingRegs = teammateRegs.filter(reg => {
+            if (!reg.teammates) return false;
+            const teammates = Array.isArray(reg.teammates) ? reg.teammates : JSON.parse(reg.teammates || "[]");
+            return teammates.some(tm => {
+              if (isValidRegId && String(tm.registerNumber).trim().toUpperCase() === regId.toUpperCase()) return true;
+              if (isValidEmail && String(tm.email).trim().toLowerCase() === emailId) return true;
+              return false;
+            });
+          });
+          allRegs.push(...matchingRegs);
+        }
+      } catch (err) {
+        console.warn("Could not check teammates:", err.message);
+      }
+
+      // Deduplicate registrations
+      const uniqueIds = new Set();
+      registrations = [];
+      for (const reg of allRegs) {
+        if (!uniqueIds.has(reg.registration_id)) {
+          uniqueIds.add(reg.registration_id);
+          registrations.push(reg);
+        }
+      }
+      
+      // Sort by created_at descending
+      registrations.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+    } else if (!event_id) {
+      registrations = await queryAll("registrations", {
+        order: { column: "created_at", ascending: false },
+      });
+    } else {
+      if (typeof event_id !== "string" || event_id.trim() === "") {
+        return res
+          .status(400)
+          .json({ error: "Invalid event_id parameter" });
       }
 
       // If not master admin, verify they are only requesting their own data
@@ -694,6 +780,20 @@ router.post("/register", async (req, res) => {
       custom_field_responses: req.body.custom_field_responses || null,
     });
 
+    // Initialize attendance status as 'pending'
+    await insert("attendance_status", [
+      {
+        registration_id,
+        event_id: normalizedEventId,
+        status: "pending",
+        marked_at: new Date().toISOString(),
+        marked_by: "system_registration",
+      },
+    ]).catch((err) => {
+      console.warn("Failed to initialize attendance status:", err.message);
+      // Non-blocking for registration flow
+    });
+
     console.log('✅ Registration saved:', registration);
 
     // ===== AUTO-CREATE USER RECORDS FOR TEAMMATES (NEW) =====
@@ -790,6 +890,49 @@ router.post("/register", async (req, res) => {
       { total_participants: newTotalParticipants },
       { event_id: normalizedEventId }
     );
+
+    // Send notifications (Non-blocking)
+    const registrationEmail = effectiveParticipantEmail;
+    if (registrationEmail && registrationEmail !== "unknown@example.com") {
+      (async () => {
+        try {
+          const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
+          const { sendPushToEmail } = await import("../utils/webPushService.js");
+          const eventTitle = event.title || "Event";
+          
+          const notifPayload = {
+            title: "Registration Confirmed 🎟️",
+            body: `You're all set for ${eventTitle}! View your ticket in the app.`,
+            actionUrl: `/event/${normalizedEventId}`,
+            data: {
+              eventId: normalizedEventId,
+              type: "registration_confirmed"
+            }
+          };
+
+          // 1. Mobile App Push (OneSignal)
+          await sendOneSignalToEmail(registrationEmail, notifPayload);
+
+          // 2. PWA Web Push (VAPID)
+          await sendPushToEmail(registrationEmail, notifPayload);
+
+          // 3. In-app Notification (Database)
+          await insert("notifications", [
+            {
+              user_email: registrationEmail.toLowerCase(),
+              title: "Event Registered",
+              message: `You have successfully registered for "${eventTitle}".`,
+              type: "registration",
+              event_id: normalizedEventId,
+              event_title: eventTitle,
+              action_url: `/event/${normalizedEventId}`,
+            },
+          ]);
+        } catch (notifError) {
+          console.warn("[Notification] Multi-channel registration failed:", notifError.message);
+        }
+      })();
+    }
 
     return res.status(201).json({
       message: "Registration successful",

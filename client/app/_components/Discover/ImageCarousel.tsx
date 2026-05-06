@@ -27,6 +27,14 @@ export const FullWidthCarousel: React.FC<FullWidthCarouselProps> = ({
   const touchStartX = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Reset to first slide when the images array changes (e.g. campus filter change)
+  useEffect(() => {
+    setCurrentIndex(0);
+    setIsTransitioning(false);
+  }, [images.length]);
+
+  const safeIndex = images.length > 0 ? Math.min(currentIndex, images.length - 1) : 0;
+
   useEffect(() => {
     if (isHovered || images.length <= 1 || isTransitioning) return;
 
@@ -129,12 +137,12 @@ export const FullWidthCarousel: React.FC<FullWidthCarouselProps> = ({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <Link href={images[currentIndex].link}>
+      <Link href={images[safeIndex].link}>
         <div
           ref={carouselRef}
           className="flex transition-transform duration-500 ease-in-out will-change-transform"
           style={{
-            transform: `translateX(-${currentIndex * 100}%)`,
+            transform: `translateX(-${safeIndex * 100}%)`,
           }}
         >
           {images.map((image) => (
@@ -215,7 +223,7 @@ export const FullWidthCarousel: React.FC<FullWidthCarouselProps> = ({
                 key={`carousel-dot-${image.id}-${index}`}
                 onClick={() => goToSlide(index)}
                 className={`w-2 h-2 md:w-3 md:h-3 rounded-full transition-colors ${
-                  index === currentIndex ? "bg-white" : "bg-white/50"
+                  index === safeIndex ? "bg-white" : "bg-white/50"
                 } ${isTransitioning ? "cursor-not-allowed" : "cursor-pointer"}`}
                 aria-label={`Go to slide ${index + 1}`}
                 disabled={isTransitioning}

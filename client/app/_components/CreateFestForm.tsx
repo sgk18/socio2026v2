@@ -920,6 +920,7 @@ function CreateFestForm(props?: CreateFestProps) {
   const faqs = props?.faqs || [];
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [isDraftFest, setIsDraftFest] = useState(Boolean(props?.isDraft));
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [formData, setFormData] = useState<CreateFestState>({
@@ -2055,6 +2056,25 @@ function CreateFestForm(props?: CreateFestProps) {
     await submitFest(true);
   };
 
+  const processImageFile = (file: File) => {
+    setImageFile(file);
+    if (file.size > 3 * 1024 * 1024)
+      setErrors((prev) => ({ ...prev, imageFile: "Max 3MB" }));
+    else if (!ALLOWED_FEST_IMAGE_TYPES.includes(file.type))
+      setErrors((prev) => ({ ...prev, imageFile: "JPG/PNG/WEBP/GIF only" }));
+    else
+      setErrors((prev) => { const e = { ...prev }; delete e.imageFile; return e; });
+  };
+
+  const handleImageDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingImage(true); };
+  const handleImageDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDraggingImage(false); };
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processImageFile(file);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -2810,7 +2830,16 @@ function CreateFestForm(props?: CreateFestProps) {
                     Fest image: <span className="text-red-500">*</span> (max
                     3MB, JPG/PNG/WEBP/GIF)
                   </label>
-                  <div className="border border-dashed border-gray-400 rounded-xl p-6 sm:p-8 text-center hover:border-gray-500 transition-colors">
+                  <div
+                    className={`border border-dashed rounded-xl p-6 sm:p-8 text-center transition-colors ${
+                      isDraggingImage
+                        ? "border-[#154CB3] bg-blue-50"
+                        : "border-gray-400 hover:border-gray-500"
+                    }`}
+                    onDragOver={handleImageDragOver}
+                    onDragLeave={handleImageDragLeave}
+                    onDrop={handleImageDrop}
+                  >
                     {/* Display existing file info if in edit mode, an existing image URL is provided, and no new file has been selected yet */}
                     {finalIsEditMode && existingImageFileUrl && !imageFile && (
                       <div className="mb-4 text-center">
@@ -2829,7 +2858,9 @@ function CreateFestForm(props?: CreateFestProps) {
                     )}
 
                     {/* Display selected new file info, OR the upload prompt (SVG + text) */}
-                    {imageFile ? (
+                    {isDraggingImage ? (
+                      <p className="text-[#154CB3] font-medium mb-3 text-sm sm:text-base">Drop image here</p>
+                    ) : imageFile ? (
                       <p className="text-gray-700 font-medium mb-3 text-sm sm:text-base">
                         New file selected: {imageFile.name}
                       </p>
@@ -2837,8 +2868,8 @@ function CreateFestForm(props?: CreateFestProps) {
                       <>
                         <p className="text-gray-500 mb-4 text-sm sm:text-base">
                           {finalIsEditMode && existingImageFileUrl
-                            ? ""
-                            : "JPEG, PNG, WEBP, GIF (max 3MB)"}
+                            ? "Drag & drop or click to change"
+                            : "Drag & drop or click to upload · JPEG, PNG, WEBP, GIF (max 3MB)"}
                         </p>
                       </>
                     )}

@@ -46,6 +46,8 @@ const SupportInboxPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const fetchMessages = useCallback(async () => {
     if (!session?.access_token) {
@@ -158,6 +160,13 @@ const SupportInboxPage = () => {
     return messages.filter((entry) => safeLower(entry.status || "new") === filter);
   }, [messages, filter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredMessages.length / PAGE_SIZE));
+  const pagedMessages = filteredMessages.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const renderStatusBadge = (status?: string | null) => {
     const normalized = safeLower(status || "new");
     const style = statusBadgeStyles[normalized] || "bg-gray-100 text-gray-600";
@@ -227,6 +236,7 @@ const SupportInboxPage = () => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 {hasMessages ? `${filteredMessages.length} message${filteredMessages.length === 1 ? "" : "s"}` : "No messages"}
+                {totalPages > 1 && <span className="text-gray-400">· page {page} of {totalPages}</span>}
               </div>
               <div className="flex items-center gap-2">
                 {(["all", "new", "read", "resolving", "solved"] as const).map((option) => (
@@ -252,7 +262,7 @@ const SupportInboxPage = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredMessages.map((entry) => (
+                {pagedMessages.map((entry) => (
                   <article key={entry.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
                     <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
                       <div>
@@ -333,6 +343,38 @@ const SupportInboxPage = () => {
                     </div>
                   </article>
                 ))}
+              </div>
+            )}
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page <= 1}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                    page <= 1
+                      ? "border-gray-200 text-gray-300 cursor-not-allowed"
+                      : "border-gray-200 text-gray-600 hover:border-[#154CB3] hover:text-[#154CB3]"
+                  }`}
+                >
+                  ← Prev
+                </button>
+                <span className="text-sm text-gray-500">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page >= totalPages}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                    page >= totalPages
+                      ? "border-gray-200 text-gray-300 cursor-not-allowed"
+                      : "border-gray-200 text-gray-600 hover:border-[#154CB3] hover:text-[#154CB3]"
+                  }`}
+                >
+                  Next →
+                </button>
               </div>
             )}
           </div>

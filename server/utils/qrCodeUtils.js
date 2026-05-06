@@ -10,11 +10,13 @@ import crypto from 'crypto';
  */
 export function generateQRCodeData(registrationId, eventId, participantEmail) {
   const timestamp = Date.now();
-  const expiryTime = timestamp + (24 * 60 * 60 * 1000); // 24 hours from now
+  const expiryTime = timestamp + (30 * 24 * 60 * 60 * 1000); // 30 days from now
   
-  // Create a hash for security verification
+  // Create a HMAC for security verification
   const dataToHash = `${registrationId}:${eventId}:${participantEmail}:${timestamp}`;
-  const hash = crypto.createHash('sha256').update(dataToHash + process.env.QR_SECRET || 'default-secret').digest('hex');
+  const hmac = crypto.createHmac('sha256', process.env.QR_SECRET || 'default-secret')
+    .update(dataToHash)
+    .digest('hex');
   
   return {
     registrationId,
@@ -22,7 +24,7 @@ export function generateQRCodeData(registrationId, eventId, participantEmail) {
     participantEmail,
     timestamp,
     expiryTime,
-    hash
+    hash: hmac
   };
 }
 
@@ -81,21 +83,36 @@ export function verifyQRCodeData(qrData) {
       return { valid: false, message: 'Invalid QR code data: missing required fields' };
     }
     
-    // Check expiry
-    if (Date.now() > expiryTime) {
-      return { valid: false, message: 'QR code has expired' };
-    }
-    
-    // Verify hash
+    // Prepare data for hashing
     const dataToHash = `${registrationId}:${eventId}:${participantEmail}:${timestamp}`;
-    const expectedHash = crypto.createHash('sha256').update(dataToHash + (process.env.QR_SECRET || 'default-secret')).digest('hex');
     
-    if (hash !== expectedHash) {
-      return { valid: false, message: 'Invalid QR code: security verification failed' };
+    // 1. Check Modern HMAC (Highest Priority)
+    const hmacHash = crypto.createHmac('sha256', process.env.QR_SECRET || 'default-secret')
+      .update(dataToHash)
+      .digest('hex');
+    
+    if (hash === hmacHash) {
+      if (Date.now() > expiryTime) {
+        console.warn(`[QR] HMAC valid but EXPIRED. Reg: ${registrationId}, Expiry: ${new Date(expiryTime).toISOString()}`);
+        return { valid: false, message: 'QR code has expired' };
+      }
+      return { valid: true, message: 'QR code is valid (HMAC verified)' };
+    }
+
+    // 2. Check Legacy Hash (Fallback)
+    const legacyHash = crypto.createHash('sha256')
+      .update(dataToHash + (process.env.QR_SECRET || 'default-secret'))
+      .digest('hex');
+    
+    if (hash === legacyHash) {
+      console.log(`[QR] Legacy hash verified. Reg: ${registrationId}`);
+      return { valid: true, message: 'QR code is valid (Legacy verified)' };
     }
     
-    return { valid: true, message: 'QR code is valid' };
+    console.error(`[QR] Verification failed. Reg: ${registrationId}. Hash received: ${hash.substring(0, 8)}... Expected HMAC: ${hmacHash.substring(0, 8)}... Expected Legacy: ${legacyHash.substring(0, 8)}...`);
+    return { valid: false, message: 'Invalid QR code: security verification failed' };
   } catch (error) {
+    console.error(`[QR] Parsing error:`, error);
     return { valid: false, message: 'Invalid QR code format' };
   }
 }

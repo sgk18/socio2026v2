@@ -114,6 +114,25 @@ router.get(
   }
 });
 
+// Get current user profile (self)
+router.get(
+  "/me",
+  authenticateUser,
+  getUserInfo(),
+  async (req, res) => {
+    try {
+      // req.userInfo is populated by getUserInfo middleware
+      if (!req.userInfo) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+      return res.status(200).json({ user: req.userInfo });
+    } catch (error) {
+      console.error("Error fetching self profile:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 router.get("/:email", async (req, res) => {
   try {
     const { email } = req.params;
@@ -266,7 +285,7 @@ function isStaffDomain(email) {
   return domain === 'christuniversity.in';
 }
 
-router.post("/", async (req, res) => {
+router.post("/", authenticateUser, async (req, res) => {
   try {
     const { user: authClientUser } = req.body;
     if (!authClientUser || !authClientUser.email) {

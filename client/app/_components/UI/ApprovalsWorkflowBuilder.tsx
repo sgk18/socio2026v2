@@ -394,10 +394,6 @@ export function ApprovalsWorkflowBuilder({
         </div>
       </div>
 
-      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-6 text-xs text-amber-800">
-        <span className="font-semibold">Routing:</span> HOD is auto-assigned by dept + campus · Dean by school + campus · CFO & Finance by campus. Use ↓/↑ to move between sections.
-      </div>
-
       {needsBudget && (
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-5">
           <div className="flex items-center justify-between mb-1">

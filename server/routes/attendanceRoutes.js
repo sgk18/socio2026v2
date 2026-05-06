@@ -1,10 +1,5 @@
 import express from "express";
-import {
-  queryOne,
-  queryAll,
-  upsert,
-  insert,
-} from "../config/database.js";
+import { queryOne, queryAll, upsert, insert } from "../config/database.js";
 import { verifyQRCodeData, parseQRCodeData } from "../utils/qrCodeUtils.js";
 import {
   authenticateUser,
@@ -36,11 +31,14 @@ router.get("/events/:eventId/participants", async (req, res) => {
       where: { event_id: eventId },
     });
     const attendanceMap = new Map(
-      (attendanceRows || []).map((row) => [row.registration_id, row])
+      (attendanceRows || []).map((row) => [row.registration_id, row]),
     );
 
     const participants = (registrations || []).map((reg) => {
-      const attendance = attendanceMap.get(reg.id) || attendanceMap.get(reg.registration_id) || {};
+      const attendance =
+        attendanceMap.get(reg.id) ||
+        attendanceMap.get(reg.registration_id) ||
+        {};
       const base = {
         id: reg.id,
         registration_id: reg.registration_id,
@@ -92,11 +90,15 @@ router.post("/events/:eventId/attendance", async (req, res) => {
     const { participantIds, status, markedBy = "admin" } = req.body;
 
     if (!Array.isArray(participantIds) || participantIds.length === 0) {
-      return res.status(400).json({ error: "participantIds array is required" });
+      return res
+        .status(400)
+        .json({ error: "participantIds array is required" });
     }
 
     if (!["attended", "absent"].includes(status)) {
-      return res.status(400).json({ error: "Status must be 'attended' or 'absent'" });
+      return res
+        .status(400)
+        .json({ error: "Status must be 'attended' or 'absent'" });
     }
 
     const event = await queryOne("events", { where: { event_id: eventId } });
@@ -118,7 +120,7 @@ router.post("/events/:eventId/attendance", async (req, res) => {
             marked_at: now,
             marked_by: markedBy,
           },
-          "registration_id"
+          "registration_id",
         );
         updatedCount++;
       } catch (err) {
@@ -143,227 +145,335 @@ router.post(
   getUserInfo(),
   checkRoleExpiration,
   async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { qrCodeData, scannedBy, scannerInfo } = req.body;
+    try {
+      const { eventId } = req.params;
+      const { qrCodeData, scannedBy, scannerInfo } = req.body;
 
-    if (!qrCodeData) {
-      return res.status(400).json({ error: "QR code data is required" });
-    }
-
-    const event = await queryOne("events", {
-      where: { event_id: eventId },
-      select: "event_id, volunteers",
-    });
-
-    if (!event) {
-      return res.status(404).json({ error: "Event not found" });
-    }
-
-    if (!hasActiveVolunteerAccess(event.volunteers, req.userInfo?.register_number)) {
-      return res.status(403).json({
-        error: "Access denied: active volunteer access is required for this event.",
-      });
-    }
-
-    const scannedByIdentity = req.userInfo?.email || scannedBy || "qr_scanner";
-
-    let isSimpleQR = false;
-    let qrData = null;
-
-    // 1. Try SOCIO URL parsing (e.g., https://app.withsocio.com/vc/[registrationId]/[eventId])
-    if (typeof qrCodeData === "string" && qrCodeData.includes("/vc/")) {
-      const parts = qrCodeData.split("/vc/")[1].split("/");
-      if (parts.length >= 1) {
-        isSimpleQR = true;
-        qrData = {
-          identifier: parts[0], // registrationId
-          eventId: parts[1] || eventId // optional eventId from URL or use current
-        };
-      }
-    }
-
-    // 2. Try JSON parsing (Signed QR)
-    if (!qrData) {
-      const parsed = parseQRCodeData(qrCodeData);
-      // Ensure it's an object and not a number/string/array
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        // If it's an object, check if it has the SOCIO signature fields
-        if (parsed.registrationId && parsed.hash) {
-          qrData = parsed;
-        } else {
-          // If it's an object but not a signed one, try to extract a possible identifier
-          const possibleId = parsed.registrationId || parsed.id || parsed.identifier || parsed.registerNumber;
-          if (possibleId) {
-            isSimpleQR = true;
-            qrData = {
-              identifier: String(possibleId).trim(),
-              eventId: parsed.eventId || eventId
-            };
-          }
-        }
-      }
-    }
-
-    // 3. FALLBACK: Treat the whole string as a raw identifier (e.g., register number)
-    if (!qrData) {
-      if (typeof qrCodeData === "string" && qrCodeData.trim().length > 0) {
-        isSimpleQR = true;
-        qrData = {
-          identifier: qrCodeData.trim(),
-          eventId: eventId
-        };
-      } else if (typeof qrCodeData === "object" && qrCodeData !== null) {
-        // Final fallback for random objects: stringify and use as identifier
-        isSimpleQR = true;
-        qrData = {
-          identifier: JSON.stringify(qrCodeData),
-          eventId: eventId
-        };
-      }
-    }
-
-    if (!qrData) {
-      await insert("qr_scan_logs", [{
-        event_id: eventId,
-        scanned_by: scannedByIdentity,
-        scan_result: "invalid",
-        scanner_info: scannerInfo || {},
-      }]);
-      return res.status(400).json({ error: "Invalid QR code format" });
-    }
-
-    // 4. Verification (ONLY for complex objects that aren't simple QRs)
-    if (!isSimpleQR) {
-      const verification = verifyQRCodeData(qrData);
-      if (!verification.valid) {
-        await insert("qr_scan_logs", [{
-          registration_id: qrData.registrationId || null,
-          event_id: eventId,
-          scanned_by: scannedByIdentity,
-          scan_result: "invalid",
-          scanner_info: scannerInfo || {},
-        }]);
-        return res.status(400).json({ error: verification.message });
+      if (!qrCodeData) {
+        return res.status(400).json({ error: "QR code data is required" });
       }
 
-      if (qrData.eventId !== eventId) {
-        await insert("qr_scan_logs", [{
-          registration_id: qrData.registrationId,
-          event_id: eventId,
-          scanned_by: scannedByIdentity,
-          scan_result: "invalid",
-          scanner_info: scannerInfo || {},
-        }]);
-        return res.status(400).json({ error: "QR code is not valid for this event" });
-      }
-    }
-
-    let registration = null;
-
-    if (isSimpleQR) {
-      // For simple QR, the identifier could be a registration_id, register number, or email
-      const normalizedId = qrData.identifier.trim().toUpperCase();
-      
-      // 1. Try direct registration_id lookup first
-      registration = await queryOne("registrations", { 
-        where: { registration_id: qrData.identifier, event_id: eventId } 
+      const event = await queryOne("events", {
+        where: { event_id: eventId },
+        select: "event_id, volunteers",
       });
 
-      // 2. If not found, search all registrations for this event by other fields
-      if (!registration) {
-        const eventRegistrations = await queryAll("registrations", { where: { event_id: eventId } });
-        registration = eventRegistrations.find(reg => {
-          if (reg.individual_register_number && String(reg.individual_register_number).trim().toUpperCase() === normalizedId) return true;
-          if (reg.team_leader_register_number && String(reg.team_leader_register_number).trim().toUpperCase() === normalizedId) return true;
-          
-          if (reg.teammates) {
-            try {
-              const team = Array.isArray(reg.teammates) ? reg.teammates : JSON.parse(reg.teammates);
-              return team.some((t) => t.registerNumber && String(t.registerNumber).trim().toUpperCase() === normalizedId);
-            } catch(e) {}
-          }
-          if (reg.individual_email && reg.individual_email.toLowerCase() === qrData.identifier.toLowerCase()) return true;
-          if (reg.team_leader_email && reg.team_leader_email.toLowerCase() === qrData.identifier.toLowerCase()) return true;
-          return false;
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      if (
+        !hasActiveVolunteerAccess(
+          event.volunteers,
+          req.userInfo?.register_number,
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "Access denied: active volunteer access is required for this event.",
         });
       }
 
-      if (registration) {
-        qrData.registrationId = registration.registration_id;
+      const scannedByIdentity =
+        req.userInfo?.email || scannedBy || "qr_scanner";
+
+      let isSimpleQR = false;
+      let qrData = null;
+
+      // 1. Try SOCIO URL parsing (e.g., https://app.withsocio.com/vc/[registrationId]/[eventId])
+      if (typeof qrCodeData === "string" && qrCodeData.includes("/vc/")) {
+        const parts = qrCodeData.split("/vc/")[1].split("/");
+        if (parts.length >= 1) {
+          isSimpleQR = true;
+          qrData = {
+            identifier: parts[0], // registrationId
+            eventId: parts[1] || eventId, // optional eventId from URL or use current
+          };
+        }
       }
-    } else {
-      registration = await queryOne("registrations", { where: { registration_id: qrData.registrationId } });
-    }
-    if (!registration) {
-      await insert("qr_scan_logs", [{
-        registration_id: qrData.registrationId,
-        event_id: eventId,
-        scanned_by: scannedByIdentity,
-        scan_result: "invalid",
-        scanner_info: scannerInfo || {},
-      }]);
-      return res.status(404).json({ error: "Registration not found" });
-    }
 
-    const attendance = await queryOne("attendance_status", { where: { registration_id: registration.registration_id } });
-    if (attendance?.status === "attended") {
-      await insert("qr_scan_logs", [{
-        registration_id: qrData.registrationId,
-        event_id: eventId,
-        scanned_by: scannedByIdentity,
-        scan_result: "duplicate",
-        scanner_info: scannerInfo || {},
-      }]);
-      return res.status(200).json({
-        message: "Already scanned",
-        participant: {
-          name: registration.individual_name || registration.team_leader_name,
-          email: registration.individual_email || registration.team_leader_email,
-          registrationId: registration.registration_id,
-          status: "already_present",
-        },
+      // 2. Try JSON parsing (Signed QR)
+      if (!qrData) {
+        const parsed = parseQRCodeData(qrCodeData);
+        // Ensure it's an object and not a number/string/array
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          // If it's an object, check if it has the SOCIO signature fields
+          if (parsed.registrationId && parsed.hash) {
+            qrData = parsed;
+          } else {
+            // If it's an object but not a signed one, try to extract a possible identifier
+            const possibleId =
+              parsed.registrationId ||
+              parsed.id ||
+              parsed.identifier ||
+              parsed.registerNumber;
+            if (possibleId) {
+              isSimpleQR = true;
+              qrData = {
+                identifier: String(possibleId).trim(),
+                eventId: parsed.eventId || eventId,
+              };
+            }
+          }
+        }
+      }
+
+      // 3. FALLBACK: Treat the whole string as a raw identifier (e.g., register number)
+      if (!qrData) {
+        if (typeof qrCodeData === "string" && qrCodeData.trim().length > 0) {
+          isSimpleQR = true;
+          qrData = {
+            identifier: qrCodeData.trim(),
+            eventId: eventId,
+          };
+        } else if (typeof qrCodeData === "object" && qrCodeData !== null) {
+          // Final fallback for random objects: stringify and use as identifier
+          isSimpleQR = true;
+          qrData = {
+            identifier: JSON.stringify(qrCodeData),
+            eventId: eventId,
+          };
+        }
+      }
+
+      if (!qrData) {
+        await insert("qr_scan_logs", [
+          {
+            event_id: eventId,
+            scanned_by: scannedByIdentity,
+            scan_result: "invalid",
+            scanner_info: scannerInfo || {},
+          },
+        ]);
+        return res.status(400).json({ error: "Invalid QR code format" });
+      }
+
+      // 4. Verification (ONLY for complex objects that aren't simple QRs)
+      if (!isSimpleQR) {
+        const verification = verifyQRCodeData(qrData);
+        if (!verification.valid) {
+          await insert("qr_scan_logs", [
+            {
+              registration_id: qrData.registrationId || null,
+              event_id: eventId,
+              scanned_by: scannedByIdentity,
+              scan_result: "invalid",
+              scanner_info: scannerInfo || {},
+            },
+          ]);
+          return res.status(400).json({ error: verification.message });
+        }
+
+        if (String(qrData.eventId) !== String(eventId)) {
+          await insert("qr_scan_logs", [
+            {
+              registration_id: qrData.registrationId,
+              event_id: eventId,
+              scanned_by: scannedByIdentity,
+              scan_result: "invalid",
+              scanner_info: scannerInfo || {},
+            },
+          ]);
+          return res
+            .status(400)
+            .json({ error: "QR code is not valid for this event" });
+        }
+      }
+
+      let registration = null;
+
+      if (isSimpleQR) {
+        // For simple QR, the identifier could be a registration_id, register number, or email
+        const normalizedId = qrData.identifier.trim().toUpperCase();
+
+        // 1. Try direct registration_id lookup first
+        registration = await queryOne("registrations", {
+          where: { registration_id: qrData.identifier, event_id: eventId },
+        });
+
+        // 2. If not found, search all registrations for this event by other fields
+        if (!registration) {
+          const eventRegistrations = await queryAll("registrations", {
+            where: { event_id: eventId },
+          });
+          registration = eventRegistrations.find((reg) => {
+            if (
+              reg.individual_register_number &&
+              String(reg.individual_register_number).trim().toUpperCase() ===
+                normalizedId
+            )
+              return true;
+            if (
+              reg.team_leader_register_number &&
+              String(reg.team_leader_register_number).trim().toUpperCase() ===
+                normalizedId
+            )
+              return true;
+
+            if (reg.teammates) {
+              try {
+                const team = Array.isArray(reg.teammates)
+                  ? reg.teammates
+                  : JSON.parse(reg.teammates);
+                return team.some(
+                  (t) =>
+                    t.registerNumber &&
+                    String(t.registerNumber).trim().toUpperCase() ===
+                      normalizedId,
+                );
+              } catch (e) {}
+            }
+            if (
+              reg.individual_email &&
+              reg.individual_email.toLowerCase() ===
+                qrData.identifier.toLowerCase()
+            )
+              return true;
+            if (
+              reg.team_leader_email &&
+              reg.team_leader_email.toLowerCase() ===
+                qrData.identifier.toLowerCase()
+            )
+              return true;
+            return false;
+          });
+        }
+
+        if (registration) {
+          qrData.registrationId = registration.registration_id;
+        }
+      } else {
+        registration = await queryOne("registrations", {
+          where: { registration_id: qrData.registrationId },
+        });
+      }
+      if (!registration) {
+        await insert("qr_scan_logs", [
+          {
+            registration_id: qrData.registrationId,
+            event_id: eventId,
+            scanned_by: scannedByIdentity,
+            scan_result: "invalid",
+            scanner_info: scannerInfo || {},
+          },
+        ]);
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      const attendance = await queryOne("attendance_status", {
+        where: { registration_id: registration.registration_id },
       });
-    }
+      const now = new Date().toISOString();
 
-    const now = new Date().toISOString();
+      // CASE 2: status = "attended" → Treat as "Verified" (already present)
+      if (attendance?.status === "attended") {
+        await insert("qr_scan_logs", [
+          {
+            registration_id: qrData.registrationId,
+            event_id: eventId,
+            scanned_by: scannedByIdentity,
+            scan_result: "duplicate",
+            scanner_info: scannerInfo || {},
+          },
+        ]);
+        return res.status(200).json({
+          message: "Verified",
+          participant: {
+            name: registration.individual_name || registration.team_leader_name,
+            email: registration.individual_email || registration.team_leader_email,
+            registrationId: registration.registration_id,
+            status: "already_present",
+            markedAt: attendance.marked_at,
+          },
+        });
+      }
 
-    await upsert(
-      "attendance_status",
+      // CASE 1: status = "pending" (or "absent") → UPDATE to "attended"
+      // CASE 3: status = "absent" → allow override
+      await upsert(
+        "attendance_status",
+        {
+          registration_id: registration.registration_id,
+          event_id: eventId,
+          status: "attended",
+          marked_at: now,
+          marked_by: scannedByIdentity,
+        },
+        "registration_id",
+      );
+
+    await insert("qr_scan_logs", [
       {
-        registration_id: registration.registration_id,
+        registration_id: qrData.registrationId,
         event_id: eventId,
-        status: "attended",
-        marked_at: now,
-        marked_by: scannedByIdentity,
+        scanned_by: scannedByIdentity,
+        scan_result: "success",
+        scanner_info: scannerInfo || {},
       },
-      "registration_id"
-    );
+    ]);
 
-    await insert("qr_scan_logs", [{
-      registration_id: qrData.registrationId,
-      event_id: eventId,
-      scanned_by: scannedByIdentity,
-      scan_result: "success",
-      scanner_info: scannerInfo || {},
-    }]);
+    // Send push notification and save to database
+    const participantEmail = registration.individual_email || registration.team_leader_email;
+    if (participantEmail) {
+      (async () => {
+        try {
+          const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
+          const { sendPushToEmail } = await import("../utils/webPushService.js");
+          const event = await queryOne("events", { where: { event_id: eventId } });
+          const eventTitle = event?.title || "Event";
+          
+          const notifPayload = {
+            title: "Attendance Marked ✅",
+            body: `You have successfully checked in for ${eventTitle}. Enjoy the event!`,
+            actionUrl: `/event/${eventId}`,
+            data: {
+              eventId,
+              type: "attendance_confirmed"
+            }
+          };
+
+          // 1. Mobile App Push (OneSignal)
+          await sendOneSignalToEmail(participantEmail, notifPayload);
+
+          // 2. PWA Web Push (VAPID)
+          await sendPushToEmail(participantEmail, notifPayload);
+
+          // 3. In-app Notification (Database)
+          await insert("notifications", [
+            {
+              user_email: participantEmail.toLowerCase(),
+              title: "Attendance Confirmed",
+              message: `Your attendance for "${eventTitle}" has been marked.`,
+              type: "attendance",
+              event_id: eventId,
+              event_title: eventTitle,
+              action_url: `/event/${eventId}`,
+            },
+          ]);
+        } catch (notifError) {
+          console.warn("[Notification] Multi-channel delivery failed:", notifError.message);
+        }
+      })();
+    }
 
     return res.status(200).json({
-      message: "Attendance marked successfully",
-      participant: {
-        name: registration.individual_name || registration.team_leader_name,
-        email: registration.individual_email || registration.team_leader_email,
-        registrationId: registration.registration_id,
-        registrationType: registration.registration_type,
-        teamName: registration.team_name,
-        status: "marked_present",
-        markedAt: now,
-      },
-    });
-  } catch (error) {
-    console.error("Error processing QR scan:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+        message: "Attendance marked successfully",
+        participant: {
+          name: registration.individual_name || registration.team_leader_name,
+          email:
+            registration.individual_email || registration.team_leader_email,
+          registrationId: registration.registration_id,
+          registrationType: registration.registration_type,
+          teamName: registration.team_name,
+          status: "marked_present",
+          markedAt: now,
+        },
+      });
+    } catch (error) {
+      console.error("Error processing QR scan:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
 
 export default router;
