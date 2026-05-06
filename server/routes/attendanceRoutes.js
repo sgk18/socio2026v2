@@ -7,6 +7,8 @@ import {
   getUserInfo,
 } from "../middleware/authMiddleware.js";
 import { hasActiveVolunteerAccess } from "../utils/volunteerAccess.js";
+import { sendOneSignalToEmail } from "../utils/oneSignalService.js";
+import { sendPushToEmail } from "../utils/webPushService.js";
 
 const router = express.Router();
 
@@ -455,8 +457,6 @@ router.post(
     if (participantEmail) {
       (async () => {
         try {
-          const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
-          const { sendPushToEmail } = await import("../utils/webPushService.js");
           const event = await queryOne("events", { where: { event_id: eventId } });
           const eventTitle = event?.title || "Event";
           
