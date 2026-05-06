@@ -3,6 +3,81 @@ import { supabase } from './supabaseClient';
 // API Base URL
 export const API_URL = process.env.NEXT_PUBLIC_API_URL!.replace(/\/api\/?$/, "");
 
+export type SupportArticleSummary = {
+  id: number;
+  category: string;
+  title: string;
+  description: string;
+  read_time_minutes: number;
+  helpful_count: number;
+  created_at?: string;
+};
+
+export type SupportArticleDetail = SupportArticleSummary & {
+  content: string;
+  updated_at?: string;
+};
+
+async function getApiErrorMessage(response: Response, fallbackMessage: string): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body?.message === 'string' && body.message.trim()) {
+      return body.message;
+    }
+  } catch {
+    // Ignore JSON parse errors and return fallback.
+  }
+  return fallbackMessage;
+}
+
+export async function getSupportArticles(filters?: {
+  category?: string;
+  search?: string;
+}): Promise<SupportArticleSummary[]> {
+  const params = new URLSearchParams();
+
+  if (filters?.category && filters.category !== 'all') {
+    params.set('category', filters.category);
+  }
+
+  if (filters?.search?.trim()) {
+    params.set('search', filters.search.trim());
+  }
+
+  const query = params.toString();
+  const url = `${API_URL}/api/support/articles${query ? `?${query}` : ''}`;
+  const response = await fetch(url, { cache: 'no-store' });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Unable to load support articles right now.'));
+  }
+
+  const body = await response.json();
+  return Array.isArray(body?.articles) ? body.articles : [];
+}
+
+export async function getSupportArticleById(id: number | string): Promise<SupportArticleDetail | null> {
+  const articleId = Number.parseInt(String(id), 10);
+  if (!Number.isFinite(articleId) || articleId <= 0) {
+    throw new Error('Invalid article id.');
+  }
+
+  const response = await fetch(`${API_URL}/api/support/articles/${articleId}`, {
+    cache: 'no-store'
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Unable to load support article right now.'));
+  }
+
+  const body = await response.json();
+  return body?.article ?? null;
+}
+
 // ============ EVENTS ============
 
 export async function getEvents() {

@@ -29,6 +29,7 @@ import attendanceRoutes from "./routes/attendanceRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
+import supportRoutes from "./routes/supportRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import { csrfProtection, csrfTokenProvider } from "./middleware/csrfMiddleware.js";
@@ -225,6 +226,7 @@ app.get('/', (req, res) => {
       notifications: '/api/notifications',
       contact: '/api/contact',
       supportMessages: '/api/support/messages',
+      supportArticles: '/api/support/articles',
       chat: '/api/chat',
       report: '/api/report',
       analytics: '/api/analytics/*'
@@ -249,6 +251,7 @@ app.use("/api", attendanceRoutes);
 app.use("/api", notificationRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", contactRoutes);
+app.use("/api", supportRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api", reportRoutes);
 app.use("/api", approvalRoutes);
