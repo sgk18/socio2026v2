@@ -46,6 +46,7 @@ import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
 import { sanitizeErrorPayload } from "./utils/userFacingErrors.js";
+import authRoutes from "./routes/authRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -233,12 +234,13 @@ app.get('/', (req, res) => {
 
 app.get('/api/csrf-token', (req, res) => {
   const csrfToken = res.locals.csrfToken || '';
-  res.json({ 
+  res.json({
     message: 'CSRF token provided in headers',
     token: csrfToken
   });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/fests", festRoutes);
