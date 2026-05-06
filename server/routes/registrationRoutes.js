@@ -820,6 +820,49 @@ router.post("/register", async (req, res) => {
       { event_id: normalizedEventId }
     );
 
+    // Send notifications (Non-blocking)
+    const registrationEmail = effectiveParticipantEmail;
+    if (registrationEmail && registrationEmail !== "unknown@example.com") {
+      (async () => {
+        try {
+          const { sendOneSignalToEmail } = await import("../utils/oneSignalService.js");
+          const { sendPushToEmail } = await import("../utils/webPushService.js");
+          const eventTitle = event.title || "Event";
+          
+          const notifPayload = {
+            title: "Registration Confirmed 🎟️",
+            body: `You're all set for ${eventTitle}! View your ticket in the app.`,
+            actionUrl: `/event/${normalizedEventId}`,
+            data: {
+              eventId: normalizedEventId,
+              type: "registration_confirmed"
+            }
+          };
+
+          // 1. Mobile App Push (OneSignal)
+          await sendOneSignalToEmail(registrationEmail, notifPayload);
+
+          // 2. PWA Web Push (VAPID)
+          await sendPushToEmail(registrationEmail, notifPayload);
+
+          // 3. In-app Notification (Database)
+          await insert("notifications", [
+            {
+              user_email: registrationEmail.toLowerCase(),
+              title: "Event Registered",
+              message: `You have successfully registered for "${eventTitle}".`,
+              type: "registration",
+              event_id: normalizedEventId,
+              event_title: eventTitle,
+              action_url: `/event/${normalizedEventId}`,
+            },
+          ]);
+        } catch (notifError) {
+          console.warn("[Notification] Multi-channel registration failed:", notifError.message);
+        }
+      })();
+    }
+
     return res.status(201).json({
       message: "Registration successful",
       registration: {
