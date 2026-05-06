@@ -54,9 +54,6 @@ const DEFAULT_DISCOVER_CAMPUS = "Central Campus (Main)";
 const normalizeText = (value: unknown): string =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
-const toNormalizedEmail = (value: unknown): string =>
-  typeof value === "string" ? value.trim().toLowerCase() : "";
-
 const findCampusByQueryValue = (value: string | null) => {
   if (!value) {
     return null;
@@ -183,11 +180,7 @@ const DiscoverPageContent = () => {
           throw new Error(error.message);
         }
 
-        const filteredOrganizations = (Array.isArray(data) ? data : []).filter(
-          (organization) => Boolean(organization.club_registrations)
-        ) as ClubRecord[];
-
-        setOrganizations(filteredOrganizations);
+        setOrganizations((Array.isArray(data) ? data : []) as ClubRecord[]);
       } catch (err) {
         if (!isMounted) return;
         setOrganizations([]);
@@ -308,49 +301,43 @@ const DiscoverPageContent = () => {
       .catch(() => {});
   }, [isAdminOrOrganizer, session?.access_token, allFests, allEvents]); // eslint-disable-line
 
-  const currentEmail = toNormalizedEmail(userData?.email || session?.user?.email);
+  const currentEmail = normalizeText(userData?.email || session?.user?.email);
   const isMasterAdmin = Boolean(userData?.is_masteradmin);
-  const canEditOrganization = (organization: ClubRecord) => {
-    if (isMasterAdmin) return true;
-    if (!currentEmail) return false;
 
-    const editors = Array.isArray(organization.club_editors)
-      ? organization.club_editors
-      : [];
-    return editors.some((editor) => toNormalizedEmail(editor) === currentEmail);
-  };
-  const canManageOrganization = (organization: ClubRecord) =>
-    isMasterAdmin || canEditOrganization(organization);
+  const displayOrganizations = useMemo(() => {
+    const canEdit = (organization: ClubRecord) => {
+      if (isMasterAdmin) return true;
+      if (!currentEmail) return false;
+      const editors = Array.isArray(organization.club_editors) ? organization.club_editors : [];
+      return editors.some((editor) => normalizeText(editor) === currentEmail);
+    };
 
-  const displayOrganizations = useMemo(
-    () =>
-      organizations.slice(0, 3).map((organization) => {
-        const organizationType = normalizeText(organization.type);
-        const cardType: "club" | "center" | "cell" =
-          organizationType === "club"
-            ? "club"
-            : organizationType === "cell"
-              ? "cell"
-              : "center";
+    return organizations.slice(0, 3).map((organization) => {
+      const organizationType = normalizeText(organization.type);
+      const cardType: "club" | "center" | "cell" =
+        organizationType === "club"
+          ? "club"
+          : organizationType === "cell"
+            ? "cell"
+            : "center";
 
-        return {
-          id: organization.club_id,
-          title: organization.club_name,
-          subtitle: organization.subtitle ?? undefined,
-          description: organization.club_description ?? "No description provided.",
-          slug: organization.slug ?? undefined,
-          image: organization.club_image_url ?? undefined,
-          categories: toClubCategories(organization.category),
-          type: cardType,
-          registrationsOpen: Boolean(organization.club_registrations),
-          showEditButton: canEditOrganization(organization),
-          editHref: `/edit/clubs/${organization.club_id}`,
-          showManageButton: canManageOrganization(organization),
-          manageHref: `/clubeditor/${organization.club_id}`,
-        };
-      }),
-    [organizations, canEditOrganization, canManageOrganization]
-  );
+      return {
+        id: organization.club_id,
+        title: organization.club_name,
+        subtitle: organization.subtitle ?? undefined,
+        description: organization.club_description ?? "No description provided.",
+        slug: organization.slug ?? undefined,
+        image: organization.club_image_url ?? undefined,
+        categories: toClubCategories(organization.category),
+        type: cardType,
+        registrationsOpen: Boolean(organization.club_registrations),
+        showEditButton: canEdit(organization),
+        editHref: `/edit/clubs/${organization.club_id}`,
+        showManageButton: isMasterAdmin || canEdit(organization),
+        manageHref: `/clubeditor/${organization.club_id}`,
+      };
+    });
+  }, [organizations, isMasterAdmin, currentEmail]);
 
   const handleToggleArchive = async (eventId: string, shouldArchive: boolean) => {
     console.log(`🔄 Archive toggle initiated: eventId=${eventId}, shouldArchive=${shouldArchive}`);
