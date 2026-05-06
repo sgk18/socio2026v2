@@ -43,6 +43,7 @@ import stallBookingRoutes from "./routes/stallBookingRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import volunteerRoutes from "./routes/volunteerRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -172,6 +173,7 @@ app.get('/', (req, res) => {
   });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/fests", festRoutes);
