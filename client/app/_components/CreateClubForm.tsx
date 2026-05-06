@@ -587,10 +587,10 @@ export default function CreateClubForm({
                       key={type}
                       type="button"
                       onClick={() => setClubType(type)}
-                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
+                      className={`cursor-pointer rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors duration-200 ${
                         active
-                          ? "border-[#1f57c3] bg-[#1f57c3] text-white"
-                          : "border-[#9cacbf] bg-white text-[#4b5f79]"
+                          ? "border-[#1f57c3] bg-[#1f57c3] text-white hover:bg-[#184cae]"
+                          : "border-[#9cacbf] bg-white text-[#4b5f79] hover:border-[#1f57c3]/60 hover:bg-[#f3f7ff]"
                       }`}
                     >
                       {titleCase(type)}
@@ -647,7 +647,7 @@ export default function CreateClubForm({
             <button
               type="button"
               onClick={() => setShowCategoriesMenu((prev) => !prev)}
-              className={`flex h-10 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-sm focus:outline-none focus:ring-1 focus:ring-[#1f57c3] ${
+              className={`flex h-10 w-full cursor-pointer items-center justify-between rounded-md border bg-white px-3 text-left text-sm transition-colors duration-200 hover:bg-[#f6f9ff] focus:outline-none focus:ring-1 focus:ring-[#1f57c3] ${
                 errors.category ? "border-red-500" : "border-[#bcc8d6]"
               }`}
             >
@@ -718,7 +718,7 @@ export default function CreateClubForm({
             {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description}</p>}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-[11px] font-semibold text-[#29364a]">
                 {entityLabel} image: (max 3MB) - JPG/PNG <span className="text-red-500">*</span>
@@ -851,7 +851,7 @@ export default function CreateClubForm({
             </div>
           </div>
 
-          <div className="rounded-md border border-[#d3dbe6] bg-[#f4f6f8] px-3 py-2">
+          <div className="mt-6 mb-6 rounded-md border border-[#d3dbe6] bg-[#f4f6f8] px-3 py-2">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[11px] font-semibold text-[#29364a]">{entityLabel} Registrations</p>
@@ -872,7 +872,7 @@ export default function CreateClubForm({
                   onClick={() => setRegistrationsOpen((prev) => !prev)}
                   aria-label={`Registrations ${registrationsOpen ? "on" : "off"}`}
                   aria-pressed={registrationsOpen}
-                  className={`relative h-6 w-11 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-[#1f57c3]/40 ${
+                  className={`relative h-6 w-11 cursor-pointer rounded-full border transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#1f57c3]/40 ${
                     registrationsOpen
                       ? "border-[#1f57c3] bg-[#1f57c3]"
                       : "border-[#b7c2d2] bg-[#c2ccda]"
@@ -922,7 +922,7 @@ export default function CreateClubForm({
               <button
                 type="button"
                 onClick={addEditorRow}
-                className="inline-flex items-center gap-1 rounded-full bg-[#0d3b85] px-3 py-1 text-[10px] font-semibold text-white"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[#0d3b85] px-3 py-1 text-[10px] font-semibold text-white transition-colors duration-200 hover:bg-[#0b3272]"
               >
                 <Plus className="h-3 w-3" />
                 Add {entityLabel} Editors
@@ -936,7 +936,7 @@ export default function CreateClubForm({
                     <button
                       type="button"
                       onClick={() => removeEditorRow(row.id)}
-                      className="text-[10px] font-semibold text-red-500"
+                      className="cursor-pointer text-[10px] font-semibold text-red-500 transition-colors duration-200 hover:text-red-600"
                     >
                       Remove
                     </button>
@@ -965,7 +965,7 @@ export default function CreateClubForm({
               <button
                 type="button"
                 onClick={() => setShowRolesMenu((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-full border border-[#1f57c3] bg-white px-3 py-1 text-[10px] font-semibold text-[#1f57c3]"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[#1f57c3] bg-white px-3 py-1 text-[10px] font-semibold text-[#1f57c3] transition-colors duration-200 hover:bg-[#f3f7ff]"
               >
                 <Plus className="h-3 w-3" />
                 Add Role
@@ -987,7 +987,7 @@ export default function CreateClubForm({
                   <button
                     type="button"
                     onClick={() => removeRoleRow(row.id)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500/45 bg-red-500/15 text-base font-bold leading-none text-red-800 transition-colors duration-200 hover:border-red-600/70 hover:bg-red-600/25 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                    className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-red-500/45 bg-red-500/15 text-base font-bold leading-none text-red-800 transition-colors duration-200 hover:border-red-600/70 hover:bg-red-600/25 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
                     aria-label={`Remove role ${row.value}`}
                   >
                     ×
@@ -1003,7 +1003,7 @@ export default function CreateClubForm({
                     key={role}
                     type="button"
                     onClick={() => addRole(role)}
-                    className="block w-full border-b border-[#edf1f5] px-3 py-1.5 text-left text-[10px] text-[#2f435c] last:border-b-0 hover:bg-[#f3f7ff]"
+                    className="block w-full cursor-pointer border-b border-[#edf1f5] px-3 py-1.5 text-left text-[10px] text-[#2f435c] transition-colors duration-200 last:border-b-0 hover:bg-[#f3f7ff]"
                   >
                     {role}
                   </button>
@@ -1011,7 +1011,7 @@ export default function CreateClubForm({
                 <button
                   type="button"
                   onClick={() => addRole(OTHER_ROLE_OPTION)}
-                  className="block w-full px-3 py-1.5 text-left text-[10px] text-[#2f435c] hover:bg-[#f3f7ff]"
+                  className="block w-full cursor-pointer px-3 py-1.5 text-left text-[10px] text-[#2f435c] transition-colors duration-200 hover:bg-[#f3f7ff]"
                 >
                   Others
                 </button>
@@ -1029,7 +1029,7 @@ export default function CreateClubForm({
                 <button
                   type="button"
                   onClick={addOtherRole}
-                  className="rounded-md bg-[#1f57c3] px-3 py-1 text-[10px] font-semibold text-white"
+                  className="cursor-pointer rounded-md bg-[#1f57c3] px-3 py-1 text-[10px] font-semibold text-white transition-colors duration-200 hover:bg-[#184cae]"
                 >
                   Add
                 </button>
@@ -1058,7 +1058,7 @@ export default function CreateClubForm({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex rounded-md bg-[#1f57c3] px-5 py-2 text-sm font-semibold text-white hover:bg-[#184cae] disabled:opacity-60"
+              className="inline-flex cursor-pointer rounded-md bg-[#1f57c3] px-5 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#184cae] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting
                 ? isUploadingImage
