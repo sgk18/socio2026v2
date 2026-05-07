@@ -11,6 +11,7 @@ import socioTeam2Img from '@/public/socioteam2.jpeg';
 import advaithImg from '@/public/advaithsocio.jpeg';
 import altonImg from '@/public/altonsocio.jpeg';
 import suryachalamImg from '@/public/suryachalamsocio.jpeg';
+import hatimImg from '@/public/hatim.jpeg';
 
 export default function TeamPage() {
   const founders = [
@@ -147,7 +148,7 @@ export default function TeamPage() {
     {
       name: "Hatim Abizer",
       role: "Fullstack & Cybersecurity Engineer",
-      image: "/hatim.jpg",
+      image: hatimImg,
       skills: ["Full Stack", "Cybersecurity", "APIs"],
       email: "hatim.work07@gmail.com",
       linkedin: "https://www.linkedin.com/in/hatim-abizer-361031371/",
