@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const orgType = getOrganizationType(newSession.user?.email);
 
         void (async () => {
-          await createOrUpdateUser(newSession.user);
+          await createOrUpdateUser(newSession.user, newSession.access_token);
 
           let fetchedUser = await fetchUserData(newSession.user.email!);
           if (!fetchedUser) {
@@ -270,7 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase]);
 
-  const createOrUpdateUser = async (user: User) => {
+  const createOrUpdateUser = async (user: User, accessToken?: string) => {
     if (!user?.email) return;
 
     try {
@@ -327,11 +327,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("Creating/updating user with payload:", payload);
 
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch(`/api/users`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ user: payload }),
       });
 
