@@ -9,9 +9,11 @@ import { CategorySection } from "../_components/Discover/CategorySection";
 import { ClubSection } from "../_components/Discover/ClubSection";
 import { PendingFeedbackSection } from "../_components/Discover/PendingFeedbackSection";
 import Footer from "../_components/Home/Footer";
-import { allCentres } from "../lib/centresData";
+import { ClubRecord } from "../actions/clubs";
+import { toClubCategories } from "../lib/clubCategory";
 import { christCampuses } from "../lib/eventFormSchema";
 import { useAuth } from "@/context/AuthContext";
+import supabase from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
 import {
@@ -94,6 +96,9 @@ const DiscoverPageContent = () => {
   const [allFests, setAllFests] = useState<Fest[]>([]);
   const [isLoadingFests, setIsLoadingFests] = useState(true);
   const [errorFests, setErrorFests] = useState<string | null>(null);
+  const [organizations, setOrganizations] = useState<ClubRecord[]>([]);
+  const [isLoadingOrganizations, setIsLoadingOrganizations] = useState(true);
+  const [organizationsError, setOrganizationsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchFests = async () => {
@@ -153,6 +158,47 @@ const DiscoverPageContent = () => {
 
     fetchFests();
   }, [API_URL, session?.access_token]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchOrganizations = async () => {
+      setIsLoadingOrganizations(true);
+      setOrganizationsError(null);
+
+      try {
+        const { data, error } = await supabase
+          .from("clubs")
+          .select(
+            "club_id,club_name,subtitle,club_description,slug,club_image_url,type,category,club_registrations,club_editors"
+          )
+          .eq("club_registrations", true)
+          .order("club_name", { ascending: true });
+
+        if (!isMounted) return;
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        setOrganizations((Array.isArray(data) ? data : []) as ClubRecord[]);
+      } catch (err) {
+        if (!isMounted) return;
+        setOrganizations([]);
+        setOrganizationsError(
+          err instanceof Error ? err.message : "Failed to load centers and clubs."
+        );
+      } finally {
+        if (!isMounted) return;
+        setIsLoadingOrganizations(false);
+      }
+    };
+
+    void fetchOrganizations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const {
     filteredEvents: allFilteredEvents,
@@ -255,16 +301,43 @@ const DiscoverPageContent = () => {
       .catch(() => {});
   }, [isAdminOrOrganizer, session?.access_token, allFests, allEvents]); // eslint-disable-line
 
-  // Use centres from centralized data, show first 3 on Discover page
-  const displayCentres = allCentres.slice(0, 3).map(centre => ({
-    id: centre.id,
-    title: centre.title,
-    subtitle: centre.subtitle,
-    description: centre.description,
-    link: centre.externalLink,
-    image: centre.image,
-    slug: centre.slug,
-  }));
+  const currentEmail = normalizeText(userData?.email || session?.user?.email);
+  const isMasterAdmin = Boolean(userData?.is_masteradmin);
+
+  const displayOrganizations = useMemo(() => {
+    const canEdit = (organization: ClubRecord) => {
+      if (isMasterAdmin) return true;
+      if (!currentEmail) return false;
+      const editors = Array.isArray(organization.club_editors) ? organization.club_editors : [];
+      return editors.some((editor) => normalizeText(editor) === currentEmail);
+    };
+
+    return organizations.slice(0, 3).map((organization) => {
+      const organizationType = normalizeText(organization.type);
+      const cardType: "club" | "center" | "cell" =
+        organizationType === "club"
+          ? "club"
+          : organizationType === "cell"
+            ? "cell"
+            : "center";
+
+      return {
+        id: organization.club_id,
+        title: organization.club_name,
+        subtitle: organization.subtitle ?? undefined,
+        description: organization.club_description ?? "No description provided.",
+        slug: organization.slug ?? undefined,
+        image: organization.club_image_url ?? undefined,
+        categories: toClubCategories(organization.category),
+        type: cardType,
+        registrationsOpen: Boolean(organization.club_registrations),
+        showEditButton: canEdit(organization),
+        editHref: `/edit/clubs/${organization.club_id}`,
+        showManageButton: isMasterAdmin || canEdit(organization),
+        manageHref: `/clubeditor/${organization.club_id}`,
+      };
+    });
+  }, [organizations, isMasterAdmin, currentEmail]);
 
   const handleToggleArchive = async (eventId: string, shouldArchive: boolean) => {
     console.log(`🔄 Archive toggle initiated: eventId=${eventId}, shouldArchive=${shouldArchive}`);
@@ -578,13 +651,29 @@ const DiscoverPageContent = () => {
         </section>
 
         <section className="mb-12">
-          <ClubSection
-            title="Centers and clubs"
-            items={displayCentres}
-            type="centre"
-            linkUrl="/clubs"
-            showAll={true}
-          />
+          {isLoadingOrganizations ? (
+            <div className="text-center py-10 text-gray-500">
+              Loading centers and clubs...
+            </div>
+          ) : organizationsError ? (
+            <div className="text-center py-10 text-red-600 font-semibold">
+              Error loading centers and clubs: {organizationsError}
+            </div>
+          ) : displayOrganizations.length > 0 ? (
+            <ClubSection
+              title="Centers and clubs"
+              items={displayOrganizations}
+              linkUrl="/clubs"
+              showAll={true}
+            />
+          ) : (
+            <div className="my-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm text-slate-500">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 01.553-.894L9 2m0 18l6-3m-6 3V2m6 15l5.447-2.724A1 1 0 0021 13.382V2.618a1 1 0 00-.553-.894L15 0m0 17V0m0 0L9 2" />
+              </svg>
+              No centers or clubs available right now.
+            </div>
+          )}
         </section>
 
         {!isLoadingEventsFromContext && !errorEventsFromContext && (

@@ -2,29 +2,25 @@ import React from "react";
 import { CentreClubCard } from "./ClubCard";
 import { SectionHeader } from "./SectionHeader";
 
-interface Centre {
-  id: number;
+interface SectionItem {
+  id: string | number;
   title: string;
   subtitle?: string;
   description: string;
-  link?: string;
-  image?: string;
   slug?: string;
-}
-
-interface Club {
-  id: number;
-  title: string;
-  department: string;
-  description: string;
-  link?: string;
   image?: string;
+  categories?: string[];
+  type: "center" | "club" | "cell";
+  registrationsOpen?: boolean;
+  showEditButton?: boolean;
+  editHref?: string;
+  showManageButton?: boolean;
+  manageHref?: string;
 }
 
 interface SectionProps {
   title: string;
-  items: Centre[] | Club[];
-  type: "centre" | "club";
+  items: SectionItem[];
   linkUrl: string;
   showAll?: boolean;
 }
@@ -32,7 +28,6 @@ interface SectionProps {
 export const ClubSection = ({
   title,
   items,
-  type,
   linkUrl,
   showAll = false,
 }: SectionProps) => {
@@ -44,20 +39,22 @@ export const ClubSection = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
         {displayItems.map((item) => (
-          <CentreClubCard
-            key={item.id}
-            title={item.title}
-            subtitle={
-              type === "club"
-                ? (item as Club).department
-                : (item as Centre).subtitle
-            }
-            description={item.description}
-            link={item.link}
-            slug={(item as Centre).slug}
-            image={item.image}
-            type={type === "centre" ? "center" : "club"}
-          />
+          <div key={item.id} className="min-w-0 h-full">
+            <CentreClubCard
+              title={item.title}
+              subtitle={item.subtitle}
+              description={item.description}
+              slug={item.slug}
+              image={item.image}
+              categories={item.categories}
+              type={item.type}
+              registrationsOpen={item.registrationsOpen}
+              showEditButton={item.showEditButton}
+              editHref={item.editHref}
+              showManageButton={item.showManageButton}
+              manageHref={item.manageHref}
+            />
+          </div>
         ))}
       </div>
     </div>
