@@ -302,28 +302,12 @@ const SupportPage = () => {
               <div className="space-y-4">
                 {filteredArticles.map((article) => (
                   <div key={article.id} className="bg-gray-50 border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all">
-                    <div className="flex justify-between items-start mb-2">
-                      <Link href={`/support/${article.id}`} className="text-lg font-bold text-gray-800 hover:text-[#154CB3]">
-                        {article.title}
-                      </Link>
-                      <span className="text-xs text-gray-500 whitespace-nowrap ml-4">
-                        {article.read_time_minutes} min read
-                      </span>
-                    </div>
-                    <p className="text-gray-600 mb-4 text-sm">
+                    <h4 className="text-lg font-bold text-gray-800 mb-3">
+                      {article.title}
+                    </h4>
+                    <p className="text-gray-600 text-sm leading-relaxed">
                       {article.description}
                     </p>
-                    <div className="flex justify-between items-center">
-                      <Link href={`/support/${article.id}`} className="text-[#154CB3] hover:underline font-medium text-sm">
-                        Read Article →
-                      </Link>
-                      <div className="flex items-center text-xs text-gray-500">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                        {article.helpful_count} found this helpful
-                      </div>
-                    </div>
                   </div>
                 ))}
               </div>

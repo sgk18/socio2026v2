@@ -557,8 +557,6 @@ router.get(
     try {
       const allowed = req.catering_ids || [];
       const requested = (req.query.catering_id || "").trim();
-      const page = parseInt(req.query.page) || 1;
-      const pageSize = parseInt(req.query.pageSize) || 20;
       let scopeIds;
 
       if (requested) {
